@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "node:crypto";
 import { adminDb } from "@/lib/adminDb";
+import { getPostHogClient } from "@/lib/posthog-server";
 
 const ALLOWED_RATINGS = new Set(["positive", "negative", "neutral"]);
 const MAX_FEEDBACK_LENGTH = 2000;
@@ -119,6 +120,18 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
       createdAt: now,
     }),
   ]);
+
+  const posthog = getPostHogClient();
+  posthog.capture({
+    distinctId: skill.ownerId,
+    event: "feedback_received",
+    properties: {
+      skill_id: skillId,
+      skill_name: skill.name,
+      rating,
+    },
+  });
+  await posthog.shutdown();
 
   return jsonResponse({}, 201);
 }

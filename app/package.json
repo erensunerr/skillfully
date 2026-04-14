@@ -14,6 +14,8 @@
     "@instantdb/admin": "latest",
     "@instantdb/react": "latest",
     "next": "15.4.10",
+    "posthog-js": "^1.368.0",
+    "posthog-node": "^5.29.2",
     "react": "19.1.0",
     "react-dom": "19.1.0"
   },

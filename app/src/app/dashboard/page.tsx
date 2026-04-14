@@ -7,6 +7,7 @@ import { type AppSchema } from "@/instant.schema";
 import { type InstaQLEntity, id } from "@instantdb/react";
 import type { User as InstantUser } from "@instantdb/core";
 import { resolveDashboardViewState } from "./view-state";
+import posthog from "posthog-js";
 
 type Skill = InstaQLEntity<AppSchema, "skills">;
 type Feedback = InstaQLEntity<AppSchema, "feedback">;
@@ -385,6 +386,7 @@ function SkillDetail({
           className="mt-2 border-4 border-black bg-white px-3 py-2 text-sm font-black uppercase hover:bg-black hover:text-white"
           onClick={async () => {
             await navigator.clipboard.writeText(snippetTemplate(skill.skillId));
+            posthog.capture("snippet_copied", { skill_name: skill.name, skill_id: skill.skillId });
             setSnippetCopied(true);
             window.setTimeout(() => setSnippetCopied(false), 1200);
           }}
@@ -426,7 +428,10 @@ function SkillDetail({
               <button
                 type="button"
                 className="mt-3 text-sm font-black uppercase underline"
-                onClick={() => setPageLimit((current) => current + 10)}
+                onClick={() => {
+                  posthog.capture("feedback_load_more_clicked", { skill_name: skill.name });
+                  setPageLimit((current) => current + 10);
+                }}
               >
                 Load more
               </button>
@@ -539,6 +544,7 @@ export default function Dashboard() {
             return;
           }
 
+          posthog.capture("auth_email_submitted", { email: normalized });
           setIsSubmitting(true);
           try {
             await db.auth.sendMagicCode({ email: normalized });
@@ -546,6 +552,7 @@ export default function Dashboard() {
             setAuthForm((state) => ({ ...state, email: normalized, code: "" }));
             setAuthPhase("verify");
           } catch (error) {
+            posthog.captureException(error);
             setErrorMessage(extractErrorMessage(error));
           } finally {
             setIsSubmitting(false);
@@ -576,11 +583,14 @@ export default function Dashboard() {
             });
 
             if (response.user) {
+              posthog.identify(response.user.id, { email: normalized });
+              posthog.capture("auth_code_verified", { email: normalized });
               return;
             }
 
             setErrorMessage("Could not verify code yet. Try again.");
           } catch (error) {
+            posthog.captureException(error);
             setErrorMessage(extractErrorMessage(error));
           } finally {
             setIsSubmitting(false);
@@ -612,6 +622,8 @@ export default function Dashboard() {
   }
 
   async function handleSignOut() {
+    posthog.capture("user_signed_out");
+    posthog.reset();
     setErrorMessage("");
     setSkillForm({ name: "", description: "" });
     setAuthForm({ email: "", code: "" });
@@ -636,15 +648,22 @@ export default function Dashboard() {
     const cleanDescription = description.trim() || undefined;
     const newSkillEntityId = id();
 
+    const newSkillId = randomSkillId();
+
     db.transact(
       db.tx.skills[newSkillEntityId].create({
         ownerId: user.id,
         name: cleanName,
         description: cleanDescription,
-        skillId: randomSkillId(),
+        skillId: newSkillId,
         createdAt: Date.now(),
       }),
     );
+
+    posthog.capture("skill_created", {
+      skill_name: cleanName,
+      has_description: Boolean(cleanDescription),
+    });
 
     setSkillForm({ name: "", description: "" });
     setSelectedSkillId(newSkillEntityId);
@@ -675,6 +694,7 @@ export default function Dashboard() {
             skills={skills}
             selectedId={viewState.kind === "detail" ? viewState.skillId : null}
             onSelect={(skill) => {
+              posthog.capture("skill_selected", { skill_name: skill.name });
               setSelectedSkillId(skill.id);
               setScreen("detail");
               setErrorMessage("");

@@ -1,2 +1,1 @@
-# skillfully
-The new way to build agent skills, skillfully.
+# zimp-mono

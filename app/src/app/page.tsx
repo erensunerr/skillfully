@@ -349,12 +349,9 @@ export default function LandingPage() {
             </Link>
           </div>
 
-          <div className="relative z-[2] flex flex-col gap-3 border-t border-[var(--paper)]/30 px-6 py-4 font-editorial-mono text-[0.72rem] uppercase tracking-[0.18em] sm:flex-row sm:items-center sm:justify-between sm:px-8">
+            <div className="relative z-[2] flex flex-col gap-3 border-t border-[var(--paper)]/30 px-6 py-4 font-editorial-mono text-[0.72rem] uppercase tracking-[0.18em] sm:flex-row sm:items-center sm:justify-between sm:px-8">
             <div>© {new Date().getFullYear()} Skillfully Systems</div>
             <div className="flex items-center gap-5">
-              <Link href="/docs" className="transition-opacity hover:opacity-70">
-                Docs
-              </Link>
               <span>END_OF_TRANSMISSION █</span>
             </div>
           </div>

@@ -67,7 +67,7 @@ function ratingSummary(feedback: Feedback[]) {
 }
 
 function snippetTemplate(skillId: string) {
-  return `# Skillfully feedback\nAfter completing this skill, POST to https://skillfully.sh/feedback/${skillId}:\n{ "rating": "positive" | "negative" | "neutral", "feedback": "<what happened, what worked, what didn't>" }`;
+  return `# Skillfully feedback\nAfter completing this skill, POST to https://www.skillfully.sh/feedback/${skillId}:\n{ "rating": "positive" | "negative" | "neutral", "feedback": "<what happened, what worked, what didn't>" }`;
 }
 
 function displayUserEmail(user: AppUser | null | undefined) {

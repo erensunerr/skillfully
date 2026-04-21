@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { db } from "@/lib/db";
 import { type AppSchema } from "@/instant.schema";
@@ -32,10 +32,12 @@ const BRUTAL_BUTTON =
 const BRUTAL_INPUT =
   "mt-1 w-full border-4 border-black bg-white px-3 py-2 text-sm outline-none";
 
+const FEEDBACK_SNIPPET_URL = "/feedback-template.md";
+
 function randomSkillId() {
   const chars = "abcdefghijkmnopqrstuvwxyz23456789";
   let out = "sk_";
-  for (let i = 0; i < 8; i += 1) {
+  for (let i = 0; i < 10; i += 1) {
     out += chars[Math.floor(Math.random() * chars.length)];
   }
   return out;
@@ -66,8 +68,9 @@ function ratingSummary(feedback: Feedback[]) {
   };
 }
 
-function snippetTemplate(skillId: string) {
-  return `# Skillfully feedback\nAfter completing this skill, POST to https://www.skillfully.sh/feedback/${skillId}:\n{ "rating": "positive" | "negative" | "neutral", "feedback": "<what happened, what worked, what didn't>" }`;
+function renderFeedbackTemplate(template: string, skillId: string) {
+  const feedbackUrl = `https://www.skillfully.sh/feedback/${skillId}`;
+  return template.replaceAll("{{feedbackUrl}}", feedbackUrl);
 }
 
 function displayUserEmail(user: AppUser | null | undefined) {
@@ -352,13 +355,20 @@ function SkillDetail({
   skill,
   entries,
   onBack,
+  feedbackTemplate,
+  feedbackTemplateError,
 }: {
   skill: Skill;
   entries: Feedback[];
   onBack: () => void;
+  feedbackTemplate: string | null;
+  feedbackTemplateError: string | null;
 }) {
   const [snippetCopied, setSnippetCopied] = useState(false);
   const [pageLimit, setPageLimit] = useState(10);
+  const resolvedTemplate = feedbackTemplate
+    ? renderFeedbackTemplate(feedbackTemplate, skill.skillId)
+    : null;
 
   const sorted = [...entries].sort((a, b) => toMillis(b.createdAt) - toMillis(a.createdAt));
   const visible = sorted.slice(0, pageLimit);
@@ -379,20 +389,27 @@ function SkillDetail({
       <div>
         <p className="text-sm font-black uppercase">Add this to your skill:</p>
         <pre className="mt-2 max-h-48 overflow-auto border-4 border-black bg-black p-4 font-mono text-sm whitespace-pre-wrap text-gray-100">
-          {snippetTemplate(skill.skillId)}
+          {resolvedTemplate || "Loading feedback template..."}
         </pre>
         <button
           type="button"
-          className="mt-2 border-4 border-black bg-white px-3 py-2 text-sm font-black uppercase hover:bg-black hover:text-white"
+          className="mt-2 border-4 border-black bg-white px-3 py-2 text-sm font-black uppercase transition-all hover:bg-black hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+          disabled={!resolvedTemplate}
           onClick={async () => {
-            await navigator.clipboard.writeText(snippetTemplate(skill.skillId));
+            if (!resolvedTemplate) return;
+            await navigator.clipboard.writeText(resolvedTemplate);
             posthog.capture("snippet_copied", { skill_name: skill.name, skill_id: skill.skillId });
             setSnippetCopied(true);
             window.setTimeout(() => setSnippetCopied(false), 1200);
           }}
         >
-          {snippetCopied ? "Copied! ✓" : "Copy snippet"}
+          {snippetCopied ? "Copied! ✓" : resolvedTemplate ? "Copy snippet" : "Loading snippet..."}
         </button>
+        {feedbackTemplateError ? (
+          <p className="mt-2 border-4 border-red-600 bg-red-100 p-2 text-xs font-black uppercase">
+            {feedbackTemplateError}
+          </p>
+        ) : null}
       </div>
 
       <div className={`${BRUTAL_CARD} p-4`}>
@@ -459,6 +476,8 @@ export default function Dashboard() {
 
   const [errorMessage, setErrorMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [feedbackTemplate, setFeedbackTemplate] = useState<string | null>(null);
+  const [feedbackTemplateError, setFeedbackTemplateError] = useState<string | null>(null);
 
   const query = useMemo(() => {
     if (!user) {
@@ -512,6 +531,39 @@ export default function Dashboard() {
         : [],
     [selectedSkill, feedback],
   );
+
+  useEffect(() => {
+    let active = true;
+
+    void fetch(FEEDBACK_SNIPPET_URL)
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error(`Failed to fetch feedback template: ${response.status}`);
+        }
+        return response.text();
+      })
+      .then((content) => {
+        if (!active) return;
+        const normalized = content.trim();
+        if (!normalized) {
+          throw new Error("Feedback template file is empty.");
+        }
+        setFeedbackTemplate(normalized);
+        setFeedbackTemplateError(null);
+      })
+      .catch((error) => {
+        if (!active) return;
+        if (error instanceof Error) {
+          setFeedbackTemplateError(error.message);
+          return;
+        }
+        setFeedbackTemplateError("Unable to load feedback template.");
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   if (isAuthLoading || (user && isDataLoading)) {
     return <main className="min-h-screen overflow-x-hidden border-x-4 border-black bg-white" />;
@@ -717,6 +769,8 @@ export default function Dashboard() {
             <SkillDetail
               skill={selectedSkill}
               entries={selectedFeedback}
+              feedbackTemplate={feedbackTemplate}
+              feedbackTemplateError={feedbackTemplateError}
               onBack={() => {
                 setSelectedSkillId(null);
                 setScreen("list");

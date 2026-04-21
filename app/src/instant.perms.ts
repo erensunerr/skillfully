@@ -11,6 +11,38 @@ const rules = {
       delete: "false",
     },
   },
+  apiLoginCodes: {
+    allow: {
+      view: "false",
+      create: "false",
+      update: "false",
+      delete: "false",
+    },
+  },
+  apiTokens: {
+    allow: {
+      view: "false",
+      create: "false",
+      update: "false",
+      delete: "false",
+    },
+  },
+  apiLoginAttempts: {
+    allow: {
+      view: "false",
+      create: "false",
+      update: "false",
+      delete: "false",
+    },
+  },
+  apiUsers: {
+    allow: {
+      view: "false",
+      create: "false",
+      update: "false",
+      delete: "false",
+    },
+  },
   skills: {
     allow: {
       view: "data.ownerId == auth.id",

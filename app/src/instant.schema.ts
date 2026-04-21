@@ -4,6 +4,33 @@ import { i } from "@instantdb/react";
 
 const _schema = i.schema({
   entities: {
+    apiLoginCodes: i.entity({
+      userId: i.string().indexed(),
+      email: i.string().indexed(),
+      codeHash: i.string(),
+      expiresAt: i.number().indexed(),
+      consumedAt: i.number().optional(),
+      createdAt: i.number().indexed(),
+    }),
+    apiTokens: i.entity({
+      userId: i.string().indexed(),
+      tokenHash: i.string().indexed(),
+      tokenPrefix: i.string().indexed(),
+      expiresAt: i.number().indexed(),
+      createdAt: i.number().indexed(),
+    }),
+    apiLoginAttempts: i.entity({
+      action: i.string().indexed(),
+      email: i.string().indexed(),
+      ipHash: i.string().indexed(),
+      outcome: i.string(),
+      createdAt: i.number().indexed(),
+    }),
+    apiUsers: i.entity({
+      email: i.string().unique().indexed(),
+      createdAt: i.number(),
+      lastLoginCodeSentAt: i.number().optional(),
+    }),
     skills: i.entity({
       ownerId: i.string().indexed(),
       name: i.string(),

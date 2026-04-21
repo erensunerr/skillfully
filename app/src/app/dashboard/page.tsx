@@ -34,10 +34,6 @@ const BRUTAL_INPUT =
 
 const FEEDBACK_SNIPPET_URL = "/feedback-template.md";
 
-function buildFeedbackTemplate(template: string, skillId: string) {
-  return template.replaceAll("{{skillId}}", skillId);
-}
-
 function randomSkillId() {
   const chars = "abcdefghijkmnopqrstuvwxyz23456789";
   let out = "sk_";
@@ -360,11 +356,13 @@ function SkillDetail({
   entries,
   onBack,
   feedbackTemplate,
+  feedbackTemplateError,
 }: {
   skill: Skill;
   entries: Feedback[];
   onBack: () => void;
   feedbackTemplate: string | null;
+  feedbackTemplateError: string | null;
 }) {
   const [snippetCopied, setSnippetCopied] = useState(false);
   const [pageLimit, setPageLimit] = useState(10);
@@ -407,6 +405,11 @@ function SkillDetail({
         >
           {snippetCopied ? "Copied! ✓" : resolvedTemplate ? "Copy snippet" : "Loading snippet..."}
         </button>
+        {feedbackTemplateError ? (
+          <p className="mt-2 border-4 border-red-600 bg-red-100 p-2 text-xs font-black uppercase">
+            {feedbackTemplateError}
+          </p>
+        ) : null}
       </div>
 
       <div className={`${BRUTAL_CARD} p-4`}>
@@ -546,6 +549,7 @@ export default function Dashboard() {
           throw new Error("Feedback template file is empty.");
         }
         setFeedbackTemplate(normalized);
+        setFeedbackTemplateError(null);
       })
       .catch((error) => {
         if (!active) return;
@@ -563,14 +567,6 @@ export default function Dashboard() {
 
   if (isAuthLoading || (user && isDataLoading)) {
     return <main className="min-h-screen overflow-x-hidden border-x-4 border-black bg-white" />;
-  }
-
-  if (feedbackTemplateError) {
-    return (
-      <main className="min-h-screen overflow-x-hidden border-x-4 border-black bg-white p-6 text-red-700">
-        Feedback template unavailable: {feedbackTemplateError}
-      </main>
-    );
   }
 
   if (authHookError) {
@@ -774,6 +770,7 @@ export default function Dashboard() {
               skill={selectedSkill}
               entries={selectedFeedback}
               feedbackTemplate={feedbackTemplate}
+              feedbackTemplateError={feedbackTemplateError}
               onBack={() => {
                 setSelectedSkillId(null);
                 setScreen("list");

@@ -1,28 +1,11 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 
 import {
   ApiError,
   createTrackedSkill,
   getBearerToken,
 } from "@/lib/agent-api";
-
-function jsonResponse(payload: Record<string, unknown>, status: number) {
-  const response = NextResponse.json(payload, { status });
-  response.headers.set("Access-Control-Allow-Origin", "*");
-  response.headers.set("Access-Control-Allow-Methods", "POST, OPTIONS");
-  response.headers.set("Access-Control-Allow-Headers", "authorization, content-type");
-  return response;
-}
-
-function getErrorPayload(error: unknown) {
-  if (error instanceof ApiError) {
-    return { ...error.payload };
-  }
-  if (error instanceof Error) {
-    return { error: error.message };
-  }
-  return { error: "unknown error" };
-}
+import { getErrorPayload, jsonResponse } from "@/lib/route-helpers";
 
 export async function OPTIONS() {
   return jsonResponse({}, 200);

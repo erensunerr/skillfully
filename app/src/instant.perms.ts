@@ -27,6 +27,14 @@ const rules = {
       delete: "false",
     },
   },
+  apiLoginAttempts: {
+    allow: {
+      view: "false",
+      create: "false",
+      update: "false",
+      delete: "false",
+    },
+  },
   apiUsers: {
     allow: {
       view: "false",

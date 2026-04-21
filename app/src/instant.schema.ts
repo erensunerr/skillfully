@@ -8,7 +8,6 @@ const _schema = i.schema({
       userId: i.string().indexed(),
       email: i.string().indexed(),
       codeHash: i.string(),
-      codeLength: i.number(),
       expiresAt: i.number().indexed(),
       consumedAt: i.number().optional(),
       createdAt: i.number().indexed(),
@@ -18,6 +17,13 @@ const _schema = i.schema({
       tokenHash: i.string().indexed(),
       tokenPrefix: i.string().indexed(),
       expiresAt: i.number().indexed(),
+      createdAt: i.number().indexed(),
+    }),
+    apiLoginAttempts: i.entity({
+      action: i.string().indexed(),
+      email: i.string().indexed(),
+      ipHash: i.string().indexed(),
+      outcome: i.string(),
       createdAt: i.number().indexed(),
     }),
     apiUsers: i.entity({

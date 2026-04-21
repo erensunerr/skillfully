@@ -10,7 +10,13 @@ import {
 } from "./agent-api";
 
 type EntityRow = Record<string, unknown>;
-type EntityName = "apiUsers" | "apiLoginCodes" | "apiTokens" | "skills" | "feedback";
+type EntityName =
+  | "apiUsers"
+  | "apiLoginCodes"
+  | "apiTokens"
+  | "apiLoginAttempts"
+  | "skills"
+  | "feedback";
 
 type Op =
   | {
@@ -36,6 +42,7 @@ class InMemoryApiStore {
     apiUsers: {},
     apiLoginCodes: {},
     apiTokens: {},
+    apiLoginAttempts: {},
     skills: {},
     feedback: {},
   };
@@ -157,6 +164,52 @@ test("requestLoginCode creates a user and login code when valid email provided",
   assert.equal((loginRows.apiLoginCodes as unknown[]).length, 1);
 });
 
+test("requestLoginCode enforces cooldown before issuing another code to the same email", async () => {
+  let now = 1700000000000;
+  const { store, deps } = buildDeps({
+    now: () => now,
+    sendLoginCode: async () => undefined,
+  });
+
+  await requestLoginCode(
+    {
+      email: "cooldown@test.com",
+      ipHash: "ip_hash",
+    },
+    deps,
+  );
+
+  await assert.rejects(async () => {
+    await requestLoginCode(
+      {
+        email: "cooldown@test.com",
+        ipHash: "ip_hash",
+      },
+      {
+        ...deps,
+        now: () => now + 30_000,
+      },
+    );
+  }, (error: unknown) => error instanceof ApiError);
+
+  now = now + 61_000;
+  const second = await requestLoginCode(
+    {
+      email: "cooldown@test.com",
+      ipHash: "ip_hash",
+    },
+    {
+      ...deps,
+      now: () => now,
+    },
+  );
+  const users = await store.query({
+    apiUsers: { $: { where: { email: "cooldown@test.com" } } },
+  });
+  assert.equal(users.apiUsers.length, 1);
+  assert.equal(second.email, "cooldown@test.com");
+});
+
 test("confirmLoginCode issues token only when code matches", async () => {
   const { store, deps } = buildDeps({
     sendLoginCode: async ({ code }) => {
@@ -176,6 +229,41 @@ test("confirmLoginCode issues token only when code matches", async () => {
     apiTokens: { $: { where: { userId: confirmResult.userId } } },
   });
   assert.equal((tokens.apiTokens as unknown[]).length, 1);
+});
+
+test("confirmLoginCode rate limits repeated invalid attempts from the same IP", async () => {
+  const { deps } = buildDeps({
+    sendLoginCode: async () => undefined,
+  });
+
+  await requestLoginCode({
+    email: "badcode@test.com",
+    ipHash: "ip_hash",
+  }, deps);
+
+  for (let index = 0; index < 30; index += 1) {
+    await assert.rejects(async () => {
+      await confirmLoginCode(
+        {
+          email: "badcode@test.com",
+          code: "000000",
+          ipHash: "ip_hash",
+        },
+        deps,
+      );
+    }, (error: unknown) => error instanceof ApiError);
+  }
+
+  await assert.rejects(async () => {
+    await confirmLoginCode(
+      {
+        email: "badcode@test.com",
+        code: "000000",
+        ipHash: "ip_hash",
+      },
+      deps,
+    );
+  }, (error: unknown) => error instanceof ApiError);
 });
 
 test("createTrackedSkill requires a valid token and returns runtime feedback snippet", async () => {
@@ -241,7 +329,7 @@ test("listFeedbackForSkill filters, sorts, and paginates", async () => {
         skillId: created.skillId,
         rating: "negative",
         feedback: "second",
-        createdAt: 20,
+        createdAt: 10,
       },
     },
     {
@@ -253,10 +341,10 @@ test("listFeedbackForSkill filters, sorts, and paginates", async () => {
         skillId: created.skillId,
         rating: "positive",
         feedback: "third",
-        createdAt: 30,
+        createdAt: 20,
       },
     },
-  ] as never);
+  ]);
 
   const first = await listFeedbackForSkill(
     {
@@ -271,7 +359,7 @@ test("listFeedbackForSkill filters, sorts, and paginates", async () => {
   assert.equal(first.items.length, 2);
   assert.equal(first.items[0].id, "fb_3");
   assert.equal(first.hasMore, true);
-  assert.equal(first.nextCursor, 20);
+  assert.equal(first.nextCursor, "10:fb_2");
 
   const second = await listFeedbackForSkill(
     {

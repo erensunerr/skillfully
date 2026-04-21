@@ -1,24 +1,7 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 
 import { ApiError, confirmLoginCode } from "@/lib/agent-api";
-
-function jsonResponse(payload: Record<string, string | number>, status: number) {
-  const response = NextResponse.json(payload, { status });
-  response.headers.set("Access-Control-Allow-Origin", "*");
-  response.headers.set("Access-Control-Allow-Methods", "POST, OPTIONS");
-  response.headers.set("Access-Control-Allow-Headers", "content-type");
-  return response;
-}
-
-function getErrorPayload(error: unknown) {
-  if (error instanceof ApiError) {
-    return { ...error.payload };
-  }
-  if (error instanceof Error) {
-    return { error: error.message };
-  }
-  return { error: "unknown error" };
-}
+import { getErrorPayload, getIpHash, jsonResponse } from "@/lib/route-helpers";
 
 export async function OPTIONS() {
   return jsonResponse({}, 200);
@@ -36,6 +19,7 @@ export async function POST(request: NextRequest) {
     const result = await confirmLoginCode({
       email: String(body.email ?? ""),
       code: String(body.code ?? ""),
+      ipHash: getIpHash(request),
     });
 
     return jsonResponse(

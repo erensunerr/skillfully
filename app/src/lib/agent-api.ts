@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import fs from "node:fs/promises";
-import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { getAdminDb } from "@/lib/adminDb";
 
@@ -8,6 +8,10 @@ type FeedbackRows = Array<Record<string, unknown>>;
 
 const LOGIN_CODE_TTL_MS = 10 * 60_000;
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+const LOGIN_RATE_LIMIT_WINDOW_MS = 60_000;
+const LOGIN_REQUESTS_PER_MINUTE = 30;
+const LOGIN_CONFIRM_REQUESTS_PER_MINUTE = 30;
+const LOGIN_CODE_COOLDOWN_MS = 60_000;
 const FEEDBACK_MIN_LIMIT = 1;
 const FEEDBACK_MAX_LIMIT = 100;
 const FEEDBACK_DEFAULT_LIMIT = 20;
@@ -18,12 +22,12 @@ const ALLOWED_SKILL_SORT: Record<string, "asc" | "desc"> = {
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const SKILL_ID_CHARS = "abcdefghijkmnopqrstuvwxyz23456789";
-const DEFAULT_TEMPLATE_PATH = path.join(
-  process.cwd(),
-  "app",
-  "public",
-  "feedback-template.md",
+const DEFAULT_TEMPLATE_PATH = fileURLToPath(
+  new URL("../../public/feedback-template.md", import.meta.url),
 );
+
+type LoginRateLimitAction = "login_request" | "login_confirm";
+type LoginAttemptOutcome = "success" | "failure";
 
 export type ApiRating = "positive" | "negative" | "neutral";
 export type ApiSort = "asc" | "desc";
@@ -31,6 +35,7 @@ export type AgentEntity =
   | "apiUsers"
   | "apiLoginCodes"
   | "apiTokens"
+  | "apiLoginAttempts"
   | "skills"
   | "feedback";
 
@@ -108,9 +113,9 @@ export interface FeedbackListResult {
   sort: ApiSort;
   limit: number;
   rating?: ApiRating;
-  cursor?: number;
+  cursor?: string;
   hasMore: boolean;
-  nextCursor?: number;
+  nextCursor?: string;
 }
 
 const ALLOWED_RATINGS = new Set<ApiRating>(["positive", "negative", "neutral"]);
@@ -126,9 +131,15 @@ class ApiError extends Error {
   }
 }
 
+type TxWriter = {
+  create: (values: Record<string, unknown>) => unknown;
+  update: (values: Record<string, unknown>) => unknown;
+  delete: () => unknown;
+};
+
 function makeAdminStore(): AgentDataStore {
   const db = getAdminDb();
-  const tx = db.tx as Record<string, Record<string, { create: Function; update: Function; delete: Function }>>;
+  const tx = db.tx as Record<string, Record<string, TxWriter>>;
 
   return {
     query: async (query: QueryInput) => db.query(query as never),
@@ -193,6 +204,17 @@ function hashValue(value: string) {
   return crypto.createHash("sha256").update(value).digest("hex");
 }
 
+function verifyDigestEquals(a: string, b: string) {
+  if (a.length === 0 || b.length === 0 || a.length !== b.length) {
+    return false;
+  }
+  try {
+    return crypto.timingSafeEqual(Buffer.from(a, "hex"), Buffer.from(b, "hex"));
+  } catch {
+    return false;
+  }
+}
+
 function toApiError(err: unknown): ApiError {
   if (err instanceof ApiError) {
     return err;
@@ -212,7 +234,7 @@ function isValidEmail(email: string) {
 function randomSkillId() {
   let out = "sk_";
   for (let index = 0; index < 8; index += 1) {
-    out += SKILL_ID_CHARS[Math.floor(Math.random() * SKILL_ID_CHARS.length)];
+    out += SKILL_ID_CHARS[crypto.randomInt(0, SKILL_ID_CHARS.length)];
   }
   return out;
 }
@@ -243,6 +265,88 @@ function queryByWhere<T extends Record<string, unknown>>(
   ) as T[];
 }
 
+function rateLimitConfig(action: LoginRateLimitAction) {
+  if (action === "login_request") {
+    return {
+      maxAttempts: LOGIN_REQUESTS_PER_MINUTE,
+      windowMs: LOGIN_RATE_LIMIT_WINDOW_MS,
+    };
+  }
+  return {
+    maxAttempts: LOGIN_CONFIRM_REQUESTS_PER_MINUTE,
+    windowMs: LOGIN_RATE_LIMIT_WINDOW_MS,
+  };
+}
+
+function rateLimitCursorFilter(
+  rows: Record<string, unknown>[] | undefined,
+  now: number,
+  windowMs: number,
+) {
+  return queryByWhere(rows, undefined).filter((row) => {
+    const createdAt = Number(row.createdAt);
+    return Number.isFinite(createdAt) && createdAt > now - windowMs;
+  });
+}
+
+async function enforceLoginRateLimit(
+  config: ApiDependencies,
+  params: {
+    ipHash: string;
+    action: LoginRateLimitAction;
+    email: string;
+    now: number;
+  },
+) {
+  if (!params.ipHash) {
+    return;
+  }
+
+  const limits = rateLimitConfig(params.action);
+  const { apiLoginAttempts } = await config.db.query({
+    apiLoginAttempts: {
+      $: {
+        where: {
+          action: params.action,
+          ipHash: params.ipHash,
+          email: params.email,
+        },
+      },
+    },
+  });
+  const recentAttempts = rateLimitCursorFilter(
+    apiLoginAttempts,
+    params.now,
+    limits.windowMs,
+  );
+  if (recentAttempts.length >= limits.maxAttempts) {
+    throw new ApiError(429, "rate limit exceeded. Try again shortly.");
+  }
+}
+
+async function recordLoginAttempt(
+  config: ApiDependencies,
+  params: {
+    ipHash: string;
+    action: LoginRateLimitAction;
+    outcome: LoginAttemptOutcome;
+    email: string;
+    now: number;
+  },
+) {
+  if (!params.ipHash) {
+    return;
+  }
+
+  await config.db.create("apiLoginAttempts", config.idGenerator(), {
+    action: params.action,
+    outcome: params.outcome,
+    email: params.email,
+    ipHash: params.ipHash,
+    createdAt: params.now,
+  });
+}
+
 function parseFeedbackSort(value: string | null) {
   if (!value) {
     return "desc" as const;
@@ -270,15 +374,20 @@ function parseFeedbackLimit(value: string | null) {
   return parsed;
 }
 
-function parseFeedbackCursor(value: string | null) {
+function parseFeedbackCursor(value: string | null): FeedbackCursor | undefined {
   if (!value) {
     return undefined;
   }
-  const parsed = Number.parseInt(value, 10);
-  if (!Number.isFinite(parsed)) {
+  const separator = value.lastIndexOf(":");
+  if (separator <= 0) {
     throw new ApiError(400, "invalid cursor");
   }
-  return parsed;
+  const createdAt = Number.parseInt(value.slice(0, separator), 10);
+  const id = value.slice(separator + 1);
+  if (!Number.isFinite(createdAt) || !id) {
+    throw new ApiError(400, "invalid cursor");
+  }
+  return { createdAt, id };
 }
 
 function parseRating(value: string | null) {
@@ -311,16 +420,15 @@ export function buildFeedbackSnippet(template: string, baseUrl: string, skillId:
   return template.replaceAll("{{feedbackUrl}}", `${baseUrl}/feedback/${skillId}`);
 }
 
-export function renderFeedbackSnippet(template: string, baseUrl: string, skillId: string) {
-  return buildFeedbackSnippet(template, baseUrl, skillId);
-}
+type FeedbackCursor = { createdAt: number; id: string };
 
 export async function requestLoginCode(
-  params: { email: string },
+  params: { email: string; ipHash?: string },
   deps: Partial<ApiDependencies> = {},
 ): Promise<LoginRequestResult> {
   const normalized = normalizeEmail(String(params.email ?? ""));
   const config = { ...buildDefaultDependencies(), ...deps };
+  const ipHash = params.ipHash ? params.ipHash.trim() : "";
 
   if (!normalized || !isValidEmail(normalized)) {
     throw new ApiError(400, "invalid email");
@@ -328,10 +436,29 @@ export async function requestLoginCode(
 
   try {
     const now = config.now();
+    if (ipHash) {
+      await enforceLoginRateLimit(config, {
+        action: "login_request",
+        email: normalized,
+        ipHash,
+        now,
+      });
+    }
+
     const users = await config.db.query({
       apiUsers: { $: { where: { email: normalized } } },
     });
     const existingUser = pickFirst(users.apiUsers);
+    if (typeof existingUser?.lastLoginCodeSentAt === "number") {
+      const nextAttemptAt = existingUser.lastLoginCodeSentAt + LOGIN_CODE_COOLDOWN_MS;
+      if (nextAttemptAt > now) {
+        throw new ApiError(
+          429,
+          `Please wait ${Math.max(1, Math.ceil((nextAttemptAt - now) / 1000))} seconds before requesting another code`,
+        );
+      }
+    }
+
     const userId = (existingUser?.id as string | undefined) ?? config.idGenerator();
 
     const existingCodes = await config.db.query({
@@ -357,7 +484,6 @@ export async function requestLoginCode(
         userId,
         email: normalized,
         codeHash: hashedCode,
-        codeLength: code.length,
         createdAt: now,
         expiresAt: now + LOGIN_CODE_TTL_MS,
       }),
@@ -365,6 +491,13 @@ export async function requestLoginCode(
 
     await config.db.transact(ops);
     await config.sendLoginCode({ email: normalized, code });
+    await recordLoginAttempt(config, {
+      action: "login_request",
+      email: normalized,
+      outcome: "success",
+      ipHash,
+      now,
+    });
 
     return {
       userId,
@@ -378,12 +511,13 @@ export async function requestLoginCode(
 }
 
 export async function confirmLoginCode(
-  params: { email: string; code: string },
+  params: { email: string; code: string; ipHash?: string },
   deps: Partial<ApiDependencies> = {},
 ): Promise<LoginConfirmResult> {
   const normalized = normalizeEmail(String(params.email ?? ""));
   const config = { ...buildDefaultDependencies(), ...deps };
   const code = String(params.code ?? "").trim();
+  const ipHash = params.ipHash ? params.ipHash.trim() : "";
 
   if (!normalized || !isValidEmail(normalized) || code.length === 0) {
     throw new ApiError(400, "invalid email or code");
@@ -391,15 +525,32 @@ export async function confirmLoginCode(
 
   try {
     const now = config.now();
+    if (ipHash) {
+      await enforceLoginRateLimit(config, {
+        action: "login_confirm",
+        email: normalized,
+        ipHash,
+        now,
+      });
+    }
+
     const users = await config.db.query({
       apiUsers: { $: { where: { email: normalized } } },
     });
     const user = pickFirst(users.apiUsers);
     if (!user?.id) {
+      await recordLoginAttempt(config, {
+        action: "login_confirm",
+        email: normalized,
+        outcome: "failure",
+        ipHash,
+        now,
+      });
       throw new ApiError(401, "invalid code");
     }
 
     const userId = user.id as string;
+    const providedCodeHash = hashValue(code);
     const codes = await config.db.query({
       apiLoginCodes: { $: { where: { userId } } },
     });
@@ -410,7 +561,10 @@ export async function confirmLoginCode(
         const consumedAt = entry.consumedAt as number | undefined;
         const expiresAt = entry.expiresAt as number | undefined;
         return (
-          hash === hashValue(code) && !consumedAt && !hasExpired(expiresAt, now)
+          typeof hash === "string" &&
+          !consumedAt &&
+          !hasExpired(expiresAt, now) &&
+          verifyDigestEquals(hash, providedCodeHash)
         );
       })
       .sort((a, b) => {
@@ -420,6 +574,13 @@ export async function confirmLoginCode(
       })[0];
 
     if (!matchedCode?.id) {
+      await recordLoginAttempt(config, {
+        action: "login_confirm",
+        email: normalized,
+        outcome: "failure",
+        ipHash,
+        now,
+      });
       throw new ApiError(401, "invalid code");
     }
 
@@ -447,6 +608,13 @@ export async function confirmLoginCode(
     ];
 
     await config.db.transact(ops);
+    await recordLoginAttempt(config, {
+      action: "login_confirm",
+      email: normalized,
+      outcome: "success",
+      ipHash,
+      now,
+    });
 
     return {
       token,
@@ -608,24 +776,33 @@ export async function listFeedbackForSkill(
       }));
 
     const sorted = allEntries.sort((a, b) =>
-      sort === "asc" ? a.createdAt - b.createdAt : b.createdAt - a.createdAt,
+      sort === "asc"
+        ? a.createdAt - b.createdAt || a.id.localeCompare(b.id)
+        : b.createdAt - a.createdAt || b.id.localeCompare(a.id),
     );
 
+    const cursorToken = cursor === undefined ? undefined : `${cursor.createdAt}:${cursor.id}`;
     const filtered = cursor === undefined
       ? sorted
       : sorted.filter((entry) => {
-          return sort === "asc" ? entry.createdAt > cursor : entry.createdAt < cursor;
+          return sort === "asc"
+            ? entry.createdAt > cursor.createdAt ||
+            (entry.createdAt === cursor.createdAt && entry.id.localeCompare(cursor.id) > 0)
+            : entry.createdAt < cursor.createdAt ||
+            (entry.createdAt === cursor.createdAt && entry.id.localeCompare(cursor.id) < 0);
         });
 
     const window = filtered.slice(0, limit);
-    const nextCursor = filtered.length > limit ? window[window.length - 1]?.createdAt : undefined;
+    const nextCursor = filtered.length > limit && window.at(-1)
+      ? `${window.at(-1).createdAt}:${window.at(-1).id}`
+      : undefined;
 
     return {
       items: window,
       sort,
       limit,
       rating,
-      cursor,
+      cursor: cursorToken,
       hasMore: filtered.length > limit,
       nextCursor,
     };

@@ -1,9 +1,10 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import crypto from "node:crypto";
 
 import { adminDb } from "@/lib/adminDb";
 import { getPostHogClient } from "@/lib/posthog-server";
 import { ApiError, getBearerToken, listFeedbackForSkill } from "@/lib/agent-api";
+import { getErrorPayload, getIpHash, jsonResponse } from "@/lib/route-helpers";
 
 type RouteContext = { params: Promise<{ skillId: string }> };
 
@@ -11,42 +12,6 @@ const ALLOWED_RATINGS = new Set(["positive", "negative", "neutral"]);
 const MAX_FEEDBACK_LENGTH = 2000;
 const MAX_REQUESTS_PER_MINUTE = 30;
 const RATE_LIMIT_WINDOW_MS = 60_000;
-
-function getIp(request: NextRequest): string {
-  const xForwardedFor = request.headers.get("x-forwarded-for");
-  if (xForwardedFor) {
-    const first = xForwardedFor.split(",")[0];
-    if (first) return first.trim();
-  }
-
-  return request.headers.get("x-real-ip") || "unknown";
-}
-
-function hashIp(ip: string) {
-  return crypto.createHash("sha256").update(ip).digest("hex");
-}
-
-function jsonResponse(
-  payload: unknown,
-  status: number,
-  methods = "POST, OPTIONS",
-) {
-  const response = NextResponse.json(payload, { status });
-  response.headers.set("Access-Control-Allow-Origin", "*");
-  response.headers.set("Access-Control-Allow-Methods", methods);
-  response.headers.set("Access-Control-Allow-Headers", "authorization, content-type");
-  return response;
-}
-
-function getErrorPayload(error: unknown) {
-  if (error instanceof ApiError) {
-    return { ...error.payload };
-  }
-  if (error instanceof Error) {
-    return { error: error.message };
-  }
-  return { error: "unknown error" };
-}
 
 export async function OPTIONS() {
   return jsonResponse({}, 200, "GET, POST, OPTIONS");
@@ -105,7 +70,7 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
   }
 
   const now = Date.now();
-  const ipHash = hashIp(getIp(request));
+  const ipHash = getIpHash(request);
 
   const { feedback: recentFeedback } = await adminDb.query({
     feedback: {

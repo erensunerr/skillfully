@@ -15,6 +15,7 @@ const LOGIN_CODE_COOLDOWN_MS = 60_000;
 const FEEDBACK_MIN_LIMIT = 1;
 const FEEDBACK_MAX_LIMIT = 100;
 const FEEDBACK_DEFAULT_LIMIT = 20;
+const SKILL_ID_SUFFIX_LENGTH = 10;
 const ALLOWED_SKILL_SORT: Record<string, "asc" | "desc"> = {
   asc: "asc",
   desc: "desc",
@@ -233,7 +234,7 @@ function isValidEmail(email: string) {
 
 function randomSkillId() {
   let out = "sk_";
-  for (let index = 0; index < 8; index += 1) {
+  for (let index = 0; index < SKILL_ID_SUFFIX_LENGTH; index += 1) {
     out += SKILL_ID_CHARS[crypto.randomInt(0, SKILL_ID_CHARS.length)];
   }
   return out;

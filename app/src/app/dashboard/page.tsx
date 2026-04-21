@@ -37,7 +37,7 @@ const FEEDBACK_SNIPPET_URL = "/feedback-template.md";
 function randomSkillId() {
   const chars = "abcdefghijkmnopqrstuvwxyz23456789";
   let out = "sk_";
-  for (let i = 0; i < 8; i += 1) {
+  for (let i = 0; i < 10; i += 1) {
     out += chars[Math.floor(Math.random() * chars.length)];
   }
   return out;

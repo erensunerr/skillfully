@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import fs from "node:fs/promises";
-import { fileURLToPath } from "node:url";
+import path from "node:path";
 
 import { getAdminDb } from "@/lib/adminDb";
 
@@ -23,9 +23,10 @@ const ALLOWED_SKILL_SORT: Record<string, "asc" | "desc"> = {
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const SKILL_ID_CHARS = "abcdefghijkmnopqrstuvwxyz23456789";
-const DEFAULT_TEMPLATE_PATH = fileURLToPath(
-  new URL("../../public/feedback-template.md", import.meta.url),
-);
+const PUBLIC_TEMPLATE_PATHS = [
+  path.join("app", "public", "feedback-template.md"),
+  path.join("public", "feedback-template.md"),
+];
 
 type LoginRateLimitAction = "login_request" | "login_confirm";
 type LoginAttemptOutcome = "success" | "failure";
@@ -140,7 +141,7 @@ type TxWriter = {
 
 function makeAdminStore(): AgentDataStore {
   const db = getAdminDb();
-  const tx = db.tx as Record<string, Record<string, TxWriter>>;
+  const tx = db.tx as unknown as Record<string, Record<string, TxWriter>>;
 
   return {
     query: async (query: QueryInput) => db.query(query as never),
@@ -188,8 +189,16 @@ function buildDefaultDependencies(): ApiDependencies {
       }
     },
     readTemplate: async () => {
+      for (const templatePath of PUBLIC_TEMPLATE_PATHS) {
+        const absolutePath = path.join(process.cwd(), templatePath);
+        try {
+          return await fs.readFile(absolutePath, "utf8");
+        } catch {
+          // try next candidate
+        }
+      }
       try {
-        return await fs.readFile(DEFAULT_TEMPLATE_PATH, "utf8");
+        return await fs.readFile(path.join(process.cwd(), "app", "public", "feedback-template.md"), "utf8");
       } catch {
         throw new Error("Unable to load feedback template from public/feedback-template.md");
       }
@@ -794,9 +803,18 @@ export async function listFeedbackForSkill(
         });
 
     const window = filtered.slice(0, limit);
-    const nextCursor = filtered.length > limit && window.at(-1)
-      ? `${window.at(-1).createdAt}:${window.at(-1).id}`
-      : undefined;
+    const nextCursor = (() => {
+      if (filtered.length <= limit) {
+        return undefined;
+      }
+
+      const lastItem = window.at(-1);
+      if (!lastItem) {
+        return undefined;
+      }
+
+      return `${lastItem.createdAt}:${lastItem.id}`;
+    })();
 
     return {
       items: window,

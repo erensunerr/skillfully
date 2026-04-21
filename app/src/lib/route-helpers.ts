@@ -42,7 +42,7 @@ export function jsonResponse(
 
 export function getErrorPayload(error: unknown): ErrorPayload {
   if (error instanceof ApiError) {
-    return { ...error.payload };
+    return { error: error.payload.error, ...error.payload };
   }
   if (error instanceof Error) {
     return { error: error.message };

@@ -6,3 +6,7 @@ export const adminDb = init({
   adminToken: process.env.INSTANT_APP_ADMIN_TOKEN!,
   schema,
 });
+
+export function getAdminDb() {
+  return adminDb;
+}

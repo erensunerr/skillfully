@@ -1,13 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "node:crypto";
+
 import { adminDb } from "@/lib/adminDb";
 import { getPostHogClient } from "@/lib/posthog-server";
+import { ApiError, getBearerToken, listFeedbackForSkill } from "@/lib/agent-api";
+
+type RouteContext = { params: Promise<{ skillId: string }> };
 
 const ALLOWED_RATINGS = new Set(["positive", "negative", "neutral"]);
 const MAX_FEEDBACK_LENGTH = 2000;
 const MAX_REQUESTS_PER_MINUTE = 30;
 const RATE_LIMIT_WINDOW_MS = 60_000;
-type RouteContext = { params: Promise<{ skillId: string }> };
 
 function getIp(request: NextRequest): string {
   const xForwardedFor = request.headers.get("x-forwarded-for");
@@ -23,19 +26,30 @@ function hashIp(ip: string) {
   return crypto.createHash("sha256").update(ip).digest("hex");
 }
 
-function jsonResponse(payload: Record<string, string>, status: number) {
+function jsonResponse(
+  payload: unknown,
+  status: number,
+  methods = "POST, OPTIONS",
+) {
   const response = NextResponse.json(payload, { status });
   response.headers.set("Access-Control-Allow-Origin", "*");
-  response.headers.set(
-    "Access-Control-Allow-Methods",
-    "POST, OPTIONS",
-  );
-  response.headers.set("Access-Control-Allow-Headers", "content-type");
+  response.headers.set("Access-Control-Allow-Methods", methods);
+  response.headers.set("Access-Control-Allow-Headers", "authorization, content-type");
   return response;
 }
 
+function getErrorPayload(error: unknown) {
+  if (error instanceof ApiError) {
+    return { ...error.payload };
+  }
+  if (error instanceof Error) {
+    return { error: error.message };
+  }
+  return { error: "unknown error" };
+}
+
 export async function OPTIONS() {
-  return jsonResponse({}, 200);
+  return jsonResponse({}, 200, "GET, POST, OPTIONS");
 }
 
 export async function POST(request: NextRequest, { params }: RouteContext) {
@@ -134,4 +148,30 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
   await posthog.shutdown();
 
   return jsonResponse({}, 201);
+}
+
+export async function GET(request: NextRequest, { params }: RouteContext) {
+  const { skillId } = await params;
+  const token = getBearerToken(request.headers.get("authorization"));
+
+  if (!token) {
+    return jsonResponse({ error: "missing Authorization: Bearer <token>" }, 401, "GET, OPTIONS");
+  }
+
+  const searchParams = request.nextUrl.searchParams;
+  try {
+    const result = await listFeedbackForSkill({
+      token,
+      skillId,
+      rating: searchParams.get("rating"),
+      sort: searchParams.get("sort"),
+      limit: searchParams.get("limit"),
+      cursor: searchParams.get("cursor"),
+    });
+
+    return jsonResponse(result, 200, "GET, OPTIONS");
+  } catch (error) {
+    const status = error instanceof ApiError ? error.status : 500;
+    return jsonResponse(getErrorPayload(error), status, "GET, OPTIONS");
+  }
 }

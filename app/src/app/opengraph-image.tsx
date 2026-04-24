@@ -7,7 +7,37 @@ export const size = {
 
 export const contentType = "image/png";
 
-export default function Image() {
+const TITLE = "Skillfully";
+const SUBTITLE = "See how agents use your skills, where they fail, and what to improve next.";
+
+async function loadGoogleFont(font: string, text: string, weight?: number) {
+  const family = font.replaceAll(" ", "+");
+  const variant = weight ? `:wght@${weight}` : "";
+  const cssUrl =
+    `https://fonts.googleapis.com/css2?family=${family}${variant}&text=` +
+    encodeURIComponent(text);
+  const css = await fetch(cssUrl).then((response) => response.text());
+  const resource = css.match(/src: url\((.+)\) format\('(opentype|truetype|woff)'\)/);
+
+  if (!resource) {
+    throw new Error(`Failed to resolve font source for ${font}.`);
+  }
+
+  const fontResponse = await fetch(resource[1]);
+
+  if (!fontResponse.ok) {
+    throw new Error(`Failed to download font data for ${font}.`);
+  }
+
+  return fontResponse.arrayBuffer();
+}
+
+export default async function Image() {
+  const [titleFont, subtitleFont] = await Promise.all([
+    loadGoogleFont("Instrument Serif", TITLE),
+    loadGoogleFont("Space Grotesk", SUBTITLE, 500),
+  ]);
+
   return new ImageResponse(
     (
       <div
@@ -18,51 +48,54 @@ export default function Image() {
           flexDirection: "column",
           justifyContent: "center",
           alignItems: "flex-start",
-          padding: "74px",
-          background: "#080808",
-          color: "#f6f4ec",
-          fontFamily: "Space Grotesk, Arial, sans-serif",
+          padding: "78px",
+          background: "#000000",
+          color: "#f4eddf",
           boxSizing: "border-box",
-          gap: 24,
+          gap: 14,
         }}
       >
         <div
           style={{
+            fontFamily: "Instrument Serif",
+            fontSize: 228,
+            lineHeight: 0.9,
+            letterSpacing: "-0.05em",
+          }}
+        >
+          {TITLE}
+        </div>
+
+        <div
+          style={{
+            maxWidth: 940,
+            fontFamily: "Space Grotesk",
             fontSize: 44,
-            letterSpacing: "0.1em",
-            textTransform: "uppercase",
-          }}
-        >
-          Skillfully
-        </div>
-
-        <div
-          style={{
-            fontSize: 78,
-            fontWeight: 700,
-            textTransform: "uppercase",
+            fontWeight: 500,
+            lineHeight: 1.15,
             letterSpacing: "-0.03em",
-            lineHeight: 1,
-            maxWidth: 1000,
           }}
         >
-          Analytics for Agent Skills
-        </div>
-
-        <div
-          style={{
-            marginTop: 8,
-            fontSize: 34,
-            lineHeight: 1.28,
-            maxWidth: 1040,
-          }}
-        >
-          See how agents use your skills, where they fail, and what to improve next.
+          {SUBTITLE}
         </div>
       </div>
     ),
     {
       ...size,
+      fonts: [
+        {
+          name: "Instrument Serif",
+          data: titleFont,
+          weight: 400,
+          style: "normal",
+        },
+        {
+          name: "Space Grotesk",
+          data: subtitleFont,
+          weight: 500,
+          style: "normal",
+        },
+      ],
     }
   );
 }

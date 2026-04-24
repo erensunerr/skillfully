@@ -55,7 +55,6 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Skillfully: Analytics for Agent Skills",
     description: "See how agents use your skills, where they fail, and what to improve next.",
-    images: ["/opengraph-image"],
   },
 };
 

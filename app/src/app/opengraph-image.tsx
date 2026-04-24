@@ -52,11 +52,12 @@ export default function Image() {
               maxWidth: 950,
               textTransform: "uppercase",
               letterSpacing: "-0.04em",
+              display: "flex",
+              flexDirection: "column",
             }}
           >
-            SEE HOW YOUR
-            <br />
-            AGENTS PERFORM
+            <span>SEE HOW YOUR</span>
+            <span>AGENTS PERFORM</span>
           </div>
 
           <div
@@ -72,8 +73,7 @@ export default function Image() {
           <div
             style={{
               marginTop: 16,
-              display: "grid",
-              gridTemplateColumns: "1.2fr 1fr",
+              display: "flex",
               gap: 20,
             }}
           >
@@ -86,6 +86,7 @@ export default function Image() {
                 display: "flex",
                 flexDirection: "column",
                 justifyContent: "center",
+                flex: "1.2 1 0%",
               }}
             >
               <div style={{ fontSize: 20, letterSpacing: "0.08em" }}>AGENT RUNS</div>
@@ -110,6 +111,7 @@ export default function Image() {
                 flexDirection: "column",
                 justifyContent: "center",
                 gap: 8,
+                flex: "1 1 0%",
               }}
             >
               <div style={{ fontSize: 20, letterSpacing: "0.08em" }}>IMPROVEMENT LOOP</div>

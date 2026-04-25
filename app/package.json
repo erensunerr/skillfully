@@ -13,7 +13,7 @@
   "dependencies": {
     "@instantdb/admin": "latest",
     "@instantdb/react": "latest",
-    "next": "15.4.10",
+    "next": "^16.2.4",
     "posthog-js": "^1.368.0",
     "posthog-node": "^5.29.2",
     "react": "19.1.0",

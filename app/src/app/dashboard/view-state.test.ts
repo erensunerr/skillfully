@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { resolveDashboardViewState } from "./view-state";
+import {
+  resolveDashboardViewState,
+  shouldShowOnboardingModalByDefault,
+} from "./view-state";
 
 test("shows detail view for list screen when skills exist", () => {
   const result = resolveDashboardViewState({
@@ -26,4 +29,12 @@ test("shows empty view when there are no skills", () => {
   assert.deepEqual(result, {
     kind: "empty",
   });
+});
+
+test("shows onboarding modal by default only when no skills exist", () => {
+  assert.equal(shouldShowOnboardingModalByDefault({ skills: [] }), true);
+  assert.equal(
+    shouldShowOnboardingModalByDefault({ skills: [{ id: "skill-1" }] }),
+    false,
+  );
 });

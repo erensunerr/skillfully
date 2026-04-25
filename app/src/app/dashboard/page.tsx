@@ -6,7 +6,11 @@ import { db } from "@/lib/db";
 import { type AppSchema } from "@/instant.schema";
 import { type InstaQLEntity, id } from "@instantdb/react";
 import type { User as InstantUser } from "@instantdb/core";
-import { resolveDashboardViewState } from "./view-state";
+import {
+  resolveDashboardViewState,
+  shouldShowOnboardingModalByDefault,
+} from "./view-state";
+import { OnboardingModal } from "./onboarding-modal";
 import posthog from "posthog-js";
 
 type Skill = InstaQLEntity<AppSchema, "skills">;
@@ -332,7 +336,13 @@ function SkillList({
   );
 }
 
-function EmptyState({ onCreate }: { onCreate: () => void }) {
+function EmptyState({
+  onCreate,
+  onOpenOnboarding,
+}: {
+  onCreate: () => void;
+  onOpenOnboarding: () => void;
+}) {
   return (
     <section className={`${BRUTAL_CARD} p-6`}>
       <h2 className="text-xl font-black uppercase">Your skills</h2>
@@ -340,13 +350,22 @@ function EmptyState({ onCreate }: { onCreate: () => void }) {
       <p className="mt-1 text-sm">
         Add your first skill to start collecting feedback.
       </p>
-      <button
-        type="button"
-        className={`${BRUTAL_BUTTON} mt-4`}
-        onClick={onCreate}
-      >
-        + New skill
-      </button>
+      <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+        <button
+          type="button"
+          className={BRUTAL_BUTTON}
+          onClick={onOpenOnboarding}
+        >
+          Choose setup path
+        </button>
+        <button
+          type="button"
+          className="border-4 border-black bg-white px-4 py-2 text-sm font-black uppercase text-black transition-all hover:bg-black hover:text-white"
+          onClick={onCreate}
+        >
+          Create skill directly
+        </button>
+      </div>
     </section>
   );
 }
@@ -478,6 +497,7 @@ export default function Dashboard() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [feedbackTemplate, setFeedbackTemplate] = useState<string | null>(null);
   const [feedbackTemplateError, setFeedbackTemplateError] = useState<string | null>(null);
+  const [onboardingDismissed, setOnboardingDismissed] = useState(false);
 
   const query = useMemo(() => {
     if (!user) {
@@ -531,6 +551,15 @@ export default function Dashboard() {
         : [],
     [selectedSkill, feedback],
   );
+
+  const shouldShowOnboardingModal =
+    screen === "list" &&
+    !onboardingDismissed &&
+    shouldShowOnboardingModalByDefault({ skills });
+
+  useEffect(() => {
+    setOnboardingDismissed(false);
+  }, [user?.id]);
 
   useEffect(() => {
     let active = true;
@@ -681,9 +710,22 @@ export default function Dashboard() {
     setAuthForm({ email: "", code: "" });
     setAuthPhase("request");
     setSelectedSkillId(null);
+    setOnboardingDismissed(false);
     setScreen("list");
 
     await db.auth.signOut({ invalidateToken: true });
+  }
+
+  function openCreateSkill() {
+    setOnboardingDismissed(true);
+    setErrorMessage("");
+    setScreen("create");
+  }
+
+  function openOnboarding() {
+    setOnboardingDismissed(false);
+    setErrorMessage("");
+    setScreen("list");
   }
 
   function createSkill(name: string, description: string) {
@@ -719,6 +761,7 @@ export default function Dashboard() {
 
     setSkillForm({ name: "", description: "" });
     setSelectedSkillId(newSkillEntityId);
+    setOnboardingDismissed(true);
     setScreen("detail");
     setErrorMessage("");
   }
@@ -729,15 +772,17 @@ export default function Dashboard() {
       style={{ backgroundImage: "linear-gradient(to right, #f3f4f6 1px, transparent 1px), linear-gradient(to bottom, #f3f4f6 1px, transparent 1px)", backgroundSize: "40px 40px" }}
     >
       <AppHeader user={user} onSignOut={handleSignOut} />
-      <div className="mx-auto flex w-full max-w-6xl gap-5 px-4 py-6 md:px-8">
-        <aside className="w-72 shrink-0">
+      <div
+        className={`mx-auto flex w-full max-w-6xl flex-col gap-5 px-4 py-6 transition-opacity md:px-8 lg:flex-row ${
+          shouldShowOnboardingModal ? "opacity-45" : ""
+        }`}
+        aria-hidden={shouldShowOnboardingModal ? true : undefined}
+      >
+        <aside className="w-full shrink-0 lg:w-72">
           <button
             type="button"
             className={`${BRUTAL_BUTTON} mb-3 w-full`}
-            onClick={() => {
-              setErrorMessage("");
-              setScreen("create");
-            }}
+            onClick={openCreateSkill}
           >
             + New skill
           </button>
@@ -748,6 +793,7 @@ export default function Dashboard() {
             onSelect={(skill) => {
               posthog.capture("skill_selected", { skill_name: skill.name });
               setSelectedSkillId(skill.id);
+              setOnboardingDismissed(true);
               setScreen("detail");
               setErrorMessage("");
             }}
@@ -778,10 +824,8 @@ export default function Dashboard() {
             />
           ) : (
             <EmptyState
-              onCreate={() => {
-                setErrorMessage("");
-                setScreen("create");
-              }}
+              onCreate={openCreateSkill}
+              onOpenOnboarding={openOnboarding}
             />
           )}
 
@@ -792,6 +836,15 @@ export default function Dashboard() {
           ) : null}
         </section>
       </div>
+      {shouldShowOnboardingModal ? (
+        <OnboardingModal
+          onClose={() => {
+            posthog.capture("onboarding_modal_closed");
+            setOnboardingDismissed(true);
+          }}
+          onCreateSkill={openCreateSkill}
+        />
+      ) : null}
     </main>
   );
 }

@@ -8,7 +8,7 @@
     "prebuild": "node -e \"require('node:fs').rmSync('.next', { recursive: true, force: true })\"",
     "start": "next start",
     "lint": "next lint",
-    "test": "node --import tsx --test"
+    "test": "node --import tsx --test \"src/**/*.test.ts\" \"src/**/*.test.tsx\""
   },
   "dependencies": {
     "@instantdb/admin": "latest",

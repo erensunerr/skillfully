@@ -33,3 +33,11 @@ export function resolveDashboardViewState<T extends DashboardSkillRef>({
     skillId: selectedSkill.id,
   };
 }
+
+export function shouldShowOnboardingModalByDefault<T extends DashboardSkillRef>({
+  skills,
+}: {
+  skills: T[];
+}) {
+  return skills.length === 0;
+}

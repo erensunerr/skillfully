@@ -1,11 +1,11 @@
 # Guide And Blog Implementation Plan
 
-**Goal:** Redesign `/docs` into a multi-step Skillfully guide and add a publishable blog.
+**Goal:** Redesign `/guide` into a multi-step Skillfully guide and add a publishable blog.
 
 ## Task 1: Pin route behavior with tests
 
 **Files:**
-- Modify: `app/src/app/docs/page.test.tsx`
+- Modify: `app/src/app/guide/page.test.tsx`
 - Create: `app/src/app/blog/page.test.tsx`
 - Create: `app/src/app/blog/[slug]/page.test.tsx`
 
@@ -18,12 +18,12 @@
 
 **Files:**
 - Create: `app/src/content/blog.ts`
-- Modify: `app/src/app/docs/page.tsx`
+- Modify: `app/src/app/guide/page.tsx`
 - Create: `app/src/app/blog/page.tsx`
 - Create: `app/src/app/blog/[slug]/page.tsx`
 
 - [x] Add typed article data for published blog posts.
-- [x] Redesign `/docs` around the six-step guide.
+- [x] Redesign `/guide` around the guide sequence.
 - [x] Add `/blog` article index.
 - [x] Add `/blog/[slug]` article renderer with static params and not-found behavior.
 - [x] Run `npm test`.

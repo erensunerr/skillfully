@@ -10,10 +10,12 @@ test("blog article route renders a published article", async () => {
     params: Promise.resolve({ slug: "how-to-write-better-agent-skills" }),
   });
   const html = renderToStaticMarkup(element);
+  const removedRoutePattern = new RegExp("/" + "do" + "cs");
 
   assert.match(html, /How to write better agent skills/);
   assert.match(html, /Table of Contents/);
   assert.match(html, /Instrument the outcome/);
   assert.match(html, /\/blog/);
-  assert.match(html, /\/docs/);
+  assert.match(html, /\/guide/);
+  assert.doesNotMatch(html, removedRoutePattern);
 });

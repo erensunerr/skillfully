@@ -6,7 +6,7 @@
 
 ## Goal
 
-Turn the small `/docs` guide into a long-form, multi-step guide that feels closer to the supplied Demand Curve examples, and add a separate `/blog` surface where Skillfully articles can be published.
+Turn the small `/guide` guide into a long-form guide surface that feels closer to the supplied Demand Curve examples, and add a separate `/blog` surface where Skillfully articles can be published.
 
 ## Visual Direction
 
@@ -23,7 +23,7 @@ Turn the small `/docs` guide into a long-form, multi-step guide that feels close
 
 ## Guide Structure
 
-The `/docs` route should explain a first Skillfully setup as a sequence:
+The `/guide` route should explain a first Skillfully setup as a sequence. This was later refined into separate article routes under `/guide/[slug]`.
 
 1. Intro
 2. Create
@@ -43,6 +43,6 @@ The guide should end with a blog article handoff instead of another dashboard ca
 
 ## Validation
 
-- Add render tests for `/docs`, `/blog`, and `/blog/[slug]`.
+- Add render tests for `/guide`, `/blog`, and article routes.
 - Run the full test suite and production build.
-- Browser-check `/docs`, `/blog`, and a blog article on desktop and mobile.
+- Browser-check `/guide`, `/blog`, and a blog article on desktop and mobile.

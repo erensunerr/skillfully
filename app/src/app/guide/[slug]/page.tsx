@@ -2,86 +2,55 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
-  blogArticles,
-  getBlogArticle,
-  getNextArticle,
-  type ArticleBlock,
-} from "@/content/blog";
+  getGuideArticle,
+  getNextGuideArticle,
+  guideArticles,
+} from "@/content/guide";
 
-type BlogArticleRouteProps = {
+type GuideArticleRouteProps = {
   params: Promise<{
     slug: string;
   }>;
 };
 
 export function generateStaticParams() {
-  return blogArticles.map((article) => ({
+  return guideArticles.map((article) => ({
     slug: article.slug,
   }));
 }
 
 export async function generateMetadata({
   params,
-}: BlogArticleRouteProps): Promise<Metadata> {
+}: GuideArticleRouteProps): Promise<Metadata> {
   const { slug } = await params;
-  const article = getBlogArticle(slug);
+  const article = getGuideArticle(slug);
 
   if (!article) {
     return {
-      title: "Article not found",
+      title: "Guide article not found",
     };
   }
 
   return {
-    title: `${article.title} | Skillfully Blog`,
+    title: `${article.title} | Skillfully Guide`,
     description: article.subtitle,
   };
 }
 
-function ArticleBlockView({ block }: { block: ArticleBlock }) {
-  if (block.type === "paragraph") {
-    return <p>{block.text}</p>;
-  }
-
-  if (block.type === "list") {
-    return (
-      <ul className="space-y-4 rounded-lg bg-[#f3f5f9] p-6">
-        {block.items.map((item) => (
-          <li key={item} className="flex gap-3">
-            <span aria-hidden className="mt-3 h-1.5 w-1.5 shrink-0 bg-[#0b66ff]" />
-            <span>{item}</span>
-          </li>
-        ))}
-      </ul>
-    );
-  }
-
-  return (
-    <aside className="border-l-4 border-[#0b66ff] bg-[#f3f5f9] p-6">
-      <p className="font-bold">{block.title}</p>
-      <div className="mt-4 space-y-4">
-        {block.body.map((line) => (
-          <p key={line}>{line}</p>
-        ))}
-      </div>
-    </aside>
-  );
-}
-
-export default async function BlogArticlePage({ params }: BlogArticleRouteProps) {
+export default async function GuideArticlePage({ params }: GuideArticleRouteProps) {
   const { slug } = await params;
-  const article = getBlogArticle(slug);
+  const article = getGuideArticle(slug);
 
   if (!article) {
     notFound();
   }
 
-  const nextArticle = getNextArticle(article);
+  const nextArticle = getNextGuideArticle(article);
 
   return (
     <main className="min-h-screen bg-[var(--white)] text-[var(--ink)]">
       <div className="border-b border-[var(--ink)] bg-[#0b66ff] px-4 py-3 text-center font-editorial-mono text-[0.68rem] font-bold uppercase text-white sm:text-xs">
-        Skillfully blog // {article.category}
+        Skillfully guide / article {article.number}
       </div>
 
       <header className="border-b border-[var(--ink)] bg-[var(--paper)]">
@@ -93,10 +62,10 @@ export default async function BlogArticlePage({ params }: BlogArticleRouteProps)
             aria-label="Primary navigation"
             className="flex flex-wrap items-center gap-5 font-editorial-mono text-xs font-bold uppercase"
           >
-            <Link href="/guide">Guide</Link>
-            <Link href="/blog" className="text-[#0b66ff]">
-              Blog
+            <Link href="/guide" className="text-[#0b66ff]">
+              Guide
             </Link>
+            <Link href="/blog">Blog</Link>
             <Link href="/dashboard">Dashboard</Link>
           </nav>
         </div>
@@ -104,7 +73,7 @@ export default async function BlogArticlePage({ params }: BlogArticleRouteProps)
 
       <section className="bg-[var(--ink)] px-5 pb-16 pt-20 text-center text-[var(--white)] sm:pt-24">
         <p className="font-editorial-mono text-xs font-bold uppercase text-neutral-400">
-          {article.category} / {article.publishedAt}
+          Article {article.number} / 5 sections
         </p>
         <h1 className="mx-auto mt-8 max-w-4xl font-editorial-sans text-5xl font-bold leading-none sm:text-7xl">
           {article.title}
@@ -112,23 +81,47 @@ export default async function BlogArticlePage({ params }: BlogArticleRouteProps)
         <p className="mx-auto mt-8 max-w-2xl text-lg leading-8 text-neutral-300">
           {article.subtitle}
         </p>
-        <p className="mt-6 font-editorial-mono text-xs uppercase text-neutral-400">
-          {article.author} / {article.readTime}
-        </p>
+
+        <div className="mx-auto mt-14 max-w-5xl rounded-xl bg-white px-5 py-3 text-[var(--ink)]">
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            {guideArticles.map((candidate) => (
+              <Link
+                key={candidate.slug}
+                href={`/guide/${candidate.slug}`}
+                className={`border-b-4 px-4 py-3 font-editorial-mono text-xs font-bold uppercase focus-visible:outline-none ${
+                  candidate.slug === article.slug
+                    ? "border-[#0b66ff] text-[#0b66ff]"
+                    : "border-transparent hover:border-[#0b66ff] hover:text-[#0b66ff] focus-visible:border-[#0b66ff]"
+                }`}
+              >
+                {candidate.number}
+              </Link>
+            ))}
+          </div>
+        </div>
       </section>
 
       <section className="px-5 py-16 sm:py-24">
         <div className="mx-auto grid max-w-5xl gap-10 lg:grid-cols-[minmax(0,42rem)_17rem] lg:items-start">
           <article className="space-y-14 text-lg leading-9">
-            {article.sections.map((section) => (
+            {article.sections.map((section, index) => (
               <section key={section.id} id={section.id} className="scroll-mt-8">
-                <h2 className="font-editorial-sans text-3xl font-bold leading-tight sm:text-4xl">
+                <p className="font-editorial-mono text-xs font-bold uppercase text-[#0b66ff]">
+                  Section {String(index + 1).padStart(2, "0")}
+                </p>
+                <h2 className="mt-4 font-editorial-sans text-3xl font-bold leading-tight sm:text-4xl">
                   {section.title}
                 </h2>
-                <div className="mt-6 space-y-6">
-                  {section.blocks.map((block, index) => (
-                    <ArticleBlockView key={`${section.id}-${index}`} block={block} />
-                  ))}
+                <p className="mt-6">{section.body}</p>
+                <div className="mt-7 rounded-lg bg-[#f3f5f9] p-6">
+                  <ul className="space-y-4 text-base leading-8">
+                    {section.bullets.map((bullet) => (
+                      <li key={bullet} className="flex gap-3">
+                        <span aria-hidden className="mt-3 h-1.5 w-1.5 shrink-0 bg-[#0b66ff]" />
+                        <span>{bullet}</span>
+                      </li>
+                    ))}
+                  </ul>
                 </div>
               </section>
             ))}
@@ -163,22 +156,36 @@ export default async function BlogArticlePage({ params }: BlogArticleRouteProps)
             </h2>
             <p className="mt-4 max-w-2xl text-lg leading-8">{nextArticle.subtitle}</p>
             <Link
-              href={`/blog/${nextArticle.slug}`}
+              href={`/guide/${nextArticle.slug}`}
               className="editorial-button editorial-button-dark mt-8 px-6 py-4 text-sm"
             >
               Continue
             </Link>
           </div>
         </section>
-      ) : null}
+      ) : (
+        <section className="border-y border-[#d8dce4] bg-[#f1f4f8] px-5 py-16">
+          <div className="mx-auto max-w-5xl">
+            <p className="font-editorial-mono text-xs font-bold uppercase text-[#0b66ff]">
+              Final article
+            </p>
+            <h2 className="mt-4 font-editorial-sans text-4xl font-bold leading-tight">
+              Keep improving from live feedback
+            </h2>
+            <Link href="/dashboard" className="editorial-button editorial-button-dark mt-8 px-6 py-4 text-sm">
+              Open dashboard
+            </Link>
+          </div>
+        </section>
+      )}
 
       <footer className="bg-[var(--paper)] px-5 py-14">
         <div className="mx-auto flex max-w-5xl flex-col gap-5 border-t border-[var(--ink)] pt-10 sm:flex-row sm:items-center sm:justify-between">
-          <Link href="/blog" className="font-editorial-sans text-xl font-bold">
-            Blog
-          </Link>
           <Link href="/guide" className="font-editorial-sans text-xl font-bold">
             Guide
+          </Link>
+          <Link href="/blog" className="font-editorial-sans text-xl font-bold">
+            Blog
           </Link>
         </div>
       </footer>

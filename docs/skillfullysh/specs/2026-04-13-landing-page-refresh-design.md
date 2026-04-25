@@ -24,7 +24,7 @@ Replace the current landing page with an editorial, monochrome system-inspired p
 - Keep the work inside the existing Next app under `app/`.
 - Keep real app destinations instead of placeholder links:
   - login and primary CTA continue to point at `/dashboard`
-  - footer utility link points at `/docs`
+  - footer utility link points at `/guide`
 - Implement the reference in React/Tailwind/global CSS instead of embedding raw HTML.
 - Ensure the page remains responsive on mobile, tablet, and desktop.
 

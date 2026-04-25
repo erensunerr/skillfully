@@ -17,7 +17,7 @@ export default function BlogPage() {
             aria-label="Primary navigation"
             className="flex flex-wrap items-center gap-5 font-editorial-mono text-xs font-bold uppercase"
           >
-            <Link href="/docs">Guide</Link>
+            <Link href="/guide">Guide</Link>
             <Link href="/blog" className="text-[#0b66ff]">
               Blog
             </Link>
@@ -74,7 +74,7 @@ export default function BlogPage() {
           <p className="font-editorial-mono text-xs font-bold uppercase">
             New here? Start with the guide.
           </p>
-          <Link href="/docs" className="editorial-button editorial-button-dark px-5 py-3 text-xs">
+          <Link href="/guide" className="editorial-button editorial-button-dark px-5 py-3 text-xs">
             Open guide
           </Link>
         </div>

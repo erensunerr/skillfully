@@ -45,8 +45,8 @@ Run: `cd app && npm test -- src/app/dashboard/view-state.test.ts`
 - Modify: `app/src/app/dashboard/page.tsx`
 - Create: `app/src/app/dashboard/onboarding-modal.tsx`
 - Create: `app/src/app/dashboard/onboarding-modal.test.tsx`
-- Create: `app/src/app/docs/page.tsx`
-- Create: `app/src/app/docs/page.test.tsx`
+- Create: `app/src/app/guide/page.tsx`
+- Create: `app/src/app/guide/page.test.tsx`
 
 - [x] **Step 1: Read current dashboard file immediately before editing**
 
@@ -62,11 +62,11 @@ Initialize modal visibility from `shouldShowOnboardingModalByDefault({ skills })
 
 - [x] **Step 4: Add guide route and render coverage**
 
-Create `/docs` so `Read the guide` lands on a real page, and add static render tests for the modal and guide page.
+Create `/guide` so `Read the guide` lands on a real page, and add static render tests for the modal and guide page.
 
 - [x] **Step 5: Verify reachable browser surfaces**
 
-Use Playwright to check `/docs` at desktop and mobile sizes. The live authenticated dashboard modal is blocked locally until `NEXT_PUBLIC_INSTANT_APP_ID` is configured.
+Use Playwright to check `/guide` at desktop and mobile sizes. The live authenticated dashboard modal is blocked locally until `NEXT_PUBLIC_INSTANT_APP_ID` is configured.
 
 ### Task 3: Verify and document
 

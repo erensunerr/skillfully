@@ -164,7 +164,7 @@ export function OnboardingModal({
         <footer className="flex flex-col gap-3 border-t-4 border-black px-6 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-8">
           <p className="font-mono text-base font-black uppercase">New to agent skills?</p>
           <Link
-            href="/docs"
+            href="/guide"
             className="inline-flex items-center gap-4 font-mono text-base font-black uppercase underline underline-offset-4"
             onClick={() => posthog.capture("onboarding_guide_clicked")}
           >

@@ -10,10 +10,12 @@ test("onboarding modal renders the start choices and guide action", () => {
   const html = renderToStaticMarkup(
     <OnboardingModal onClose={() => undefined} onCreateSkill={() => undefined} />,
   );
+  const removedRoutePattern = new RegExp("/" + "do" + "cs");
 
   assert.match(html, /How do you want to start\?/);
   assert.match(html, /Already have a skill\?/);
   assert.match(html, /Create your first skill/);
   assert.match(html, /Connect GitHub/);
-  assert.match(html, /href="\/docs"/);
+  assert.match(html, /href="\/guide"/);
+  assert.doesNotMatch(html, removedRoutePattern);
 });

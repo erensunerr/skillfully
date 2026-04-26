@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 
+import { CtaDotSpotlight } from "./cta-dot-spotlight";
 import { SchematicGraphic } from "./hero-schematic";
 
 const marqueeCopy =
@@ -665,8 +666,13 @@ export default function LandingPage() {
           </div>
         </section>
 
-        <section className="relative overflow-hidden bg-[var(--ink)] text-[var(--paper)]">
+        <CtaDotSpotlight>
           <div aria-hidden className="editorial-halftone-light absolute inset-0 opacity-55" />
+          <div
+            aria-hidden
+            data-dot-spotlight-layer="overlay"
+            className="cta-dot-spotlight-layer absolute inset-0"
+          />
           <RegistrationMark className="left-8 top-10" light />
           <RegistrationMark className="right-8 top-10" light />
           <RegistrationMark className="bottom-10 left-8" light />
@@ -690,7 +696,7 @@ export default function LandingPage() {
               Now onboarding early skill authors and design partners.
             </p>
           </div>
-        </section>
+        </CtaDotSpotlight>
 
         <footer className="grid gap-6 px-5 py-6 font-editorial-mono text-[0.72rem] sm:grid-cols-[1fr_auto_1fr] sm:items-center lg:px-8">
           <div>

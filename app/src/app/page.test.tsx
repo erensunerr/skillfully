@@ -23,5 +23,7 @@ test("landing page renders the refreshed editorial messaging", async () => {
   assert.match(html, /data-magnetic-layer="center"/);
   assert.match(html, /data-magnetic-layer="geometry"/);
   assert.match(html, /data-magnetic-layer="background"/);
+  assert.match(html, /data-dot-spotlight-area="footer-cta"/);
+  assert.match(html, /data-dot-spotlight-layer="overlay"/);
   assert.doesNotMatch(html, new RegExp(`/${["do", "cs"].join("")}`));
 });

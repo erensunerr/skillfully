@@ -158,6 +158,31 @@ button:disabled,
   background-size: 10px 10px;
 }
 
+.cta-dot-spotlight {
+  --cta-spotlight-x: 50%;
+  --cta-spotlight-y: 50%;
+  --cta-spotlight-opacity: 0;
+}
+
+.cta-dot-spotlight-layer {
+  pointer-events: none;
+  opacity: var(--cta-spotlight-opacity);
+  background-image: radial-gradient(circle at center, rgba(255, 255, 255, 0.23) 2.25px, transparent 3px);
+  background-size: 10px 10px;
+  mask-image: radial-gradient(
+    circle 155px at var(--cta-spotlight-x) var(--cta-spotlight-y),
+    rgb(0 0 0) 0%,
+    rgb(0 0 0 / 0.72) 38%,
+    rgb(0 0 0 / 0) 100%
+  );
+  -webkit-mask-image: radial-gradient(
+    circle 155px at var(--cta-spotlight-x) var(--cta-spotlight-y),
+    rgb(0 0 0) 0%,
+    rgb(0 0 0 / 0.72) 38%,
+    rgb(0 0 0 / 0) 100%
+  );
+}
+
 .corner-mark {
   position: absolute;
   width: 10px;
@@ -280,9 +305,14 @@ button:disabled,
 
   .editorial-button,
   .hero-schematic,
+  .cta-dot-spotlight-layer,
   .step-card-polish {
     animation: none;
     transition: none;
+  }
+
+  .cta-dot-spotlight-layer {
+    opacity: 0 !important;
   }
 
   .step-card-polish:hover,

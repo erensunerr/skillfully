@@ -17,6 +17,7 @@ type Skill = InstaQLEntity<AppSchema, "skills">;
 type Feedback = InstaQLEntity<AppSchema, "feedback">;
 type AppUser = InstantUser;
 type Screen = "list" | "create" | "detail";
+type DashboardTab = "overview" | "editor" | "analytics";
 type AuthPhase = "request" | "verify";
 
 type AuthForm = {
@@ -121,6 +122,36 @@ const versionRows = [
   ["v2.0.0", "Published", "Apr 15, 2025", "Major rewrite with new plugin architecture."],
   ["v1.0.0", "Published", "Apr 1, 2025", "Initial public release."],
 ] satisfies Array<[string, string, string, string]>;
+
+const editorMarkdownFiles = ["SKILL.md", "README.md", "examples.md", "changelog.md"] as const;
+const editorAssets = ["assets/logo.png", "faq.pdf"] as const;
+const editorValidationRows = [
+  ["Skill standard passed", ""],
+  ["Required fields complete", ""],
+  ["Markdown files", "4"],
+  ["Read-only assets", "2"],
+] satisfies Array<[string, string]>;
+const editorVersionHistoryRows = [
+  ["v2.4.0", "Draft", "bg-[var(--ink)]"],
+  ["v2.3.0", "Published", "bg-emerald-700"],
+  ["v2.2.0", "Published", "bg-emerald-700"],
+  ["v2.1.0", "Published", "bg-emerald-700"],
+] satisfies Array<[string, string, string]>;
+const editorPublishingRows = [
+  ["skills.sh", "Ready", "-", "terminal", "bg-emerald-700"],
+  ["GitHub", "Sync on publish", "-", "github", "bg-[var(--gray)]"],
+  ["agentskills.io", "Sync on publish", "-", "circle", "bg-[var(--gray)]"],
+] satisfies Array<[string, string, string, string, string]>;
+const analyticsFeedbackRows = [
+  ["May 12, 2025 23:41", "positive", "Claude", "Answered the billing question clearly and linked the correct help article."],
+  ["May 12, 2025 22:18", "neutral", "Cursor", "Useful overall, but the refund edge case was not covered in the skill."],
+  ["May 12, 2025 21:07", "negative", "Goose", "Escalation guidance was missing when the user asked about account access."],
+  ["May 12, 2025 19:56", "positive", "Codex", "Response was concise and easy to reuse."],
+  ["May 12, 2025 18:32", "neutral", "Agent run", "The plan change example helped, but pricing details were slightly outdated."],
+  ["May 12, 2025 17:15", "positive", "Claude", "Handled the question well and cited a trusted source."],
+  ["May 12, 2025 15:42", "negative", "Cursor", "Good tone, but the workflow should mention when to stop and ask for clarification."],
+  ["May 12, 2025 14:08", "neutral", "Goose", "Information was mostly correct, but the refund policy ambiguity is still confusing."],
+] satisfies Array<[string, RecentFeedbackRow["sentiment"], string, string]>;
 
 function randomSkillId() {
   const chars = "abcdefghijkmnopqrstuvwxyz23456789";
@@ -508,18 +539,25 @@ function DashboardSidebar({
   user,
   skills,
   selectedId,
+  activeTab,
   onSelect,
-  onOpenEditor,
+  onTabChange,
   onSignOut,
 }: {
   user: AppUser;
   skills: Skill[];
   selectedId: string | null;
+  activeTab: DashboardTab;
   onSelect: (skill: Skill) => void;
-  onOpenEditor: () => void;
+  onTabChange: (tab: DashboardTab) => void;
   onSignOut: () => void;
 }) {
   const selectedValue = selectedId ?? skills[0]?.id ?? "";
+  const navItems = [
+    ["overview", "Overview"],
+    ["editor", "Editor"],
+    ["analytics", "Analytics"],
+  ] satisfies Array<[DashboardTab, string]>;
 
   return (
     <aside className="flex min-h-0 flex-col border-b border-[var(--ink)] bg-[var(--paper)] text-[var(--ink)] lg:sticky lg:top-0 lg:min-h-screen lg:w-60 lg:border-b-0 lg:border-r">
@@ -555,28 +593,24 @@ function DashboardSidebar({
       </div>
 
       <nav className="border-y border-[var(--ink)] font-editorial-sans text-sm">
-        <button
-          type="button"
-          className="flex w-full items-center gap-3 border-l-4 border-[var(--ink)] bg-[var(--white)] px-5 py-4 text-left font-semibold"
-        >
-          <DashboardIcon name="overview" />
-          Overview
-        </button>
-        <button
-          type="button"
-          className="flex w-full items-center gap-3 px-5 py-4 text-left hover:bg-[var(--white)]"
-          onClick={onOpenEditor}
-        >
-          <DashboardIcon name="editor" />
-          Editor
-        </button>
-        <button
-          type="button"
-          className="flex w-full items-center gap-3 px-5 py-4 text-left hover:bg-[var(--white)]"
-        >
-          <DashboardIcon name="analytics" />
-          Analytics
-        </button>
+        {navItems.map(([tab, label]) => {
+          const isActive = activeTab === tab;
+          return (
+            <button
+              key={tab}
+              type="button"
+              className={`flex w-full items-center gap-3 border-l-4 px-5 py-4 text-left ${
+                isActive
+                  ? "border-[var(--ink)] bg-[var(--ink)] font-semibold text-[var(--paper)]"
+                  : "border-transparent hover:bg-[var(--white)]"
+              }`}
+              onClick={() => onTabChange(tab)}
+            >
+              <DashboardIcon name={tab} />
+              {label}
+            </button>
+          );
+        })}
       </nav>
 
       <div className="mt-auto px-5 py-6">
@@ -851,6 +885,10 @@ function SentimentBadge({ sentiment }: { sentiment: RecentFeedbackRow["sentiment
   );
 }
 
+function sentimentLabel(sentiment: RecentFeedbackRow["sentiment"]) {
+  return sentiment[0].toUpperCase() + sentiment.slice(1);
+}
+
 function RecentFeedbackTable({ entries }: { entries: Feedback[] }) {
   const rows = feedbackRowsFromEntries(entries);
 
@@ -962,10 +1000,533 @@ function VersionSnapshot() {
   );
 }
 
+function CheckCircleIcon() {
+  return (
+    <svg aria-hidden viewBox="0 0 20 20" className="h-5 w-5" fill="currentColor">
+      <path d="M10 2a8 8 0 1 0 0 16 8 8 0 0 0 0-16Zm3.8 6.5-4.5 4.6-2.4-2.4 1-1 1.4 1.4 3.5-3.6 1 1Z" />
+    </svg>
+  );
+}
+
+function SearchIcon() {
+  return (
+    <svg aria-hidden viewBox="0 0 20 20" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.7">
+      <circle cx="9" cy="9" r="5.5" />
+      <path d="m13 13 4 4" />
+    </svg>
+  );
+}
+
+function FileGlyph({ locked = false }: { locked?: boolean }) {
+  return (
+    <span className="flex h-7 w-7 items-center justify-center border border-[var(--ink)]">
+      {locked ? (
+        <svg aria-hidden viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.7">
+          <rect x="5" y="8" width="10" height="8" />
+          <path d="M7 8V6a3 3 0 0 1 6 0v2" />
+        </svg>
+      ) : (
+        <svg aria-hidden viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.7">
+          <path d="M5 2h7l3 3v13H5V2Z" />
+          <path d="M12 2v4h4M7 10h6M7 13h6" />
+        </svg>
+      )}
+    </span>
+  );
+}
+
+function WorkspaceTopBar({ current }: { current: "Frontmatter" | "Analytics" }) {
+  return (
+    <div className="flex min-h-14 flex-col gap-3 border-b border-[var(--ink)] bg-[var(--paper)] px-5 py-3 lg:flex-row lg:items-center lg:justify-between">
+      <div className="flex flex-wrap gap-3">
+        <button type="button" className="flex min-w-28 items-center justify-between border border-[var(--ink)] px-4 py-2 text-sm">
+          Files
+          <span aria-hidden className="text-xl leading-none">›</span>
+        </button>
+        <button type="button" className="flex min-w-32 items-center justify-between border border-[var(--ink)] px-4 py-2 text-sm">
+          {current}
+          <span aria-hidden className="text-xl leading-none">›</span>
+        </button>
+      </div>
+      <button type="button" className="flex items-center gap-3 self-start text-sm lg:self-auto">
+        <CheckCircleIcon />
+        Validate skill
+      </button>
+    </div>
+  );
+}
+
+function SkillEditorWorkspace({
+  skill,
+}: {
+  skill: Skill;
+}) {
+  const [selectedFile, setSelectedFile] = useState<(typeof editorMarkdownFiles)[number]>("SKILL.md");
+  const [frontmatter, setFrontmatter] = useState({
+    name: skill.name,
+    summary: skill.description || "Helps agents answer customer support questions clearly and safely.",
+    version: "v2.4.0",
+    status: "Draft",
+  });
+  const installPrompt = [
+    `Install and use the ${skill.name} skill.`,
+    "Load the latest published version from Skillfully, skills.sh, or agentskills.io.",
+    "Use it as a guide for handling customer support questions.",
+    "Follow its workflow, response style, and escalation guidance.",
+  ].join("\n");
+
+  return (
+    <div className="min-h-screen bg-[var(--paper)] text-[var(--ink)]">
+      <WorkspaceTopBar current="Frontmatter" />
+
+      <section className="grid border-b border-[var(--ink)] xl:min-h-[47rem] xl:grid-cols-[17.5rem_minmax(0,1fr)_21.5rem]">
+        <aside className="border-b border-[var(--ink)] p-5 xl:border-b-0 xl:border-r">
+          <div className="flex items-center justify-between">
+            <p className="font-editorial-mono text-xs font-bold uppercase">Files</p>
+            <button type="button" aria-label="Collapse files" className="text-2xl leading-none">‹</button>
+          </div>
+          <button type="button" className="mt-7 flex w-full items-center justify-center gap-3 border border-[var(--ink)] px-4 py-3 text-sm">
+            <span className="text-2xl leading-none">+</span>
+            Upload file
+          </button>
+
+          <div className="mt-7">
+            <p className="font-editorial-mono text-xs font-bold uppercase">Markdown files (editable)</p>
+            <div className="mt-4 space-y-2">
+              {editorMarkdownFiles.map((file) => {
+                const isActive = selectedFile === file;
+                return (
+                  <button
+                    key={file}
+                    type="button"
+                    className={`flex w-full items-center justify-between px-3 py-3 text-left text-sm ${
+                      isActive ? "bg-[var(--white)] font-semibold" : "hover:bg-[var(--white)]"
+                    }`}
+                    onClick={() => setSelectedFile(file)}
+                  >
+                    <span className="flex items-center gap-3">
+                      <FileGlyph />
+                      {file}
+                    </span>
+                    {isActive ? <span aria-hidden className="h-2 w-2 rounded-full bg-[var(--ink)]" /> : null}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="mt-8 border-t border-[var(--ink)] pt-7">
+            <p className="font-editorial-mono text-xs font-bold uppercase">Assets (read-only)</p>
+            <div className="mt-4 space-y-2">
+              {editorAssets.map((asset) => (
+                <div key={asset} className="flex items-center justify-between px-3 py-3 text-sm">
+                  <span className="flex items-center gap-3">
+                    <FileGlyph locked />
+                    {asset}
+                  </span>
+                  <FileGlyph locked />
+                </div>
+              ))}
+            </div>
+          </div>
+        </aside>
+
+        <section className="min-w-0 border-b border-[var(--ink)] bg-[var(--white)] xl:border-b-0 xl:border-r">
+          <div className="flex min-h-14 items-center gap-3 overflow-x-auto border-b border-[var(--ink)] px-5 text-sm">
+            {["↶", "↷", "B", "I", "Link", "•", "1.", "H2", "\"", "</>", "Table", "..."].map((tool, index) => (
+              <button
+                key={`${tool}-${index}`}
+                type="button"
+                className={`shrink-0 px-2 py-1 ${tool === "H2" ? "border border-[var(--ink)] px-4" : ""}`}
+              >
+                {tool}
+              </button>
+            ))}
+          </div>
+          <article className="mx-auto max-w-3xl px-6 py-10 sm:px-10">
+            <h1 className="font-editorial-sans text-5xl font-bold leading-none sm:text-6xl">{frontmatter.name}</h1>
+            <p className="mt-4 text-lg leading-8">{frontmatter.summary}</p>
+            <blockquote className="mt-6 border-l-4 border-[var(--ink)] bg-[var(--paper)] px-5 py-4 italic leading-7">
+              Be concise, cite sources, and escalate when the answer is unknown or sensitive to protect the customer and the company.
+            </blockquote>
+
+            <h2 className="mt-8 font-editorial-sans text-3xl font-bold">When to use</h2>
+            <ul className="mt-3 list-disc space-y-2 pl-6 text-sm leading-6">
+              <li>Answer questions about product features and how they work</li>
+              <li>Help customers understand pricing, plans, and promotions</li>
+              <li>Clarify billing, payments, refunds, and account issues</li>
+              <li>Explain company policies, eligibility, and terms</li>
+            </ul>
+
+            <h2 className="mt-8 font-editorial-sans text-3xl font-bold">Workflow</h2>
+            <ol className="mt-3 list-decimal space-y-2 pl-6 text-sm leading-6">
+              <li>Understand the customer's question and context</li>
+              <li>Search trusted sources and gather relevant information</li>
+              <li>Draft a clear, concise answer with sources</li>
+              <li>Confirm accuracy and compliance</li>
+              <li>Escalate when unsure or request more information</li>
+            </ol>
+
+            <h2 className="mt-8 font-editorial-sans text-3xl font-bold">Response style</h2>
+            <ul className="mt-3 list-disc space-y-2 pl-6 text-sm leading-6">
+              <li>Use short, plain language</li>
+              <li>Lead with the answer, then add helpful details</li>
+              <li>Cite sources using inline links</li>
+              <li>Stay empathetic and professional</li>
+            </ul>
+
+            <h2 className="mt-8 font-editorial-sans text-3xl font-bold">Examples</h2>
+            <div className="mt-4 space-y-3 text-sm leading-6">
+              <p><span className="mr-3 rounded-full border border-[var(--ink)] px-2 py-1 font-editorial-mono text-xs">Q</span>Can I change my plan after I've subscribed?</p>
+              <p className="pl-11"><span className="mr-3 rounded-full border border-[var(--ink)] px-2 py-1 font-editorial-mono text-xs">A</span>Yes. You can change your plan at any time from your billing settings. The changes take effect at the start of your next billing cycle.</p>
+            </div>
+          </article>
+        </section>
+
+        <aside className="p-5">
+          <div className="flex items-center justify-between">
+            <p className="font-editorial-mono text-xs font-bold uppercase">Frontmatter</p>
+            <button type="button" aria-label="Collapse frontmatter" className="text-2xl leading-none">⌃</button>
+          </div>
+
+          <div className="mt-6 space-y-5">
+            <label className="block text-sm">
+              <span className="block font-editorial-sans">Name</span>
+              <input
+                className={DASHBOARD_INPUT}
+                value={frontmatter.name}
+                onChange={(event) => {
+                  const nextName = event.currentTarget.value;
+                  setFrontmatter((state) => ({ ...state, name: nextName }));
+                }}
+              />
+            </label>
+            <label className="block text-sm">
+              <span className="block font-editorial-sans">Summary</span>
+              <textarea
+                className={`${DASHBOARD_INPUT} min-h-24`}
+                value={frontmatter.summary}
+                onChange={(event) => {
+                  const nextSummary = event.currentTarget.value;
+                  setFrontmatter((state) => ({ ...state, summary: nextSummary }));
+                }}
+              />
+            </label>
+            <label className="block text-sm">
+              <span className="block font-editorial-sans">Version</span>
+              <input
+                className={DASHBOARD_INPUT}
+                value={frontmatter.version}
+                onChange={(event) => {
+                  const nextVersion = event.currentTarget.value;
+                  setFrontmatter((state) => ({ ...state, version: nextVersion }));
+                }}
+              />
+            </label>
+            <label className="block text-sm">
+              <span className="block font-editorial-sans">Status</span>
+              <select
+                className={DASHBOARD_INPUT}
+                value={frontmatter.status}
+                onChange={(event) => {
+                  const nextStatus = event.currentTarget.value;
+                  setFrontmatter((state) => ({ ...state, status: nextStatus }));
+                }}
+              >
+                <option>Draft</option>
+                <option>Published</option>
+              </select>
+            </label>
+          </div>
+
+          <div className="mt-7 border-t border-[var(--ink)] pt-6">
+            <p className="font-editorial-mono text-xs font-bold uppercase">Validation</p>
+            <div className="mt-4 space-y-4">
+              {editorValidationRows.map(([label, value]) => (
+                <div key={label} className="flex items-center justify-between gap-4 text-sm">
+                  <span className="flex items-center gap-3">
+                    <span className="text-emerald-700"><CheckCircleIcon /></span>
+                    {label}
+                  </span>
+                  {value ? <span>{value}</span> : null}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="mt-7 border-t border-[var(--ink)] pt-6">
+            <p className="font-editorial-mono text-xs font-bold uppercase">Version history</p>
+            <div className="mt-4 space-y-4">
+              {editorVersionHistoryRows.map(([version, status, dot]) => (
+                <div key={version} className="grid grid-cols-[1fr_1fr_auto] items-center gap-4 text-sm">
+                  <span>{version}</span>
+                  <span className="italic">{status}</span>
+                  <span aria-hidden className={`h-2 w-2 rounded-full ${dot}`} />
+                </div>
+              ))}
+            </div>
+          </div>
+        </aside>
+      </section>
+
+      <section className="grid border-b border-[var(--ink)] lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
+        <div className="border-b border-[var(--ink)] p-5 lg:border-b-0 lg:border-r">
+          <p className="font-editorial-mono text-xs font-bold uppercase">Publishing destinations</p>
+          <table className="mt-4 w-full border-collapse text-left text-sm">
+            <thead className="font-editorial-mono text-xs uppercase">
+              <tr className="border-b border-[var(--ink)]">
+                <th className="py-3 font-bold">Destination</th>
+                <th className="py-3 font-bold">Status</th>
+                <th className="py-3 text-right font-bold">Last sync</th>
+              </tr>
+            </thead>
+            <tbody>
+              {editorPublishingRows.map(([destination, status, sync, icon, dot]) => (
+                <tr key={destination} className="border-b border-[var(--ink)]/50">
+                  <td className="py-3">
+                    <span className="flex items-center gap-3">
+                      <TargetIcon name={icon} />
+                      {destination}
+                    </span>
+                  </td>
+                  <td className="py-3">
+                    <span className="flex items-center gap-3">
+                      <span aria-hidden className={`h-2 w-2 rounded-full ${dot}`} />
+                      {status}
+                    </span>
+                  </td>
+                  <td className="py-3 text-right">{sync}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="p-5">
+          <button type="button" className="w-full border border-[var(--ink)] bg-[var(--ink)] px-6 py-4 font-editorial-sans text-lg font-semibold text-[var(--paper)]">
+            Publish version
+          </button>
+          <div className="mt-4 border border-[var(--ink)] p-4">
+            <div className="flex items-start justify-between gap-4">
+              <p className="font-editorial-mono text-xs font-bold uppercase">Install skill prompt</p>
+              <button type="button" aria-label="Copy install skill prompt" className="border border-[var(--ink)] p-3">
+                <CopyIcon />
+              </button>
+            </div>
+            <pre className="mt-4 whitespace-pre-wrap font-editorial-mono text-xs leading-6">
+              {installPrompt}
+            </pre>
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function AnalyticsChart({
+  title,
+  value,
+  delta,
+  yLabels,
+  path,
+}: {
+  title: string;
+  value: string;
+  delta: string;
+  yLabels: string[];
+  path: string;
+}) {
+  return (
+    <article className={`${DASHBOARD_CARD} p-5`}>
+      <div className="flex items-start gap-2">
+        <h2 className="font-editorial-sans text-2xl font-semibold">{title}</h2>
+        <span className="mt-1 flex h-5 w-5 items-center justify-center rounded-full border border-[var(--ink)] font-editorial-mono text-xs">i</span>
+      </div>
+      <div className="mt-3 flex items-center gap-5">
+        <span className="font-editorial-sans text-3xl font-semibold">{value}</span>
+        <span className="font-editorial-sans text-sm">
+          <span className="font-bold text-emerald-700">▲</span> {delta}
+        </span>
+      </div>
+      <div className="mt-6 overflow-x-auto">
+        <svg aria-label={`${title} chart`} role="img" viewBox="0 0 560 255" className="h-64 min-w-[34rem] text-[var(--ink)]">
+          {[34, 84, 134, 184, 234].map((y, index) => (
+            <g key={y}>
+              <line x1="58" y1={y} x2="540" y2={y} stroke="currentColor" strokeOpacity="0.22" strokeDasharray="4 4" />
+              <text x="12" y={y + 5} className="fill-current font-editorial-sans text-xs">{yLabels[index]}</text>
+            </g>
+          ))}
+          <line x1="58" y1="234" x2="540" y2="234" stroke="currentColor" />
+          <path d={path} fill="none" stroke="currentColor" strokeWidth="2.2" />
+          {["00:00", "04:00", "08:00", "12:00", "16:00", "20:00", "24:00"].map((label, index) => (
+            <text key={label} x={58 + index * 80} y="252" className="fill-current font-editorial-sans text-xs">
+              {label}
+            </text>
+          ))}
+        </svg>
+      </div>
+    </article>
+  );
+}
+
+function SkillAnalyticsWorkspace() {
+  const [query, setQuery] = useState("");
+  const [sentiments, setSentiments] = useState<Array<RecentFeedbackRow["sentiment"]>>([
+    "positive",
+    "neutral",
+    "negative",
+  ]);
+  const visibleRows = analyticsFeedbackRows.filter(([, sentiment, source, feedback]) => {
+    const matchesSentiment = sentiments.includes(sentiment);
+    const needle = query.trim().toLowerCase();
+    if (!needle) {
+      return matchesSentiment;
+    }
+    return matchesSentiment && `${source} ${feedback}`.toLowerCase().includes(needle);
+  });
+
+  return (
+    <div className="min-h-screen bg-[var(--paper)] text-[var(--ink)]">
+      <WorkspaceTopBar current="Analytics" />
+
+      <section className="space-y-6 p-5 sm:p-7">
+        <div className="grid gap-4 xl:grid-cols-[12rem_minmax(16rem,1fr)_10rem_minmax(20rem,auto)]">
+          <select aria-label="Published version" className="border border-[var(--ink)] bg-[var(--paper)] px-4 py-3 text-base" defaultValue="v2.3.0">
+            <option value="v2.3.0">Published v2.3.0</option>
+            <option value="v2.2.0">Published v2.2.0</option>
+          </select>
+          <label className="flex items-center gap-3 border border-[var(--ink)] bg-[var(--paper)] px-4">
+            <SearchIcon />
+            <input
+              className="w-full bg-transparent py-3 outline-none"
+              placeholder="Search feedback"
+              value={query}
+              onChange={(event) => setQuery(event.currentTarget.value)}
+            />
+          </label>
+          <select aria-label="Analytics date range" className="border border-[var(--ink)] bg-[var(--paper)] px-4 py-3 text-base" defaultValue="24h">
+            <option value="24h">Last 24h</option>
+            <option value="7d">Last 7 days</option>
+          </select>
+          <div className="flex flex-wrap gap-2 border border-[var(--ink)] p-2">
+            {(["positive", "neutral", "negative"] as const).map((sentiment) => {
+              const isActive = sentiments.includes(sentiment);
+              return (
+                <button
+                  key={sentiment}
+                  type="button"
+                  className={`border px-4 py-2 text-sm ${
+                    isActive ? "border-[var(--ink)] bg-[var(--white)]" : "border-[var(--ink)]/30 opacity-55"
+                  }`}
+                  onClick={() =>
+                    setSentiments((current) =>
+                      current.includes(sentiment)
+                        ? current.filter((item) => item !== sentiment)
+                        : [...current, sentiment],
+                    )
+                  }
+                >
+                  {sentimentLabel(sentiment)}
+                  <span className="ml-3" aria-hidden>×</span>
+                </button>
+              );
+            })}
+            <button type="button" aria-label="More filters" className="border border-[var(--ink)] px-3 py-2">⌄</button>
+          </div>
+        </div>
+
+        <section className="grid gap-6 xl:grid-cols-2">
+          <AnalyticsChart
+            title="Active users"
+            value="1,842"
+            delta="18.6% vs prior 24h"
+            yLabels={["2.0K", "1.5K", "1.0K", "500", "0"]}
+            path="M62 158 82 154 102 166 122 174 142 162 162 156 182 166 202 150 222 138 242 132 262 120 282 96 302 88 322 78 342 68 362 64 382 58 402 56 422 50 442 44 462 38 482 34 502 28 522 20 540 24"
+          />
+          <AnalyticsChart
+            title="Success rate"
+            value="92%"
+            delta="3.4 pp vs prior 24h"
+            yLabels={["100%", "96%", "92%", "88%", "80%"]}
+            path="M62 156 82 148 102 162 122 172 142 164 162 180 182 154 202 142 222 132 242 136 262 148 282 154 302 146 322 136 342 124 362 112 382 104 402 100 422 102 442 98 462 90 482 94 502 104 522 112 540 106"
+          />
+        </section>
+
+        <section className={`${DASHBOARD_CARD} overflow-hidden`}>
+          <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
+            <h2 className="font-editorial-sans text-2xl font-semibold">Feedback</h2>
+            <div className="flex gap-3">
+              <label className="flex min-w-64 items-center gap-3 border border-[var(--ink)] px-4">
+                <SearchIcon />
+                <input
+                  className="w-full bg-transparent py-3 outline-none"
+                  placeholder="Search feedback"
+                  value={query}
+                  onChange={(event) => setQuery(event.currentTarget.value)}
+                />
+              </label>
+              <button type="button" aria-label="Tune filters" className="border border-[var(--ink)] px-4">☷</button>
+            </div>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[56rem] border-collapse text-left text-sm">
+              <thead className="font-editorial-mono text-xs uppercase">
+                <tr className="border-b border-[var(--ink)]">
+                  <th className="px-5 py-4 font-bold">Time (UTC) ↓</th>
+                  <th className="px-5 py-4 font-bold">Sentiment</th>
+                  <th className="px-5 py-4 font-bold">Agent / Source</th>
+                  <th className="px-5 py-4 font-bold">Feedback</th>
+                </tr>
+              </thead>
+              <tbody>
+                {visibleRows.map(([time, sentiment, source, feedback]) => (
+                  <tr key={`${time}-${source}`} className="border-b border-[var(--ink)]/45">
+                    <td className="px-5 py-4">{time}</td>
+                    <td className="px-5 py-4">
+                      <span className="inline-flex items-center gap-3">
+                        <span
+                          aria-hidden
+                          className={`h-2.5 w-2.5 rounded-full ${
+                            sentiment === "positive"
+                              ? "bg-emerald-700"
+                              : sentiment === "negative"
+                                ? "bg-red-600"
+                                : "bg-[var(--gray)]"
+                          }`}
+                        />
+                        {sentimentLabel(sentiment)}
+                      </span>
+                    </td>
+                    <td className="px-5 py-4">{source}</td>
+                    <td className="px-5 py-4">{feedback}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="flex flex-col gap-4 px-5 py-4 text-sm sm:flex-row sm:items-center sm:justify-between">
+            <p>Showing 1-8 of 243</p>
+            <div className="flex items-center gap-5">
+              <button type="button" className="border border-[var(--ink)] px-3 py-2">1</button>
+              <button type="button">2</button>
+              <button type="button">3</button>
+              <span>...</span>
+              <button type="button">31</button>
+              <button type="button" className="text-2xl leading-none">›</button>
+            </div>
+          </div>
+        </section>
+      </section>
+    </div>
+  );
+}
+
 export function SkillDetail({
   skill,
   entries,
   onBack,
+  activeTab = "overview",
+  onTabChange,
   onOpenEditor,
   feedbackTemplate,
   feedbackTemplateError,
@@ -973,6 +1534,8 @@ export function SkillDetail({
   skill: Skill;
   entries: Feedback[];
   onBack: () => void;
+  activeTab?: DashboardTab;
+  onTabChange?: (tab: DashboardTab) => void;
   onOpenEditor?: () => void;
   feedbackTemplate: string | null;
   feedbackTemplateError: string | null;
@@ -986,6 +1549,14 @@ export function SkillDetail({
   const successRate =
     totalRated > 0 ? `${Math.round((counts.positive / totalRated) * 1000) / 10}%` : "94.8%";
   const activeUsers = totalRated > 0 ? Math.max(totalRated * 37, 128).toLocaleString() : "2,304";
+
+  if (activeTab === "editor") {
+    return <SkillEditorWorkspace skill={skill} />;
+  }
+
+  if (activeTab === "analytics") {
+    return <SkillAnalyticsWorkspace />;
+  }
 
   return (
     <div className="mx-auto w-full max-w-6xl space-y-8 px-5 py-8 sm:px-8 lg:px-11 lg:py-12">
@@ -1026,7 +1597,11 @@ export function SkillDetail({
             className="flex items-center justify-between border border-[var(--ink)] bg-[var(--ink)] px-5 py-4 font-editorial-sans text-base font-semibold text-[var(--paper)] transition hover:bg-[var(--paper)] hover:text-[var(--ink)]"
             onClick={() => {
               posthog.capture("dashboard_editor_clicked", { skill_name: skill.name });
-              onOpenEditor?.();
+              if (onTabChange) {
+                onTabChange("editor");
+              } else {
+                onOpenEditor?.();
+              }
             }}
           >
             Go to Editor
@@ -1074,6 +1649,7 @@ export default function Dashboard() {
   const { isLoading: isAuthLoading, user, error: authHookError } = db.useAuth();
   const [screen, setScreen] = useState<Screen>("list");
   const [selectedSkillId, setSelectedSkillId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<DashboardTab>("overview");
 
   const [authPhase, setAuthPhase] = useState<AuthPhase>("request");
   const [authForm, setAuthForm] = useState<AuthForm>({ email: "", code: "" });
@@ -1301,6 +1877,7 @@ export default function Dashboard() {
     setAuthForm({ email: "", code: "" });
     setAuthPhase("request");
     setSelectedSkillId(null);
+    setActiveTab("overview");
     setOnboardingDismissed(false);
     setScreen("list");
 
@@ -1310,13 +1887,38 @@ export default function Dashboard() {
   function openCreateSkill() {
     setOnboardingDismissed(true);
     setErrorMessage("");
+    setActiveTab("editor");
     setScreen("create");
   }
 
   function openOnboarding() {
     setOnboardingDismissed(false);
     setErrorMessage("");
+    setActiveTab("overview");
     setScreen("list");
+  }
+
+  function openDashboardTab(tab: DashboardTab) {
+    posthog.capture("dashboard_tab_selected", { tab });
+    setOnboardingDismissed(true);
+    setErrorMessage("");
+    setActiveTab(tab);
+
+    if (skills.length === 0) {
+      if (tab === "editor") {
+        setScreen("create");
+        return;
+      }
+
+      setScreen("list");
+      return;
+    }
+
+    if (!selectedSkillId) {
+      setSelectedSkillId(skills[0].id);
+    }
+
+    setScreen("detail");
   }
 
   function createSkill(name: string, description: string) {
@@ -1352,6 +1954,7 @@ export default function Dashboard() {
 
     setSkillForm({ name: "", description: "" });
     setSelectedSkillId(newSkillEntityId);
+    setActiveTab("overview");
     setOnboardingDismissed(true);
     setScreen("detail");
     setErrorMessage("");
@@ -1369,6 +1972,7 @@ export default function Dashboard() {
         <DashboardSidebar
           user={user}
           skills={skills}
+          activeTab={screen === "create" ? "editor" : activeTab}
           selectedId={viewState.kind === "detail" ? viewState.skillId : selectedSkillId}
           onSelect={(skill) => {
             posthog.capture("skill_selected", { skill_name: skill.name });
@@ -1377,7 +1981,7 @@ export default function Dashboard() {
             setScreen("detail");
             setErrorMessage("");
           }}
-          onOpenEditor={openCreateSkill}
+          onTabChange={openDashboardTab}
           onSignOut={handleSignOut}
         />
 
@@ -1398,11 +2002,13 @@ export default function Dashboard() {
             <SkillDetail
               skill={selectedSkill}
               entries={selectedFeedback}
+              activeTab={activeTab}
               feedbackTemplate={feedbackTemplate}
               feedbackTemplateError={feedbackTemplateError}
-              onOpenEditor={openCreateSkill}
+              onTabChange={openDashboardTab}
               onBack={() => {
                 setSelectedSkillId(null);
+                setActiveTab("overview");
                 setScreen("list");
               }}
             />

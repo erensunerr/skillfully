@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { type FormEvent, type ReactNode, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { db } from "@/lib/db";
 import { type AppSchema } from "@/instant.schema";
@@ -17,7 +17,7 @@ type Skill = InstaQLEntity<AppSchema, "skills">;
 type Feedback = InstaQLEntity<AppSchema, "feedback">;
 type AppUser = InstantUser;
 type Screen = "list" | "create" | "detail";
-type DashboardTab = "overview" | "editor" | "analytics";
+type DashboardTab = "overview" | "editor" | "analytics" | "settings" | "account";
 type AuthPhase = "request" | "verify";
 
 type AuthForm = {
@@ -153,6 +153,19 @@ const analyticsFeedbackRows = [
   ["May 12, 2025 14:08", "neutral", "Goose", "Information was mostly correct, but the refund policy ambiguity is still confusing."],
 ] satisfies Array<[string, RecentFeedbackRow["sentiment"], string, string]>;
 
+const skillSelectorFallbackSkills = [
+  ["demo-skill", "Customer support workflow"],
+  ["seo-audit", "Growth and content review"],
+  ["customer-support", "Support response assistant"],
+] satisfies Array<[string, string]>;
+
+const skillSettingsPublishingRows = [
+  ["skills.sh", "Publish on release", "Enabled", "terminal", "bg-emerald-700"],
+  ["GitHub", "Create PR on publish", "Enabled", "github", "bg-emerald-700"],
+  ["agentskills.io", "Publish on release", "Enabled", "circle", "bg-emerald-700"],
+  ["Skillfully directory", "Coming soon", "Disabled", "square", "bg-[var(--gray)]"],
+] satisfies Array<[string, string, string, string, string]>;
+
 function randomSkillId() {
   const chars = "abcdefghijkmnopqrstuvwxyz23456789";
   let out = "sk_";
@@ -184,6 +197,41 @@ function renderFeedbackTemplate(template: string, skillId: string) {
 
 function displayUserEmail(user: AppUser | null | undefined) {
   return user?.email || "authenticated user";
+}
+
+function displayAccountName(user: AppUser | null | undefined) {
+  const email = user?.email;
+  if (!email) {
+    return "Jane Developer";
+  }
+
+  const handle = email.split("@")[0] || "Jane";
+  if (handle.toLowerCase() === "jane") {
+    return "Jane Developer";
+  }
+
+  return handle
+    .split(/[._-]/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ") || "Jane Developer";
+}
+
+function skillInitials(name: string) {
+  const parts = name.split(/[^a-zA-Z0-9]+/).filter(Boolean);
+  const initials = parts.length > 1
+    ? `${parts[0]?.[0] ?? ""}${parts[1]?.[0] ?? ""}`
+    : `${name[0] ?? "S"}${name[1] ?? "K"}`;
+
+  return initials.toUpperCase();
+}
+
+function slugifySkillName(name: string) {
+  return name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "") || "demo-skill";
 }
 
 function extractErrorMessage(error: unknown) {
@@ -255,6 +303,15 @@ function DashboardIcon({ name }: { name: string }) {
       <svg aria-hidden viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8">
         <circle cx="12" cy="12" r="3" />
         <path d="M12 2v3M12 19v3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1 7 17M17 7l2.1-2.1" />
+      </svg>
+    );
+  }
+
+  if (name === "account") {
+    return (
+      <svg aria-hidden viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8">
+        <circle cx="12" cy="8" r="4" />
+        <path d="M4 21a8 8 0 0 1 16 0" />
       </svg>
     );
   }
@@ -535,28 +592,200 @@ function SkillForm({
   );
 }
 
+export function SkillSelector({
+  skills,
+  selectedId,
+  isOpen,
+  onToggle,
+  onSelect,
+  onCreateSkill,
+}: {
+  skills: Skill[];
+  selectedId: string | null;
+  isOpen: boolean;
+  onToggle: () => void;
+  onSelect: (skill: Skill) => void;
+  onCreateSkill: () => void;
+}) {
+  const skillOptions = [
+    ...skills.map((skill) => ({
+      id: skill.id,
+      name: skill.name,
+      description: skill.description || "Skillfully skill",
+      skill,
+    })),
+    ...skillSelectorFallbackSkills
+      .filter(([name]) => !skills.some((skill) => skill.name.toLowerCase() === name.toLowerCase()))
+      .map(([name, description]) => ({
+        id: `preview-${name}`,
+        name,
+        description,
+        skill: null,
+      })),
+  ];
+  const selectedOption =
+    skillOptions.find((option) => option.id === selectedId) ?? skillOptions[0] ?? null;
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        aria-haspopup="listbox"
+        aria-expanded={isOpen}
+        className="flex w-full items-center justify-between border border-[var(--ink)] bg-[var(--paper)] px-4 py-3 text-left font-editorial-mono text-sm transition hover:bg-[var(--white)]"
+        onClick={onToggle}
+      >
+        <span className="truncate">{selectedOption?.name ?? "No skills yet"}</span>
+        <span aria-hidden className="text-xl leading-none">{isOpen ? "⌃" : "⌄"}</span>
+      </button>
+
+      {isOpen ? (
+        <div
+          role="listbox"
+          className="absolute left-0 top-[calc(100%+0.45rem)] z-30 w-72 border border-[var(--ink)] bg-[var(--white)] p-2 shadow-[6px_6px_0_var(--ink)]"
+        >
+          <div className="space-y-1">
+            {skillOptions.map((option) => {
+              const isSelected =
+                option.id === selectedId ||
+                (!selectedId && option.id === selectedOption?.id);
+              return (
+                <button
+                  key={option.id}
+                  type="button"
+                  role="option"
+                  aria-selected={isSelected}
+                  className="grid w-full grid-cols-[2.25rem_1fr_auto] items-center gap-3 px-2 py-2 text-left text-sm hover:bg-[var(--paper)]"
+                  onClick={() => {
+                    if (option.skill) {
+                      onSelect(option.skill);
+                    }
+                  }}
+                >
+                  <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--ink)] font-editorial-mono text-xs font-bold text-[var(--paper)]">
+                    {skillInitials(option.name)}
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block truncate font-editorial-mono">{option.name}</span>
+                    <span className="block truncate text-xs text-[var(--ink)]/55">{option.description}</span>
+                  </span>
+                  {isSelected ? <span aria-hidden className="text-lg leading-none">✓</span> : null}
+                </button>
+              );
+            })}
+          </div>
+          <div className="mt-2 border-t border-[var(--ink)] pt-2">
+            <button
+              type="button"
+              className="flex w-full items-center gap-3 bg-[var(--paper)] px-3 py-3 text-left font-editorial-mono text-sm hover:bg-[var(--white)]"
+              onClick={onCreateSkill}
+            >
+              <span aria-hidden className="text-2xl leading-none">+</span>
+              Create new skill
+            </button>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+export function CreateSkillModal({
+  form,
+  onChange,
+  onCancel,
+  onSubmit,
+}: {
+  form: SkillForm;
+  onChange: (value: SkillForm) => void;
+  onCancel: () => void;
+  onSubmit: (name: string, description: string) => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--ink)]/35 px-5 py-8 backdrop-blur-[1px]">
+      <section className="w-full max-w-xl border-2 border-[var(--ink)] bg-[var(--white)] p-7 shadow-[8px_8px_0_var(--ink)] sm:p-9">
+        <h2 className="font-editorial-sans text-3xl font-bold">Create new skill</h2>
+        <p className="mt-3 font-editorial-mono text-sm">Start a new skill in Skillfully.</p>
+
+        <form
+          className="mt-7 space-y-6"
+          onSubmit={(event: FormEvent) => {
+            event.preventDefault();
+            onSubmit(form.name.trim(), form.description.trim());
+          }}
+        >
+          <label className="block font-editorial-mono text-xs font-bold uppercase">
+            Skill name
+            <input
+              value={form.name}
+              className={`${DASHBOARD_INPUT} bg-[var(--paper)]`}
+              onChange={(event) => onChange({ ...form, name: event.currentTarget.value })}
+              name="name"
+              placeholder="e.g. billing-support"
+              required
+            />
+          </label>
+
+          <label className="block font-editorial-mono text-xs font-bold uppercase">
+            Description (optional)
+            <textarea
+              value={form.description}
+              className={`${DASHBOARD_INPUT} min-h-32 bg-[var(--paper)]`}
+              onChange={(event) => onChange({ ...form, description: event.currentTarget.value })}
+              name="description"
+              placeholder="What does this skill do?"
+            />
+          </label>
+
+          <p className="font-editorial-mono text-sm">
+            Need an existing repo instead?{" "}
+            <button type="button" className="font-bold underline">
+              Import from GitHub
+            </button>
+          </p>
+
+          <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:justify-end">
+            <button type="button" className={DASHBOARD_BUTTON_LIGHT} onClick={onCancel}>
+              Cancel
+            </button>
+            <button type="submit" className={DASHBOARD_BUTTON}>
+              Create skill
+            </button>
+          </div>
+        </form>
+      </section>
+    </div>
+  );
+}
+
 function DashboardSidebar({
   user,
   skills,
   selectedId,
   activeTab,
+  isSkillSelectorOpen,
   onSelect,
   onTabChange,
+  onToggleSkillSelector,
+  onOpenCreateSkill,
   onSignOut,
 }: {
   user: AppUser;
   skills: Skill[];
   selectedId: string | null;
   activeTab: DashboardTab;
+  isSkillSelectorOpen: boolean;
   onSelect: (skill: Skill) => void;
   onTabChange: (tab: DashboardTab) => void;
+  onToggleSkillSelector: () => void;
+  onOpenCreateSkill: () => void;
   onSignOut: () => void;
 }) {
-  const selectedValue = selectedId ?? skills[0]?.id ?? "";
   const navItems = [
     ["overview", "Overview"],
     ["editor", "Editor"],
     ["analytics", "Analytics"],
+    ["settings", "Settings"],
   ] satisfies Array<[DashboardTab, string]>;
 
   return (
@@ -566,30 +795,15 @@ function DashboardSidebar({
       </div>
 
       <div className="px-5 py-7">
-        <label className="block font-editorial-mono text-xs font-bold uppercase">
-          Skill
-          <select
-            className="mt-3 w-full border border-[var(--ink)] bg-[var(--paper)] px-3 py-3 font-editorial-sans text-sm"
-            value={selectedValue}
-            disabled={skills.length === 0}
-            onChange={(event) => {
-              const nextSkill = skills.find((skill) => skill.id === event.currentTarget.value);
-              if (nextSkill) {
-                onSelect(nextSkill);
-              }
-            }}
-          >
-            {skills.length === 0 ? (
-              <option value="">No skills yet</option>
-            ) : (
-              skills.map((skill) => (
-                <option key={skill.id} value={skill.id}>
-                  {skill.name}
-                </option>
-              ))
-            )}
-          </select>
-        </label>
+        <p className="mb-3 font-editorial-mono text-xs font-bold uppercase">Skill</p>
+        <SkillSelector
+          skills={skills}
+          selectedId={selectedId}
+          isOpen={isSkillSelectorOpen}
+          onToggle={onToggleSkillSelector}
+          onSelect={onSelect}
+          onCreateSkill={onOpenCreateSkill}
+        />
       </div>
 
       <nav className="border-y border-[var(--ink)] font-editorial-sans text-sm">
@@ -613,14 +827,37 @@ function DashboardSidebar({
         })}
       </nav>
 
-      <div className="mt-auto px-5 py-6">
-        <div className="mb-5 border-t border-[var(--ink)]" />
+      <div className="mt-auto space-y-5 px-5 py-6">
         <button
           type="button"
-          className="mb-4 flex w-full items-center gap-3 py-2 text-left text-sm"
+          className="flex w-full items-center gap-3 border border-[var(--ink)] px-4 py-3 text-left font-editorial-mono text-sm hover:bg-[var(--white)]"
+          onClick={onOpenCreateSkill}
         >
-          <DashboardIcon name="settings" />
-          Settings
+          <span aria-hidden className="text-2xl leading-none">+</span>
+          New Skill
+        </button>
+
+        <div className="border border-[var(--ink)] p-4">
+          <p className="font-editorial-mono text-xs font-bold uppercase">Need help?</p>
+          <p className="mt-3 text-sm leading-6">
+            Read the guide to learn how to build great agent skills.
+          </p>
+          <button type="button" className="mt-5 font-editorial-mono text-xs font-bold uppercase underline">
+            Open Guide <span aria-hidden>→</span>
+          </button>
+        </div>
+
+        <button
+          type="button"
+          className={`flex w-full items-center gap-3 px-4 py-3 text-left text-sm ${
+            activeTab === "account"
+              ? "bg-[var(--ink)] font-semibold text-[var(--paper)]"
+              : "border border-[var(--ink)] hover:bg-[var(--white)]"
+          }`}
+          onClick={() => onTabChange("account")}
+        >
+          <DashboardIcon name="account" />
+          Account Settings
         </button>
         <p className="truncate font-editorial-mono text-[0.68rem] text-[var(--ink)]/65">
           {displayUserEmail(user)}
@@ -1521,6 +1758,357 @@ function SkillAnalyticsWorkspace() {
   );
 }
 
+function SettingsSection({
+  title,
+  children,
+}: {
+  title: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className={`${DASHBOARD_CARD} overflow-hidden`}>
+      <div className="border-b border-[var(--ink)] px-5 py-4 font-editorial-mono text-xs font-bold uppercase">
+        {title}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function SettingsRow({
+  label,
+  value,
+  action,
+}: {
+  label: string;
+  value?: ReactNode;
+  action?: ReactNode;
+}) {
+  return (
+    <div className="grid gap-3 border-b border-[var(--ink)]/35 px-5 py-4 last:border-b-0 sm:grid-cols-[16rem_1fr_auto] sm:items-center">
+      <span className="font-editorial-sans text-sm">{label}</span>
+      <span className="min-w-0 font-editorial-sans text-sm">{value}</span>
+      {action ? <span className="justify-self-start sm:justify-self-end">{action}</span> : null}
+    </div>
+  );
+}
+
+function TogglePill({ label = "Enabled" }: { label?: string }) {
+  return (
+    <span className="inline-flex items-center gap-2 rounded-full border border-[var(--ink)] bg-[var(--paper)] px-3 py-1 font-editorial-sans text-xs">
+      <span aria-hidden className="h-3 w-3 rounded-full bg-[var(--ink)]" />
+      {label}
+    </span>
+  );
+}
+
+function AccountTopBar({
+  user,
+  isAccountMenuOpen,
+  onToggleAccountMenu,
+  onOpenAccountSettings,
+  onSignOut,
+}: {
+  user: AppUser;
+  isAccountMenuOpen: boolean;
+  onToggleAccountMenu: () => void;
+  onOpenAccountSettings: () => void;
+  onSignOut: () => void;
+}) {
+  const accountName = displayAccountName(user);
+  const accountEmail = user.email || "jane@acme.dev";
+
+  return (
+    <div className="relative flex min-h-16 items-center justify-end gap-5 border-b border-[var(--ink)] bg-[var(--paper)] px-5">
+      <button type="button" className="font-editorial-mono text-sm underline">
+        Guide
+      </button>
+      <button type="button" aria-label="Theme" className="text-2xl leading-none">
+        ☼
+      </button>
+      <span aria-hidden className="h-9 border-l border-[var(--ink)]/40" />
+      <button
+        type="button"
+        className="flex items-center gap-3"
+        aria-haspopup="menu"
+        aria-expanded={isAccountMenuOpen}
+        onClick={onToggleAccountMenu}
+      >
+        <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--ink)] font-editorial-mono text-sm font-bold text-[var(--paper)]">
+          {skillInitials(accountName)}
+        </span>
+        <span aria-hidden className="font-editorial-mono text-sm">{isAccountMenuOpen ? "⌃" : "⌄"}</span>
+      </button>
+
+      {isAccountMenuOpen ? (
+        <div className="absolute right-5 top-[calc(100%+0.45rem)] z-30 w-64 border border-[var(--ink)] bg-[var(--white)] p-4 shadow-[6px_6px_0_var(--ink)]">
+          <p className="font-editorial-mono text-sm">{accountEmail}</p>
+          <div className="mt-4 border-t border-[var(--ink)] pt-3">
+            <button
+              type="button"
+              className="flex w-full items-center gap-3 px-2 py-3 text-left text-sm hover:bg-[var(--paper)]"
+              onClick={onOpenAccountSettings}
+            >
+              <DashboardIcon name="account" />
+              Account settings
+            </button>
+            <button
+              type="button"
+              className="flex w-full items-center gap-3 px-2 py-3 text-left text-sm hover:bg-[var(--paper)]"
+            >
+              <StatusIcon name="check" />
+              Product guide
+            </button>
+            <button
+              type="button"
+              className="flex w-full items-center gap-3 px-2 py-3 text-left text-sm hover:bg-[var(--paper)]"
+              onClick={onSignOut}
+            >
+              <StatusIcon name="x" />
+              Sign out
+            </button>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+export function SkillSettingsWorkspace({ skill }: { skill: Skill }) {
+  const slug = slugifySkillName(skill.name);
+
+  return (
+    <div className="mx-auto w-full max-w-5xl space-y-6 px-5 py-8 sm:px-8 lg:px-11 lg:py-12">
+      <header>
+        <h1 className="font-editorial-sans text-5xl font-bold leading-none sm:text-6xl">
+          Settings
+        </h1>
+        <p className="mt-3 text-lg leading-7">Persistent configuration for this skill.</p>
+      </header>
+
+      <SettingsSection title="01. General">
+        <SettingsRow label="Skill name" value={skill.name} />
+        <SettingsRow label="Slug" value={slug} />
+        <SettingsRow
+          label="Archive skill"
+          action={<button type="button" className={DASHBOARD_BUTTON_LIGHT}>Archive</button>}
+        />
+      </SettingsSection>
+
+      <SettingsSection title="02. Source">
+        <div className="grid gap-3 border-b border-[var(--ink)]/35 p-5 sm:grid-cols-2">
+          <button type="button" className="flex items-center gap-3 border border-[var(--ink)]/45 px-4 py-4 text-left text-sm">
+            <span aria-hidden className="h-5 w-5 rounded-full border border-[var(--ink)]" />
+            Managed in Skillfully
+          </button>
+          <button type="button" className="flex items-center gap-3 border border-[var(--ink)] bg-[var(--white)] px-4 py-4 text-left text-sm">
+            <span aria-hidden className="flex h-5 w-5 items-center justify-center rounded-full border-2 border-[var(--ink)]">
+              <span className="h-2 w-2 rounded-full bg-[var(--ink)]" />
+            </span>
+            GitHub tracked
+          </button>
+        </div>
+        <SettingsRow label="Repository" value={`erensunerr/${slug}`} />
+        <SettingsRow label="Default branch" value="main" />
+        <SettingsRow label="Publish behavior" value="Create pull request on publish" />
+        <SettingsRow
+          label="Connection status"
+          value={<span className="inline-flex items-center gap-3"><span aria-hidden className="h-2 w-2 rounded-full bg-[var(--ink)]" />Connected</span>}
+        />
+        <div className="space-y-4 p-5">
+          <button type="button" className={DASHBOARD_BUTTON_LIGHT}>Disconnect GitHub</button>
+          <p className="text-sm leading-6 text-[var(--ink)]/65">
+            Switching to "Managed in Skillfully" keeps Skillfully as the canonical source without GitHub tracking.
+          </p>
+        </div>
+      </SettingsSection>
+
+      <SettingsSection title="03. Publishing">
+        <div className="overflow-x-auto p-5">
+          <table className="w-full min-w-[42rem] border-collapse text-left text-sm">
+            <thead className="font-editorial-mono text-xs uppercase">
+              <tr className="border-b border-[var(--ink)]">
+                <th className="py-3 font-bold">Destination</th>
+                <th className="py-3 font-bold">Default behavior</th>
+                <th className="py-3 font-bold">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {skillSettingsPublishingRows.map(([destination, behavior, status, icon, dot]) => (
+                <tr key={destination} className="border-b border-[var(--ink)]/50 last:border-b-0">
+                  <td className="py-3">
+                    <span className="flex items-center gap-3">
+                      <TargetIcon name={icon} />
+                      {destination}
+                    </span>
+                  </td>
+                  <td className="py-3">{behavior}</td>
+                  <td className="py-3">
+                    <span className="inline-flex items-center gap-3">
+                      <span aria-hidden className={`h-2.5 w-2.5 rounded-full ${dot}`} />
+                      {status}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p className="mt-4 text-sm leading-6 text-[var(--ink)]/65">
+            Skillfully is the canonical source and syncs outward when you publish.
+          </p>
+        </div>
+      </SettingsSection>
+
+      <SettingsSection title="04. Tracking">
+        <SettingsRow label="Install tracking" action={<TogglePill />} />
+        <SettingsRow label="Invocation tracking" action={<TogglePill />} />
+        <SettingsRow label="Feedback collection" action={<TogglePill />} />
+        <SettingsRow
+          label="Install endpoint"
+          value={<span className="font-editorial-mono">/api/install</span>}
+          action={<button type="button" aria-label="Copy install endpoint" className="border border-[var(--ink)] p-3"><CopyIcon /></button>}
+        />
+        <SettingsRow
+          label="Feedback endpoint"
+          value={<span className="font-editorial-mono">/api/feedback</span>}
+          action={<button type="button" aria-label="Copy feedback endpoint" className="border border-[var(--ink)] p-3"><CopyIcon /></button>}
+        />
+        <p className="px-5 pb-5 text-sm text-[var(--ink)]/65">
+          Invocations are counted when an agent submits feedback.
+        </p>
+      </SettingsSection>
+
+      <SettingsSection title="05. Danger Zone">
+        <SettingsRow
+          label="Reset analytics"
+          action={<button type="button" className={DASHBOARD_BUTTON_LIGHT}>Reset analytics</button>}
+        />
+        <SettingsRow
+          label="Delete skill"
+          action={<button type="button" className={`${DASHBOARD_BUTTON_LIGHT} font-bold`}>Delete skill</button>}
+        />
+      </SettingsSection>
+    </div>
+  );
+}
+
+export function AccountSettingsWorkspace({
+  user,
+  isAccountMenuOpen,
+  onToggleAccountMenu,
+  onOpenAccountSettings,
+  onSignOut,
+}: {
+  user: AppUser;
+  isAccountMenuOpen: boolean;
+  onToggleAccountMenu: () => void;
+  onOpenAccountSettings: () => void;
+  onSignOut: () => void;
+}) {
+  const accountName = displayAccountName(user);
+  const accountEmail = user.email || "jane@acme.dev";
+
+  return (
+    <div className="min-h-screen bg-[var(--paper)] text-[var(--ink)]">
+      <AccountTopBar
+        user={user}
+        isAccountMenuOpen={isAccountMenuOpen}
+        onToggleAccountMenu={onToggleAccountMenu}
+        onOpenAccountSettings={onOpenAccountSettings}
+        onSignOut={onSignOut}
+      />
+
+      <section className="mx-auto w-full max-w-7xl space-y-7 px-5 py-8 sm:px-8 lg:px-11">
+        <header>
+          <h1 className="font-editorial-sans text-5xl font-bold leading-none sm:text-6xl">
+            Account Settings
+          </h1>
+          <p className="mt-3 text-lg leading-7">Manage your profile, preferences, and data.</p>
+        </header>
+
+        <section className="grid gap-6 border-t border-[var(--ink)] pt-6 lg:grid-cols-[16rem_1fr]">
+          <div>
+            <p className="font-editorial-mono text-xs font-bold uppercase">Profile</p>
+            <p className="mt-3 text-sm leading-6">
+              Update your personal information and how your name appears.
+            </p>
+          </div>
+          <div className={DASHBOARD_CARD}>
+            <SettingsRow label="Name" value={accountName} action={<button type="button" className={DASHBOARD_BUTTON}>Edit</button>} />
+            <SettingsRow label="Email" value={accountEmail} action={<button type="button" className={DASHBOARD_BUTTON}>Edit</button>} />
+            <SettingsRow
+              label="Avatar"
+              value={<span className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--ink)] font-editorial-mono text-sm font-bold text-[var(--paper)]">{skillInitials(accountName)}</span>}
+              action={<button type="button" className={DASHBOARD_BUTTON_LIGHT}>Change</button>}
+            />
+          </div>
+        </section>
+
+        <section className="grid gap-6 border-t border-[var(--ink)] pt-6 lg:grid-cols-[16rem_1fr]">
+          <div>
+            <p className="font-editorial-mono text-xs font-bold uppercase">Preferences</p>
+            <p className="mt-3 text-sm leading-6">
+              Customize your default experience across Skillfully.
+            </p>
+          </div>
+          <div className={DASHBOARD_CARD}>
+            <SettingsRow
+              label="Theme"
+              action={
+                <span className="inline-grid grid-cols-2 border border-[var(--ink)]">
+                  <button type="button" className="px-9 py-2 text-sm">Light</button>
+                  <button type="button" className="bg-[var(--ink)] px-9 py-2 text-sm text-[var(--paper)]">Dark</button>
+                </span>
+              }
+            />
+            <SettingsRow label="Default landing page" value="Overview" action={<span aria-hidden className="text-xl">⌄</span>} />
+            <SettingsRow label="Time zone" value="(UTC-8) Pacific Time (US & Canada)" action={<span aria-hidden className="text-xl">⌄</span>} />
+            <SettingsRow
+              label="Email notifications"
+              value="Important updates about your skills"
+              action={<TogglePill label="" />}
+            />
+          </div>
+        </section>
+
+        <section className="grid gap-6 border-t border-[var(--ink)] pt-6 lg:grid-cols-[16rem_1fr]">
+          <div>
+            <p className="font-editorial-mono text-xs font-bold uppercase">Security</p>
+            <p className="mt-3 text-sm leading-6">Keep your account secure.</p>
+          </div>
+          <div className={DASHBOARD_CARD}>
+            <SettingsRow label="Password" action={<button type="button" className={DASHBOARD_BUTTON_LIGHT}>Change Password</button>} />
+            <SettingsRow label="Active sessions" value="3 active sessions" action={<button type="button" className={DASHBOARD_BUTTON_LIGHT}>View Sessions</button>} />
+          </div>
+        </section>
+
+        <section className="grid gap-6 border-t border-[var(--ink)] pt-6 lg:grid-cols-[16rem_1fr]">
+          <div>
+            <p className="font-editorial-mono text-xs font-bold uppercase">Data & Privacy</p>
+            <p className="mt-3 text-sm leading-6">Manage your data and privacy settings.</p>
+          </div>
+          <div className={DASHBOARD_CARD}>
+            <SettingsRow
+              label="Export your data"
+              value="Download a copy of your skills and analytics."
+              action={<button type="button" className={DASHBOARD_BUTTON_LIGHT}>Export</button>}
+            />
+            <SettingsRow
+              label="Delete account"
+              value="Permanently delete your account and all data."
+              action={<button type="button" className={DASHBOARD_BUTTON_LIGHT}>Delete</button>}
+            />
+          </div>
+        </section>
+
+        <p className="pt-3 font-editorial-mono text-sm">
+          Questions? Contact us at <a href="mailto:hello@skillfully.dev" className="underline">hello@skillfully.dev</a>
+        </p>
+      </section>
+    </div>
+  );
+}
+
 export function SkillDetail({
   skill,
   entries,
@@ -1556,6 +2144,10 @@ export function SkillDetail({
 
   if (activeTab === "analytics") {
     return <SkillAnalyticsWorkspace />;
+  }
+
+  if (activeTab === "settings") {
+    return <SkillSettingsWorkspace skill={skill} />;
   }
 
   return (
@@ -1650,12 +2242,19 @@ export default function Dashboard() {
   const [screen, setScreen] = useState<Screen>("list");
   const [selectedSkillId, setSelectedSkillId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<DashboardTab>("overview");
+  const [isSkillSelectorOpen, setIsSkillSelectorOpen] = useState(false);
+  const [isCreateSkillModalOpen, setIsCreateSkillModalOpen] = useState(false);
+  const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
 
   const [authPhase, setAuthPhase] = useState<AuthPhase>("request");
   const [authForm, setAuthForm] = useState<AuthForm>({ email: "", code: "" });
   const [pendingEmail, setPendingEmail] = useState("");
 
   const [skillForm, setSkillForm] = useState<SkillForm>({
+    name: "",
+    description: "",
+  });
+  const [modalSkillForm, setModalSkillForm] = useState<SkillForm>({
     name: "",
     description: "",
   });
@@ -1878,6 +2477,9 @@ export default function Dashboard() {
     setAuthPhase("request");
     setSelectedSkillId(null);
     setActiveTab("overview");
+    setIsSkillSelectorOpen(false);
+    setIsCreateSkillModalOpen(false);
+    setIsAccountMenuOpen(false);
     setOnboardingDismissed(false);
     setScreen("list");
 
@@ -1887,13 +2489,26 @@ export default function Dashboard() {
   function openCreateSkill() {
     setOnboardingDismissed(true);
     setErrorMessage("");
+    setIsSkillSelectorOpen(false);
+    setIsAccountMenuOpen(false);
     setActiveTab("editor");
     setScreen("create");
+  }
+
+  function openCreateSkillModal() {
+    setOnboardingDismissed(true);
+    setErrorMessage("");
+    setModalSkillForm({ name: "", description: "" });
+    setIsSkillSelectorOpen(false);
+    setIsAccountMenuOpen(false);
+    setIsCreateSkillModalOpen(true);
   }
 
   function openOnboarding() {
     setOnboardingDismissed(false);
     setErrorMessage("");
+    setIsSkillSelectorOpen(false);
+    setIsAccountMenuOpen(false);
     setActiveTab("overview");
     setScreen("list");
   }
@@ -1902,7 +2517,14 @@ export default function Dashboard() {
     posthog.capture("dashboard_tab_selected", { tab });
     setOnboardingDismissed(true);
     setErrorMessage("");
+    setIsSkillSelectorOpen(false);
+    setIsAccountMenuOpen(false);
     setActiveTab(tab);
+
+    if (tab === "account") {
+      setScreen("list");
+      return;
+    }
 
     if (skills.length === 0) {
       if (tab === "editor") {
@@ -1953,11 +2575,23 @@ export default function Dashboard() {
     });
 
     setSkillForm({ name: "", description: "" });
+    setModalSkillForm({ name: "", description: "" });
     setSelectedSkillId(newSkillEntityId);
     setActiveTab("overview");
     setOnboardingDismissed(true);
+    setIsCreateSkillModalOpen(false);
+    setIsSkillSelectorOpen(false);
     setScreen("detail");
     setErrorMessage("");
+  }
+
+  function createSkillFromModal(name: string, description: string) {
+    if (!name.trim()) {
+      setErrorMessage("Skill name is required");
+      return;
+    }
+
+    createSkill(name, description);
   }
 
   return (
@@ -1974,19 +2608,38 @@ export default function Dashboard() {
           skills={skills}
           activeTab={screen === "create" ? "editor" : activeTab}
           selectedId={viewState.kind === "detail" ? viewState.skillId : selectedSkillId}
+          isSkillSelectorOpen={isSkillSelectorOpen}
           onSelect={(skill) => {
             posthog.capture("skill_selected", { skill_name: skill.name });
             setSelectedSkillId(skill.id);
             setOnboardingDismissed(true);
+            setIsSkillSelectorOpen(false);
+            setIsAccountMenuOpen(false);
             setScreen("detail");
             setErrorMessage("");
           }}
           onTabChange={openDashboardTab}
+          onToggleSkillSelector={() => {
+            setIsSkillSelectorOpen((current) => !current);
+            setIsAccountMenuOpen(false);
+          }}
+          onOpenCreateSkill={openCreateSkillModal}
           onSignOut={handleSignOut}
         />
 
         <section className="min-w-0">
-          {viewState.kind === "create" ? (
+          {activeTab === "account" ? (
+            <AccountSettingsWorkspace
+              user={user}
+              isAccountMenuOpen={isAccountMenuOpen}
+              onToggleAccountMenu={() => {
+                setIsAccountMenuOpen((current) => !current);
+                setIsSkillSelectorOpen(false);
+              }}
+              onOpenAccountSettings={() => openDashboardTab("account")}
+              onSignOut={handleSignOut}
+            />
+          ) : viewState.kind === "create" ? (
             <div className="px-5 py-8 sm:px-8 lg:px-11 lg:py-12">
               <SkillForm
                 form={skillForm}
@@ -2035,6 +2688,17 @@ export default function Dashboard() {
             setOnboardingDismissed(true);
           }}
           onCreateSkill={openCreateSkill}
+        />
+      ) : null}
+      {isCreateSkillModalOpen ? (
+        <CreateSkillModal
+          form={modalSkillForm}
+          onChange={setModalSkillForm}
+          onCancel={() => {
+            setIsCreateSkillModalOpen(false);
+            setErrorMessage("");
+          }}
+          onSubmit={createSkillFromModal}
         />
       ) : null}
     </main>

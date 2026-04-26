@@ -3,11 +3,11 @@ import test from "node:test";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
-function fakeSkill() {
+function fakeSkill(name = "demo-skill", id = "skill-1") {
   return {
-    id: "skill-1",
+    id,
     ownerId: "user-1",
-    name: "demo-skill",
+    name,
     description: "A helpful AI assistant for customer support tasks.",
     skillId: "sk_demo123",
     createdAt: Date.now(),
@@ -125,4 +125,99 @@ test("dashboard skill detail renders the analytics tab UI", async () => {
   assert.match(html, /Claude/);
   assert.match(html, /Cursor/);
   assert.match(html, /Showing 1-8 of 243/);
+});
+
+test("dashboard skill detail renders the skill settings UI", async () => {
+  Object.assign(globalThis, { React });
+  const { SkillDetail } = await import("./page");
+
+  const html = renderToStaticMarkup(
+    <SkillDetail
+      activeTab="settings"
+      skill={fakeSkill()}
+      entries={fakeEntries()}
+      feedbackTemplate="Post feedback to {{feedbackUrl}}"
+      feedbackTemplateError={null}
+      onBack={() => undefined}
+    />,
+  );
+
+  assert.match(html, /Persistent configuration for this skill/i);
+  assert.match(html, /01\. General/i);
+  assert.match(html, /Skill name/i);
+  assert.match(html, /Slug/i);
+  assert.match(html, /02\. Source/i);
+  assert.match(html, /GitHub tracked/i);
+  assert.match(html, /erensunerr\/demo-skill/i);
+  assert.match(html, /03\. Publishing/i);
+  assert.match(html, /Skillfully directory/i);
+  assert.match(html, /04\. Tracking/i);
+  assert.match(html, /Install endpoint/i);
+  assert.match(html, /\/api\/install/i);
+  assert.match(html, /05\. Danger zone/i);
+  assert.match(html, /Delete skill/i);
+});
+
+test("dashboard renders the account settings UI", async () => {
+  Object.assign(globalThis, { React });
+  const { AccountSettingsWorkspace } = await import("./page");
+
+  const html = renderToStaticMarkup(
+    <AccountSettingsWorkspace
+      user={{ email: "jane@acme.dev" } as never}
+      isAccountMenuOpen={true}
+      onToggleAccountMenu={() => undefined}
+      onOpenAccountSettings={() => undefined}
+      onSignOut={() => undefined}
+    />,
+  );
+
+  assert.match(html, /Account Settings/i);
+  assert.match(html, /Manage your profile, preferences, and data/i);
+  assert.match(html, /Jane Developer/i);
+  assert.match(html, /jane@acme\.dev/i);
+  assert.match(html, /Preferences/i);
+  assert.match(html, /Default landing page/i);
+  assert.match(html, /Security/i);
+  assert.match(html, /Active sessions/i);
+  assert.match(html, /Data &amp; Privacy/i);
+  assert.match(html, /Export your data/i);
+  assert.match(html, /Sign out/i);
+});
+
+test("dashboard renders the skill selector menu and create skill modal", async () => {
+  Object.assign(globalThis, { React });
+  const { SkillSelector, CreateSkillModal } = await import("./page");
+
+  const html = renderToStaticMarkup(
+    <>
+      <SkillSelector
+        skills={[
+          fakeSkill("demo-skill", "skill-1"),
+          fakeSkill("seo-audit", "skill-2"),
+          fakeSkill("customer-support", "skill-3"),
+        ]}
+        selectedId="skill-1"
+        isOpen={true}
+        onToggle={() => undefined}
+        onSelect={() => undefined}
+        onCreateSkill={() => undefined}
+      />
+      <CreateSkillModal
+        form={{ name: "", description: "" }}
+        onChange={() => undefined}
+        onCancel={() => undefined}
+        onSubmit={() => undefined}
+      />
+    </>,
+  );
+
+  assert.match(html, /demo-skill/i);
+  assert.match(html, /seo-audit/i);
+  assert.match(html, /customer-support/i);
+  assert.match(html, /Create new skill/i);
+  assert.match(html, /Start a new skill in Skillfully/i);
+  assert.match(html, /Skill name/i);
+  assert.match(html, /e\.g\. billing-support/i);
+  assert.match(html, /Import from GitHub/i);
 });

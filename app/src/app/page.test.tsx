@@ -19,5 +19,9 @@ test("landing page renders the refreshed editorial messaging", async () => {
   assert.match(html, /\/dashboard/);
   assert.match(html, /\/guide/);
   assert.match(html, /\/blog/);
+  assert.match(html, /data-magnetic-cursor-area="hero-illustration"/);
+  assert.match(html, /data-magnetic-layer="center"/);
+  assert.match(html, /data-magnetic-layer="geometry"/);
+  assert.match(html, /data-magnetic-layer="background"/);
   assert.doesNotMatch(html, new RegExp(`/${["do", "cs"].join("")}`));
 });

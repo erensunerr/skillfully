@@ -1,11 +1,7 @@
-import type { CSSProperties, ReactNode } from "react";
+import type { ReactNode } from "react";
 import Link from "next/link";
 
-const GRID_STYLE: CSSProperties = {
-  backgroundImage:
-    "linear-gradient(to right, rgba(8, 8, 8, 0.08) 1px, transparent 1px), linear-gradient(to bottom, rgba(8, 8, 8, 0.08) 1px, transparent 1px)",
-  backgroundSize: "44px 44px",
-};
+import { SchematicGraphic } from "./hero-schematic";
 
 const marqueeCopy =
   "NOW ONBOARDING DESIGN PARTNERS BUILDING AGENT SKILLS FOR CLAUDE, CURSOR, GOOSE, AND LOCAL AGENTS.";
@@ -145,55 +141,6 @@ function RegistrationMark({
       aria-hidden
       className={`registration-mark${light ? " light" : ""}${className ? ` ${className}` : ""}`}
     />
-  );
-}
-
-function SchematicGraphic() {
-  return (
-    <div className="relative h-full min-h-[28rem] overflow-hidden bg-[var(--white)]">
-      <div aria-hidden className="absolute inset-0" style={GRID_STYLE} />
-      <div aria-hidden className="editorial-halftone absolute inset-[7%] opacity-60" />
-
-      <svg
-        aria-hidden
-        className="absolute inset-0 h-full w-full text-[var(--ink)]"
-        viewBox="0 0 620 620"
-        preserveAspectRatio="xMidYMid meet"
-        fill="none"
-      >
-        <g stroke="currentColor" strokeWidth="1.4">
-          <line x1="0" y1="310" x2="620" y2="310" />
-          <line x1="310" y1="0" x2="310" y2="620" />
-          <circle cx="310" cy="310" r="150" strokeDasharray="5 5" />
-          <circle cx="310" cy="310" r="112" />
-          <circle cx="310" cy="310" r="58" fill="currentColor" strokeWidth="0" />
-          <rect x="205" y="205" width="210" height="210" />
-          <path d="M310 126 486 310 310 494 134 310Z" />
-          <path d="M310 158 452 310 310 462 168 310Z" />
-          <path d="M150 310C150 184 226 94 310 58" />
-          <path d="M310 58C386 80 470 168 470 310" />
-          <path d="M470 310C470 436 394 526 310 562" />
-          <path d="M310 562C234 540 150 452 150 310" />
-          <rect x="286" y="34" width="48" height="48" fill="var(--paper)" />
-          <path d="M296 70 326 40" />
-          <rect x="286" y="538" width="48" height="48" fill="var(--paper)" />
-          <path d="M296 574 326 544" />
-          <path d="M108 104h28v28h-28zM112 108h8M124 108h12M112 120h24M112 132h8M128 132h8" />
-          <path d="M484 104h28v28h-28zM488 108h8M500 108h12M488 120h24M488 132h8M504 132h8" />
-          <path d="M108 488h28v28h-28zM112 492h8M124 492h12M112 504h24M112 516h8M128 516h8" />
-          <path d="M484 488h28v28h-28zM488 492h8M500 492h12M488 504h24M488 516h8M504 516h8" />
-        </g>
-      </svg>
-
-      <aside className="absolute inset-y-0 right-0 flex w-16 flex-col items-center border-l border-[var(--ink)] bg-[var(--paper)] px-2 py-8 sm:w-20">
-        <div aria-hidden className="flex h-48 w-8 justify-between">
-          {[3, 6, 2, 8, 4, 7].map((width, index) => (
-            <span key={index} className="h-full bg-[var(--ink)]" style={{ width }} />
-          ))}
-        </div>
-        <RegistrationMark className="bottom-12 left-1/2 -translate-x-1/2" />
-      </aside>
-    </div>
   );
 }
 

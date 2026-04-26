@@ -8,9 +8,16 @@ test("landing page renders the refreshed editorial messaging", async () => {
   const { default: LandingPage } = await import("./page");
   const html = renderToStaticMarkup(<LandingPage />);
 
-  assert.match(html, /Know which of your/);
-  assert.match(html, /AGENT SKILLS/);
-  assert.match(html, /Three Steps/);
-  assert.match(html, /Ready to stop guessing\?/);
+  assert.match(html, /THE PLATFORM FOR BUILDING BETTER AGENT SKILLS/);
+  assert.match(html, /AGENT SKILL QA AND ANALYTICS/);
+  assert.match(html, /Agent skills are easy to publish\. Hard to improve\./);
+  assert.match(html, /See which skills are actually being used/);
+  assert.match(html, /Understand why agents fail/);
+  assert.match(html, /A feedback loop for every agent skill/);
+  assert.match(html, /Common questions/);
+  assert.match(html, /Stop guessing how your agent skills perform/);
   assert.match(html, /\/dashboard/);
+  assert.match(html, /\/guide/);
+  assert.match(html, /\/blog/);
+  assert.doesNotMatch(html, new RegExp(`/${["do", "cs"].join("")}`));
 });

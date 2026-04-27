@@ -57,8 +57,8 @@ test("dashboard skill detail renders the operational overview UI", async () => {
   assert.match(html, /Success rate/i);
   assert.match(html, /Active users/i);
   assert.match(html, /Usage over time/i);
-  assert.match(html, /Skill health/i);
-  assert.match(html, /Needs attention/i);
+  assert.doesNotMatch(html, /Skill health/i);
+  assert.doesNotMatch(html, /Needs attention/i);
   assert.match(html, /Feedback sentiment/i);
   assert.match(html, /Recent feedback/i);
   assert.match(html, /Publishing &amp; directory status/i);
@@ -87,11 +87,14 @@ test("dashboard skill detail renders the editor tab UI", async () => {
   assert.match(html, /Markdown files \(editable\)/i);
   assert.match(html, /SKILL\.md/);
   assert.match(html, /assets\/logo\.png/);
+  assert.match(html, /Markdown editor/i);
+  assert.match(html, /MDXEditor/i);
   assert.match(html, /When to use/);
   assert.match(html, /Workflow/);
   assert.match(html, /Skill standard passed/);
   assert.match(html, /Version history/);
-  assert.match(html, /Publishing destinations/);
+  assert.doesNotMatch(html, /Publishing destinations/);
+  assert.match(html, /Change publishing options/i);
   assert.match(html, /Publish version/);
   assert.match(html, /Install skill prompt/);
 });
@@ -177,12 +180,33 @@ test("dashboard renders the account settings UI", async () => {
   assert.match(html, /Jane Developer/i);
   assert.match(html, /jane@acme\.dev/i);
   assert.match(html, /Preferences/i);
+  assert.match(html, /System/i);
+  assert.match(html, /Light/i);
+  assert.match(html, /Dark/i);
   assert.match(html, /Default landing page/i);
   assert.match(html, /Security/i);
   assert.match(html, /Active sessions/i);
   assert.match(html, /Data &amp; Privacy/i);
   assert.match(html, /Export your data/i);
   assert.match(html, /Sign out/i);
+});
+
+test("dashboard route pages expose skill tab and account settings URLs", async () => {
+  Object.assign(globalThis, { React });
+  const dashboardPage = await import("./page");
+  const skillTabPage = await import("./[skillId]/[tab]/page");
+  const settingsPage = await import("./settings/page");
+
+  const indexHtml = renderToStaticMarkup(<dashboardPage.default />);
+  const tabHtml = renderToStaticMarkup(
+    <skillTabPage.default params={{ skillId: "sk_demo123", tab: "analytics" }} />,
+  );
+  const settingsHtml = renderToStaticMarkup(<settingsPage.default />);
+
+  assert.match(indexHtml, /data-dashboard-route="index"/);
+  assert.match(tabHtml, /data-initial-skill-id="sk_demo123"/);
+  assert.match(tabHtml, /data-initial-tab="analytics"/);
+  assert.match(settingsHtml, /data-initial-tab="account"/);
 });
 
 test("dashboard renders the skill selector menu and create skill modal", async () => {

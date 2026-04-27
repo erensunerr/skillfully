@@ -7,6 +7,22 @@
   --gray: #8a8a8a;
 }
 
+:root[data-theme="dark"] {
+  --paper: #0f0f0f;
+  --ink: #f4f4ef;
+  --white: #181818;
+  --gray: #9d9d9d;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root[data-theme="system"] {
+    --paper: #0f0f0f;
+    --ink: #f4f4ef;
+    --white: #181818;
+    --gray: #9d9d9d;
+  }
+}
+
 @theme inline {
   --color-background: var(--paper);
   --color-foreground: var(--ink);
@@ -27,6 +43,11 @@ body {
   background: var(--paper);
   color: var(--ink);
   font-family: var(--font-space-grotesk), "Space Grotesk", sans-serif;
+}
+
+:root[data-theme="dark"] .marketing-noise,
+:root[data-theme="system"] .marketing-noise {
+  opacity: 0.02;
 }
 
 a {
@@ -257,6 +278,48 @@ button:disabled,
 
 .hero-schematic {
   transition: transform 220ms ease;
+}
+
+.skillfully-mdx-editor {
+  height: 100%;
+  background: var(--white);
+  color: var(--ink);
+}
+
+.skillfully-mdx-content {
+  min-height: 100%;
+  padding: 2rem;
+  color: var(--ink);
+  font-family: var(--font-space-grotesk), "Space Grotesk", sans-serif;
+  outline: none;
+}
+
+.skillfully-mdx-content h1,
+.skillfully-mdx-content h2 {
+  font-family: var(--font-space-grotesk), "Space Grotesk", sans-serif;
+  font-weight: 700;
+}
+
+.skillfully-mdx-content h1 {
+  font-size: clamp(2.25rem, 4vw, 3.75rem);
+  line-height: 0.95;
+}
+
+.skillfully-mdx-content h2 {
+  margin-top: 1.5rem;
+  font-size: 1.5rem;
+}
+
+.skillfully-mdx-content blockquote {
+  border-left: 4px solid var(--ink);
+  background: var(--paper);
+  padding: 1rem 1.25rem;
+}
+
+.skillfully-mdx-editor .mdxeditor,
+.skillfully-mdx-editor [contenteditable="true"] {
+  background: var(--white);
+  color: var(--ink);
 }
 
 .step-card-polish {

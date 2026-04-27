@@ -1,7 +1,10 @@
 "use client";
 
 import { type FormEvent, type ReactNode, useEffect, useMemo, useState } from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import Select, { type SingleValue, type StylesConfig } from "react-select";
 import { db } from "@/lib/db";
 import { type AppSchema } from "@/instant.schema";
 import { type InstaQLEntity, id } from "@instantdb/react";
@@ -18,7 +21,9 @@ type Feedback = InstaQLEntity<AppSchema, "feedback">;
 type AppUser = InstantUser;
 type Screen = "list" | "create" | "detail";
 type DashboardTab = "overview" | "editor" | "analytics" | "settings" | "account";
+type SkillRouteTab = Exclude<DashboardTab, "account">;
 type AuthPhase = "request" | "verify";
+type ThemeMode = "light" | "dark" | "system";
 
 type AuthForm = {
   email: string;
@@ -28,6 +33,17 @@ type AuthForm = {
 type SkillForm = {
   name: string;
   description: string;
+};
+
+type DashboardRouteProps = {
+  initialSkillId?: string;
+  initialTab?: DashboardTab;
+  routeName?: string;
+};
+
+type SelectOption = {
+  value: string;
+  label: string;
 };
 
 type RecentFeedbackRow = {
@@ -47,6 +63,19 @@ const DASHBOARD_INPUT =
   "mt-2 w-full border border-[var(--ink)] bg-[var(--white)] px-3 py-3 font-editorial-mono text-sm outline-none focus-visible:ring-2 focus-visible:ring-[var(--ink)]";
 
 const FEEDBACK_SNIPPET_URL = "/feedback-template.md";
+const validSkillRouteTabs: SkillRouteTab[] = ["overview", "editor", "analytics", "settings"];
+
+const MdxMarkdownEditor = dynamic(
+  () => import("./mdx-editor-client").then((mod) => mod.MdxMarkdownEditor),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="h-full min-h-72 border border-[var(--ink)] bg-[var(--paper)] p-5 font-editorial-mono text-xs uppercase">
+        MDXEditor loading...
+      </div>
+    ),
+  },
+);
 
 const fallbackFeedbackRows: RecentFeedbackRow[] = [
   {
@@ -137,11 +166,6 @@ const editorVersionHistoryRows = [
   ["v2.2.0", "Published", "bg-emerald-700"],
   ["v2.1.0", "Published", "bg-emerald-700"],
 ] satisfies Array<[string, string, string]>;
-const editorPublishingRows = [
-  ["skills.sh", "Ready", "-", "terminal", "bg-emerald-700"],
-  ["GitHub", "Sync on publish", "-", "github", "bg-[var(--gray)]"],
-  ["agentskills.io", "Sync on publish", "-", "circle", "bg-[var(--gray)]"],
-] satisfies Array<[string, string, string, string, string]>;
 const analyticsFeedbackRows = [
   ["May 12, 2025 23:41", "positive", "Claude", "Answered the billing question clearly and linked the correct help article."],
   ["May 12, 2025 22:18", "neutral", "Cursor", "Useful overall, but the refund edge case was not covered in the skill."],
@@ -232,6 +256,91 @@ function slugifySkillName(name: string) {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "") || "demo-skill";
+}
+
+function isSkillRouteTab(value: DashboardTab): value is SkillRouteTab {
+  return validSkillRouteTabs.includes(value as SkillRouteTab);
+}
+
+function skillRoute(skill: Skill, tab: SkillRouteTab) {
+  return `/dashboard/${skill.skillId || skill.id}/${tab}`;
+}
+
+const selectStyles: StylesConfig<SelectOption, false> = {
+  control: (base, state) => ({
+    ...base,
+    minHeight: 46,
+    borderRadius: 0,
+    borderColor: "var(--ink)",
+    borderWidth: 1,
+    boxShadow: state.isFocused ? "0 0 0 2px var(--ink)" : "none",
+    backgroundColor: "var(--paper)",
+    color: "var(--ink)",
+    fontFamily: "var(--font-space-grotesk), Space Grotesk, sans-serif",
+    ":hover": {
+      borderColor: "var(--ink)",
+    },
+  }),
+  menu: (base) => ({
+    ...base,
+    zIndex: 50,
+    borderRadius: 0,
+    border: "1px solid var(--ink)",
+    backgroundColor: "var(--white)",
+    boxShadow: "6px 6px 0 var(--ink)",
+  }),
+  option: (base, state) => ({
+    ...base,
+    backgroundColor: state.isFocused || state.isSelected ? "var(--paper)" : "var(--white)",
+    color: "var(--ink)",
+    cursor: "pointer",
+    fontSize: 14,
+  }),
+  singleValue: (base) => ({ ...base, color: "var(--ink)" }),
+  input: (base) => ({ ...base, color: "var(--ink)" }),
+  indicatorSeparator: (base) => ({ ...base, backgroundColor: "var(--ink)" }),
+  dropdownIndicator: (base) => ({ ...base, color: "var(--ink)" }),
+};
+
+function DashboardSelect({
+  ariaLabel,
+  value,
+  options,
+  onChange,
+}: {
+  ariaLabel: string;
+  value: string;
+  options: SelectOption[];
+  onChange: (value: string) => void;
+}) {
+  const selected = options.find((option) => option.value === value) ?? options[0];
+
+  return (
+    <Select<SelectOption, false>
+      aria-label={ariaLabel}
+      className="min-w-40 font-editorial-sans text-sm"
+      instanceId={ariaLabel.toLowerCase().replace(/[^a-z0-9]+/g, "-")}
+      isSearchable={false}
+      options={options}
+      styles={selectStyles}
+      value={selected}
+      onChange={(nextValue: SingleValue<SelectOption>) => {
+        if (nextValue) {
+          onChange(nextValue.value);
+        }
+      }}
+    />
+  );
+}
+
+function useOptionalRouter() {
+  try {
+    return useRouter();
+  } catch {
+    return {
+      push: () => undefined,
+    };
+  }
 }
 
 function extractErrorMessage(error: unknown) {
@@ -789,7 +898,7 @@ function DashboardSidebar({
   ] satisfies Array<[DashboardTab, string]>;
 
   return (
-    <aside className="flex min-h-0 flex-col border-b border-[var(--ink)] bg-[var(--paper)] text-[var(--ink)] lg:sticky lg:top-0 lg:min-h-screen lg:w-60 lg:border-b-0 lg:border-r">
+    <aside className="flex min-h-0 flex-col border-b border-[var(--ink)] bg-[var(--paper)] text-[var(--ink)] lg:sticky lg:top-0 lg:h-screen lg:w-60 lg:overflow-hidden lg:border-b-0 lg:border-r">
       <div className="border-b border-[var(--ink)] px-5 py-6">
         <BrandMark />
       </div>
@@ -948,6 +1057,8 @@ function MetricCard({
 }
 
 function UsageChart() {
+  const [range, setRange] = useState("7");
+
   return (
     <section className={`${DASHBOARD_CARD} p-6 sm:p-8`}>
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -959,14 +1070,15 @@ function UsageChart() {
             <span>Avg. daily <strong className="ml-3 font-semibold">977</strong></span>
           </div>
         </div>
-        <select
-          aria-label="Usage chart date range"
-          className="w-fit border border-[var(--ink)] bg-[var(--paper)] px-4 py-3 font-editorial-sans text-sm"
-          defaultValue="7"
-        >
-          <option value="7">Last 7 days</option>
-          <option value="30">Last 30 days</option>
-        </select>
+        <DashboardSelect
+          ariaLabel="Usage chart date range"
+          value={range}
+          options={[
+            { value: "7", label: "Last 7 days" },
+            { value: "30", label: "Last 30 days" },
+          ]}
+          onChange={setRange}
+        />
       </div>
 
       <div className="mt-8 overflow-x-auto">
@@ -1305,6 +1417,29 @@ function SkillEditorWorkspace({
     version: "v2.4.0",
     status: "Draft",
   });
+  const [editorMarkdown, setEditorMarkdown] = useState(() =>
+    [
+      `# ${skill.name}`,
+      "",
+      frontmatter.summary,
+      "",
+      "> Be concise, cite sources, and escalate when the answer is unknown or sensitive.",
+      "",
+      "## When to use",
+      "",
+      "- Answer questions about product features and how they work",
+      "- Help customers understand pricing, plans, and promotions",
+      "- Clarify billing, payments, refunds, and account issues",
+      "",
+      "## Workflow",
+      "",
+      "1. Understand the customer's question and context",
+      "2. Search trusted sources and gather relevant information",
+      "3. Draft a clear, concise answer with sources",
+      "4. Confirm accuracy and compliance",
+      "5. Escalate when unsure or request more information",
+    ].join("\n"),
+  );
   const installPrompt = [
     `Install and use the ${skill.name} skill.`,
     "Load the latest published version from Skillfully, skills.sh, or agentskills.io.",
@@ -1313,21 +1448,21 @@ function SkillEditorWorkspace({
   ].join("\n");
 
   return (
-    <div className="min-h-screen bg-[var(--paper)] text-[var(--ink)]">
+    <div className="flex h-full min-h-0 flex-col bg-[var(--paper)] text-[var(--ink)]">
       <WorkspaceTopBar current="Frontmatter" />
 
-      <section className="grid border-b border-[var(--ink)] xl:min-h-[47rem] xl:grid-cols-[17.5rem_minmax(0,1fr)_21.5rem]">
-        <aside className="border-b border-[var(--ink)] p-5 xl:border-b-0 xl:border-r">
+      <section className="grid min-h-0 flex-1 border-b border-[var(--ink)] xl:grid-cols-[17.5rem_minmax(0,1fr)_21.5rem]">
+        <aside className="min-h-0 border-b border-[var(--ink)] p-5 xl:border-b-0 xl:border-r">
           <div className="flex items-center justify-between">
             <p className="font-editorial-mono text-xs font-bold uppercase">Files</p>
             <button type="button" aria-label="Collapse files" className="text-2xl leading-none">‹</button>
           </div>
-          <button type="button" className="mt-7 flex w-full items-center justify-center gap-3 border border-[var(--ink)] px-4 py-3 text-sm">
+          <button type="button" className="mt-5 flex w-full items-center justify-center gap-3 border border-[var(--ink)] px-4 py-3 text-sm">
             <span className="text-2xl leading-none">+</span>
             Upload file
           </button>
 
-          <div className="mt-7">
+          <div className="mt-6">
             <p className="font-editorial-mono text-xs font-bold uppercase">Markdown files (editable)</p>
             <div className="mt-4 space-y-2">
               {editorMarkdownFiles.map((file) => {
@@ -1352,12 +1487,12 @@ function SkillEditorWorkspace({
             </div>
           </div>
 
-          <div className="mt-8 border-t border-[var(--ink)] pt-7">
+          <div className="mt-6 border-t border-[var(--ink)] pt-6">
             <p className="font-editorial-mono text-xs font-bold uppercase">Assets (read-only)</p>
             <div className="mt-4 space-y-2">
               {editorAssets.map((asset) => (
                 <div key={asset} className="flex items-center justify-between px-3 py-3 text-sm">
-                  <span className="flex items-center gap-3">
+                  <span className="flex min-w-0 items-center gap-3 truncate">
                     <FileGlyph locked />
                     {asset}
                   </span>
@@ -1368,59 +1503,20 @@ function SkillEditorWorkspace({
           </div>
         </aside>
 
-        <section className="min-w-0 border-b border-[var(--ink)] bg-[var(--white)] xl:border-b-0 xl:border-r">
-          <div className="flex min-h-14 items-center gap-3 overflow-x-auto border-b border-[var(--ink)] px-5 text-sm">
-            {["↶", "↷", "B", "I", "Link", "•", "1.", "H2", "\"", "</>", "Table", "..."].map((tool, index) => (
-              <button
-                key={`${tool}-${index}`}
-                type="button"
-                className={`shrink-0 px-2 py-1 ${tool === "H2" ? "border border-[var(--ink)] px-4" : ""}`}
-              >
-                {tool}
-              </button>
-            ))}
-          </div>
-          <article className="mx-auto max-w-3xl px-6 py-10 sm:px-10">
-            <h1 className="font-editorial-sans text-5xl font-bold leading-none sm:text-6xl">{frontmatter.name}</h1>
-            <p className="mt-4 text-lg leading-8">{frontmatter.summary}</p>
-            <blockquote className="mt-6 border-l-4 border-[var(--ink)] bg-[var(--paper)] px-5 py-4 italic leading-7">
-              Be concise, cite sources, and escalate when the answer is unknown or sensitive to protect the customer and the company.
-            </blockquote>
-
-            <h2 className="mt-8 font-editorial-sans text-3xl font-bold">When to use</h2>
-            <ul className="mt-3 list-disc space-y-2 pl-6 text-sm leading-6">
-              <li>Answer questions about product features and how they work</li>
-              <li>Help customers understand pricing, plans, and promotions</li>
-              <li>Clarify billing, payments, refunds, and account issues</li>
-              <li>Explain company policies, eligibility, and terms</li>
-            </ul>
-
-            <h2 className="mt-8 font-editorial-sans text-3xl font-bold">Workflow</h2>
-            <ol className="mt-3 list-decimal space-y-2 pl-6 text-sm leading-6">
-              <li>Understand the customer's question and context</li>
-              <li>Search trusted sources and gather relevant information</li>
-              <li>Draft a clear, concise answer with sources</li>
-              <li>Confirm accuracy and compliance</li>
-              <li>Escalate when unsure or request more information</li>
-            </ol>
-
-            <h2 className="mt-8 font-editorial-sans text-3xl font-bold">Response style</h2>
-            <ul className="mt-3 list-disc space-y-2 pl-6 text-sm leading-6">
-              <li>Use short, plain language</li>
-              <li>Lead with the answer, then add helpful details</li>
-              <li>Cite sources using inline links</li>
-              <li>Stay empathetic and professional</li>
-            </ul>
-
-            <h2 className="mt-8 font-editorial-sans text-3xl font-bold">Examples</h2>
-            <div className="mt-4 space-y-3 text-sm leading-6">
-              <p><span className="mr-3 rounded-full border border-[var(--ink)] px-2 py-1 font-editorial-mono text-xs">Q</span>Can I change my plan after I've subscribed?</p>
-              <p className="pl-11"><span className="mr-3 rounded-full border border-[var(--ink)] px-2 py-1 font-editorial-mono text-xs">A</span>Yes. You can change your plan at any time from your billing settings. The changes take effect at the start of your next billing cycle.</p>
+        <section className="min-h-0 min-w-0 border-b border-[var(--ink)] bg-[var(--white)] xl:border-b-0 xl:border-r">
+          <div className="flex h-full min-h-0 flex-col">
+            <div className="flex min-h-12 items-center justify-between border-b border-[var(--ink)] px-5">
+              <p className="font-editorial-mono text-xs font-bold uppercase">Markdown editor</p>
+              <span className="font-editorial-mono text-xs">MDXEditor</span>
             </div>
-          </article>
+            <div className="sr-only">When to use Workflow</div>
+            <div className="min-h-0 flex-1">
+              <MdxMarkdownEditor markdown={editorMarkdown} onChange={setEditorMarkdown} />
+            </div>
+          </div>
         </section>
 
-        <aside className="p-5">
+        <aside className="min-h-0 p-5">
           <div className="flex items-center justify-between">
             <p className="font-editorial-mono text-xs font-bold uppercase">Frontmatter</p>
             <button type="button" aria-label="Collapse frontmatter" className="text-2xl leading-none">⌃</button>
@@ -1462,17 +1558,17 @@ function SkillEditorWorkspace({
             </label>
             <label className="block text-sm">
               <span className="block font-editorial-sans">Status</span>
-              <select
-                className={DASHBOARD_INPUT}
-                value={frontmatter.status}
-                onChange={(event) => {
-                  const nextStatus = event.currentTarget.value;
-                  setFrontmatter((state) => ({ ...state, status: nextStatus }));
-                }}
-              >
-                <option>Draft</option>
-                <option>Published</option>
-              </select>
+              <div className="mt-2">
+                <DashboardSelect
+                  ariaLabel="Frontmatter status"
+                  value={frontmatter.status}
+                  options={[
+                    { value: "Draft", label: "Draft" },
+                    { value: "Published", label: "Published" },
+                  ]}
+                  onChange={(nextStatus) => setFrontmatter((state) => ({ ...state, status: nextStatus }))}
+                />
+              </div>
             </label>
           </div>
 
@@ -1506,54 +1602,25 @@ function SkillEditorWorkspace({
         </aside>
       </section>
 
-      <section className="grid border-b border-[var(--ink)] lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
-        <div className="border-b border-[var(--ink)] p-5 lg:border-b-0 lg:border-r">
-          <p className="font-editorial-mono text-xs font-bold uppercase">Publishing destinations</p>
-          <table className="mt-4 w-full border-collapse text-left text-sm">
-            <thead className="font-editorial-mono text-xs uppercase">
-              <tr className="border-b border-[var(--ink)]">
-                <th className="py-3 font-bold">Destination</th>
-                <th className="py-3 font-bold">Status</th>
-                <th className="py-3 text-right font-bold">Last sync</th>
-              </tr>
-            </thead>
-            <tbody>
-              {editorPublishingRows.map(([destination, status, sync, icon, dot]) => (
-                <tr key={destination} className="border-b border-[var(--ink)]/50">
-                  <td className="py-3">
-                    <span className="flex items-center gap-3">
-                      <TargetIcon name={icon} />
-                      {destination}
-                    </span>
-                  </td>
-                  <td className="py-3">
-                    <span className="flex items-center gap-3">
-                      <span aria-hidden className={`h-2 w-2 rounded-full ${dot}`} />
-                      {status}
-                    </span>
-                  </td>
-                  <td className="py-3 text-right">{sync}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      <section className="grid min-h-28 gap-4 border-b border-[var(--ink)] p-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+        <div className="border border-[var(--ink)] p-4">
+          <div className="flex items-start justify-between gap-4">
+            <p className="font-editorial-mono text-xs font-bold uppercase">Install skill prompt</p>
+            <button type="button" aria-label="Copy install skill prompt" className="border border-[var(--ink)] p-2">
+              <CopyIcon />
+            </button>
+          </div>
+          <pre className="mt-3 line-clamp-2 whitespace-pre-wrap font-editorial-mono text-xs leading-5">
+            {installPrompt}
+          </pre>
         </div>
-
-        <div className="p-5">
-          <button type="button" className="w-full border border-[var(--ink)] bg-[var(--ink)] px-6 py-4 font-editorial-sans text-lg font-semibold text-[var(--paper)]">
+        <div className="flex flex-col gap-3 sm:flex-row lg:justify-end">
+          <Link href={skillRoute(skill, "settings")} className={`${DASHBOARD_BUTTON_LIGHT} text-center`}>
+            Change publishing options
+          </Link>
+          <button type="button" className="border border-[var(--ink)] bg-[var(--ink)] px-6 py-4 font-editorial-sans text-lg font-semibold text-[var(--paper)]">
             Publish version
           </button>
-          <div className="mt-4 border border-[var(--ink)] p-4">
-            <div className="flex items-start justify-between gap-4">
-              <p className="font-editorial-mono text-xs font-bold uppercase">Install skill prompt</p>
-              <button type="button" aria-label="Copy install skill prompt" className="border border-[var(--ink)] p-3">
-                <CopyIcon />
-              </button>
-            </div>
-            <pre className="mt-4 whitespace-pre-wrap font-editorial-mono text-xs leading-6">
-              {installPrompt}
-            </pre>
-          </div>
         </div>
       </section>
     </div>
@@ -1608,6 +1675,8 @@ function AnalyticsChart({
 
 function SkillAnalyticsWorkspace() {
   const [query, setQuery] = useState("");
+  const [version, setVersion] = useState("v2.3.0");
+  const [range, setRange] = useState("24h");
   const [sentiments, setSentiments] = useState<Array<RecentFeedbackRow["sentiment"]>>([
     "positive",
     "neutral",
@@ -1628,10 +1697,15 @@ function SkillAnalyticsWorkspace() {
 
       <section className="space-y-6 p-5 sm:p-7">
         <div className="grid gap-4 xl:grid-cols-[12rem_minmax(16rem,1fr)_10rem_minmax(20rem,auto)]">
-          <select aria-label="Published version" className="border border-[var(--ink)] bg-[var(--paper)] px-4 py-3 text-base" defaultValue="v2.3.0">
-            <option value="v2.3.0">Published v2.3.0</option>
-            <option value="v2.2.0">Published v2.2.0</option>
-          </select>
+          <DashboardSelect
+            ariaLabel="Published version"
+            value={version}
+            options={[
+              { value: "v2.3.0", label: "Published v2.3.0" },
+              { value: "v2.2.0", label: "Published v2.2.0" },
+            ]}
+            onChange={setVersion}
+          />
           <label className="flex items-center gap-3 border border-[var(--ink)] bg-[var(--paper)] px-4">
             <SearchIcon />
             <input
@@ -1641,10 +1715,15 @@ function SkillAnalyticsWorkspace() {
               onChange={(event) => setQuery(event.currentTarget.value)}
             />
           </label>
-          <select aria-label="Analytics date range" className="border border-[var(--ink)] bg-[var(--paper)] px-4 py-3 text-base" defaultValue="24h">
-            <option value="24h">Last 24h</option>
-            <option value="7d">Last 7 days</option>
-          </select>
+          <DashboardSelect
+            ariaLabel="Analytics date range"
+            value={range}
+            options={[
+              { value: "24h", label: "Last 24h" },
+              { value: "7d", label: "Last 7 days" },
+            ]}
+            onChange={setRange}
+          />
           <div className="flex flex-wrap gap-2 border border-[var(--ink)] p-2">
             {(["positive", "neutral", "negative"] as const).map((sentiment) => {
               const isActive = sentiments.includes(sentiment);
@@ -1805,12 +1884,16 @@ function TogglePill({ label = "Enabled" }: { label?: string }) {
 function AccountTopBar({
   user,
   isAccountMenuOpen,
+  theme,
+  onThemeChange,
   onToggleAccountMenu,
   onOpenAccountSettings,
   onSignOut,
 }: {
   user: AppUser;
   isAccountMenuOpen: boolean;
+  theme: ThemeMode;
+  onThemeChange: (theme: ThemeMode) => void;
   onToggleAccountMenu: () => void;
   onOpenAccountSettings: () => void;
   onSignOut: () => void;
@@ -1823,7 +1906,15 @@ function AccountTopBar({
       <button type="button" className="font-editorial-mono text-sm underline">
         Guide
       </button>
-      <button type="button" aria-label="Theme" className="text-2xl leading-none">
+      <button
+        type="button"
+        aria-label="Theme"
+        className="text-2xl leading-none"
+        onClick={() => {
+          const nextTheme = theme === "light" ? "dark" : theme === "dark" ? "system" : "light";
+          onThemeChange(nextTheme);
+        }}
+      >
         ☼
       </button>
       <span aria-hidden className="h-9 border-l border-[var(--ink)]/40" />
@@ -1995,12 +2086,16 @@ export function SkillSettingsWorkspace({ skill }: { skill: Skill }) {
 export function AccountSettingsWorkspace({
   user,
   isAccountMenuOpen,
+  theme = "system",
+  onThemeChange = () => undefined,
   onToggleAccountMenu,
   onOpenAccountSettings,
   onSignOut,
 }: {
   user: AppUser;
   isAccountMenuOpen: boolean;
+  theme?: ThemeMode;
+  onThemeChange?: (theme: ThemeMode) => void;
   onToggleAccountMenu: () => void;
   onOpenAccountSettings: () => void;
   onSignOut: () => void;
@@ -2013,6 +2108,8 @@ export function AccountSettingsWorkspace({
       <AccountTopBar
         user={user}
         isAccountMenuOpen={isAccountMenuOpen}
+        theme={theme}
+        onThemeChange={onThemeChange}
         onToggleAccountMenu={onToggleAccountMenu}
         onOpenAccountSettings={onOpenAccountSettings}
         onSignOut={onSignOut}
@@ -2055,9 +2152,22 @@ export function AccountSettingsWorkspace({
             <SettingsRow
               label="Theme"
               action={
-                <span className="inline-grid grid-cols-2 border border-[var(--ink)]">
-                  <button type="button" className="px-9 py-2 text-sm">Light</button>
-                  <button type="button" className="bg-[var(--ink)] px-9 py-2 text-sm text-[var(--paper)]">Dark</button>
+                <span className="inline-grid grid-cols-3 border border-[var(--ink)]">
+                  {(["light", "dark", "system"] as const).map((mode) => {
+                    const isActive = theme === mode;
+                    return (
+                      <button
+                        key={mode}
+                        type="button"
+                        className={`px-6 py-2 text-sm capitalize ${
+                          isActive ? "bg-[var(--ink)] text-[var(--paper)]" : ""
+                        }`}
+                        onClick={() => onThemeChange(mode)}
+                      >
+                        {mode.charAt(0).toUpperCase() + mode.slice(1)}
+                      </button>
+                    );
+                  })}
                 </span>
               }
             />
@@ -2223,10 +2333,8 @@ export function SkillDetail({
       </section>
 
       <UsageChart />
-      <SkillHealth />
 
-      <section className="grid lg:grid-cols-2">
-        <AttentionPanel />
+      <section className="grid">
         <SentimentPanel entries={entries} />
       </section>
 
@@ -2237,11 +2345,17 @@ export function SkillDetail({
   );
 }
 
-export default function Dashboard() {
+export default function Dashboard({
+  initialSkillId,
+  initialTab = "overview",
+  routeName = "index",
+}: DashboardRouteProps = {}) {
+  const router = useOptionalRouter();
   const { isLoading: isAuthLoading, user, error: authHookError } = db.useAuth();
   const [screen, setScreen] = useState<Screen>("list");
   const [selectedSkillId, setSelectedSkillId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<DashboardTab>("overview");
+  const [activeTab, setActiveTab] = useState<DashboardTab>(initialTab);
+  const [theme, setTheme] = useState<ThemeMode>("system");
   const [isSkillSelectorOpen, setIsSkillSelectorOpen] = useState(false);
   const [isCreateSkillModalOpen, setIsCreateSkillModalOpen] = useState(false);
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
@@ -2324,8 +2438,42 @@ export default function Dashboard() {
     shouldShowOnboardingModalByDefault({ skills });
 
   useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    document.documentElement.style.colorScheme = theme === "system" ? "light dark" : theme;
+  }, [theme]);
+
+  useEffect(() => {
     setOnboardingDismissed(false);
   }, [user?.id]);
+
+  useEffect(() => {
+    if (!user) {
+      return;
+    }
+
+    if (initialTab === "account") {
+      setActiveTab("account");
+      setScreen("list");
+      setOnboardingDismissed(true);
+      return;
+    }
+
+    if (!initialSkillId || skills.length === 0) {
+      return;
+    }
+
+    const routedSkill =
+      skills.find((skill) => skill.id === initialSkillId || skill.skillId === initialSkillId) ?? null;
+
+    if (!routedSkill) {
+      return;
+    }
+
+    setSelectedSkillId(routedSkill.id);
+    setActiveTab(isSkillRouteTab(initialTab) ? initialTab : "overview");
+    setScreen("detail");
+    setOnboardingDismissed(true);
+  }, [initialSkillId, initialTab, skills, user]);
 
   useEffect(() => {
     let active = true;
@@ -2523,6 +2671,7 @@ export default function Dashboard() {
 
     if (tab === "account") {
       setScreen("list");
+      router.push("/dashboard/settings");
       return;
     }
 
@@ -2536,10 +2685,16 @@ export default function Dashboard() {
       return;
     }
 
+    const routeSkill =
+      skills.find((skill) => skill.id === selectedSkillId) ?? selectedSkill ?? skills[0];
+
     if (!selectedSkillId) {
-      setSelectedSkillId(skills[0].id);
+      setSelectedSkillId(routeSkill.id);
     }
 
+    if (isSkillRouteTab(tab)) {
+      router.push(skillRoute(routeSkill, tab));
+    }
     setScreen("detail");
   }
 
@@ -2583,6 +2738,7 @@ export default function Dashboard() {
     setIsSkillSelectorOpen(false);
     setScreen("detail");
     setErrorMessage("");
+    router.push(`/dashboard/${newSkillId}/overview`);
   }
 
   function createSkillFromModal(name: string, description: string) {
@@ -2594,11 +2750,18 @@ export default function Dashboard() {
     createSkill(name, description);
   }
 
+  const isEditorSurface = activeTab === "editor" && viewState.kind === "detail";
+
   return (
-    <main className="min-h-screen overflow-x-hidden bg-[var(--paper)] text-[var(--ink)]">
+    <main
+      data-dashboard-route={routeName}
+      data-initial-skill-id={initialSkillId}
+      data-initial-tab={initialTab}
+      className="min-h-screen overflow-x-hidden bg-[var(--paper)] text-[var(--ink)]"
+    >
       <div aria-hidden className="marketing-noise" />
       <div
-        className={`grid min-h-screen transition-opacity lg:grid-cols-[15rem_minmax(0,1fr)] ${
+        className={`grid min-h-screen transition-opacity lg:h-screen lg:grid-cols-[15rem_minmax(0,1fr)] ${
           shouldShowOnboardingModal ? "opacity-45" : ""
         }`}
         aria-hidden={shouldShowOnboardingModal ? true : undefined}
@@ -2617,6 +2780,7 @@ export default function Dashboard() {
             setIsAccountMenuOpen(false);
             setScreen("detail");
             setErrorMessage("");
+            router.push(skillRoute(skill, isSkillRouteTab(activeTab) ? activeTab : "overview"));
           }}
           onTabChange={openDashboardTab}
           onToggleSkillSelector={() => {
@@ -2627,11 +2791,13 @@ export default function Dashboard() {
           onSignOut={handleSignOut}
         />
 
-        <section className="min-w-0">
+        <section className={`min-w-0 ${isEditorSurface ? "lg:h-screen lg:overflow-hidden" : "lg:h-screen lg:overflow-y-auto"}`}>
           {activeTab === "account" ? (
             <AccountSettingsWorkspace
               user={user}
               isAccountMenuOpen={isAccountMenuOpen}
+              theme={theme}
+              onThemeChange={setTheme}
               onToggleAccountMenu={() => {
                 setIsAccountMenuOpen((current) => !current);
                 setIsSkillSelectorOpen(false);

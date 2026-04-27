@@ -62,6 +62,10 @@ test("dashboard skill detail renders the operational overview UI", async () => {
   assert.match(html, /Feedback sentiment/i);
   assert.match(html, /Recent feedback/i);
   assert.match(html, /Publishing &amp; directory status/i);
+  assert.match(html, /LobeHub Skills/i);
+  assert.match(html, /ClawHub/i);
+  assert.match(html, /Hermes Skills Hub/i);
+  assert.doesNotMatch(html, /agentskills\.io/i);
   assert.match(html, /Version snapshot/i);
 });
 
@@ -82,7 +86,9 @@ test("dashboard skill detail renders the editor tab UI", async () => {
 
   assert.match(html, /Files/);
   assert.match(html, /Frontmatter/);
-  assert.match(html, /Validate skill/);
+  assert.match(html, /Collapse files/);
+  assert.match(html, /Collapse frontmatter/);
+  assert.doesNotMatch(html, /Validate skill/);
   assert.match(html, /Upload file/);
   assert.match(html, /Markdown files \(editable\)/i);
   assert.match(html, /SKILL\.md/);
@@ -96,7 +102,7 @@ test("dashboard skill detail renders the editor tab UI", async () => {
   assert.doesNotMatch(html, /Publishing destinations/);
   assert.match(html, /Change publishing options/i);
   assert.match(html, /Publish version/);
-  assert.match(html, /Install skill prompt/);
+  assert.doesNotMatch(html, /Install skill prompt/);
 });
 
 test("dashboard skill detail renders the analytics tab UI", async () => {
@@ -154,6 +160,10 @@ test("dashboard skill detail renders the skill settings UI", async () => {
   assert.match(html, /erensunerr\/demo-skill/i);
   assert.match(html, /03\. Publishing/i);
   assert.match(html, /Skillfully directory/i);
+  assert.match(html, /LobeHub Skills/i);
+  assert.match(html, /ClawHub/i);
+  assert.match(html, /Hermes Skills Hub/i);
+  assert.doesNotMatch(html, /agentskills\.io/i);
   assert.match(html, /04\. Tracking/i);
   assert.match(html, /Install endpoint/i);
   assert.match(html, /\/api\/install/i);

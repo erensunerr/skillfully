@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import posthog from "posthog-js";
+import { captureClientEvent } from "@/lib/client-analytics";
 
 type OnboardingImportState = "idle" | "connecting" | "unavailable";
 
@@ -118,7 +118,7 @@ export function OnboardingModal({
                 className={`${BRUTAL_BUTTON} mt-5 w-full disabled:opacity-70`}
                 disabled={isConnecting}
                 onClick={() => {
-                  posthog.capture("onboarding_github_connect_clicked");
+                  captureClientEvent("onboarding_github_connect_clicked");
                   setImportState("connecting");
                 }}
               >
@@ -151,7 +151,7 @@ export function OnboardingModal({
                 type="button"
                 className={`${BRUTAL_BUTTON} mt-5 w-full`}
                 onClick={() => {
-                  posthog.capture("onboarding_create_skill_clicked");
+                  captureClientEvent("onboarding_create_skill_clicked");
                   onCreateSkill();
                 }}
               >
@@ -166,7 +166,7 @@ export function OnboardingModal({
           <Link
             href="/guide"
             className="inline-flex items-center gap-4 font-mono text-base font-black uppercase underline underline-offset-4"
-            onClick={() => posthog.capture("onboarding_guide_clicked")}
+            onClick={() => captureClientEvent("onboarding_guide_clicked")}
           >
             Read the guide
             <span aria-hidden className="text-3xl leading-none">

@@ -4,7 +4,23 @@ import { type ComponentType, type FormEvent, type ReactNode, useEffect, useMemo,
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Select, { type SingleValue, type StylesConfig } from "react-select";
+import {
+  Area,
+  AreaChart,
+  CartesianGrid,
+  Line,
+  LineChart,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import { db } from "@/lib/db";
+import {
+  captureClientEvent,
+  captureClientException,
+  identifyClientUser,
+  resetClientAnalytics,
+} from "@/lib/client-analytics";
 import { type AppSchema } from "@/instant.schema";
 import { type InstaQLEntity, id } from "@instantdb/react";
 import type { User as InstantUser } from "@instantdb/core";
@@ -13,7 +29,6 @@ import {
   shouldShowOnboardingModalByDefault,
 } from "./view-state";
 import { OnboardingModal } from "./onboarding-modal";
-import posthog from "posthog-js";
 
 type Skill = InstaQLEntity<AppSchema, "skills">;
 type Feedback = InstaQLEntity<AppSchema, "feedback">;
@@ -56,6 +71,8 @@ type RecentFeedbackRow = {
   feedback: string;
   version: string;
 };
+
+type PublishModalStep = "confirm" | "published" | "waiting" | "confirmed";
 
 const DASHBOARD_CARD = "border border-[var(--ink)] bg-[var(--paper)] text-[var(--ink)]";
 const DASHBOARD_PANEL = "border border-[var(--ink)] bg-[var(--white)] text-[var(--ink)]";
@@ -129,10 +146,88 @@ const attentionRows = [
   },
 ] satisfies Array<{ tone: string; title: string; body: string }>;
 
+const miniSparklineData = {
+  success: [
+    { label: "1", value: 81 },
+    { label: "2", value: 83 },
+    { label: "3", value: 88 },
+    { label: "4", value: 86 },
+    { label: "5", value: 91 },
+    { label: "6", value: 89 },
+    { label: "7", value: 94 },
+    { label: "8", value: 97 },
+    { label: "9", value: 92 },
+    { label: "10", value: 96 },
+    { label: "11", value: 98 },
+  ],
+  users: [
+    { label: "1", value: 220 },
+    { label: "2", value: 226 },
+    { label: "3", value: 260 },
+    { label: "4", value: 248 },
+    { label: "5", value: 310 },
+    { label: "6", value: 292 },
+    { label: "7", value: 352 },
+    { label: "8", value: 344 },
+    { label: "9", value: 382 },
+    { label: "10", value: 334 },
+    { label: "11", value: 420 },
+  ],
+} satisfies Record<"success" | "users", Array<{ label: string; value: number }>>;
+
+const overviewUsageData = [
+  { day: "May 2", interactions: 610, installs: 96 },
+  { day: "May 3", interactions: 720, installs: 112 },
+  { day: "May 4", interactions: 680, installs: 104 },
+  { day: "May 5", interactions: 940, installs: 136 },
+  { day: "May 6", interactions: 880, installs: 128 },
+  { day: "May 7", interactions: 1240, installs: 172 },
+  { day: "May 8", interactions: 1160, installs: 164 },
+  { day: "May 9", interactions: 1310, installs: 188 },
+  { day: "May 10", interactions: 1190, installs: 176 },
+  { day: "May 11", interactions: 1420, installs: 205 },
+  { day: "May 12", interactions: 1560, installs: 234 },
+  { day: "May 13", interactions: 1480, installs: 221 },
+] satisfies Array<{ day: string; interactions: number; installs: number }>;
+
+const analyticsUsersData = [
+  { time: "00:00", users: 860 },
+  { time: "02:00", users: 910 },
+  { time: "04:00", users: 880 },
+  { time: "06:00", users: 1010 },
+  { time: "08:00", users: 1180 },
+  { time: "10:00", users: 1260 },
+  { time: "12:00", users: 1430 },
+  { time: "14:00", users: 1510 },
+  { time: "16:00", users: 1640 },
+  { time: "18:00", users: 1720 },
+  { time: "20:00", users: 1842 },
+  { time: "22:00", users: 1788 },
+  { time: "24:00", users: 1816 },
+] satisfies Array<{ time: string; users: number }>;
+
+const analyticsSuccessData = [
+  { time: "00:00", successRate: 88 },
+  { time: "02:00", successRate: 89 },
+  { time: "04:00", successRate: 87 },
+  { time: "06:00", successRate: 86 },
+  { time: "08:00", successRate: 88 },
+  { time: "10:00", successRate: 90 },
+  { time: "12:00", successRate: 89 },
+  { time: "14:00", successRate: 91 },
+  { time: "16:00", successRate: 92 },
+  { time: "18:00", successRate: 93 },
+  { time: "20:00", successRate: 92 },
+  { time: "22:00", successRate: 94 },
+  { time: "24:00", successRate: 92 },
+] satisfies Array<{ time: string; successRate: number }>;
+
 const publishingTargets = [
   ["skills.sh", "Published", "v2.3.0", "View on skills.sh", "terminal"],
   ["GitHub", "Published", "v2.3.0", "View on GitHub", "github"],
-  ["agentskills.io", "Published", "v2.3.0", "View on agentskills.io", "triangle"],
+  ["LobeHub Skills", "Pending", "-", "Open lobehub.com/skills", "circle"],
+  ["ClawHub", "Pending", "-", "Open clawhub.ai", "triangle"],
+  ["Hermes Skills Hub", "Pending", "-", "Open Hermes", "square"],
   ["Skillfully directory", "Coming soon", "-", "Learn more", "circle"],
 ] satisfies Array<[string, string, string, string, string]>;
 
@@ -178,7 +273,9 @@ const skillSelectorFallbackSkills = [
 const skillSettingsPublishingRows = [
   ["skills.sh", "Publish on release", "Enabled", "terminal", "bg-emerald-700"],
   ["GitHub", "Create PR on publish", "Enabled", "github", "bg-emerald-700"],
-  ["agentskills.io", "Publish on release", "Enabled", "circle", "bg-emerald-700"],
+  ["LobeHub Skills", "Manual submission after publish", "Ready", "circle", "bg-amber-500"],
+  ["ClawHub", "Manual submission after publish", "Ready", "triangle", "bg-amber-500"],
+  ["Hermes Skills Hub", "Manual submission after publish", "Ready", "square", "bg-amber-500"],
   ["Skillfully directory", "Coming soon", "Disabled", "square", "bg-[var(--gray)]"],
 ] satisfies Array<[string, string, string, string, string]>;
 
@@ -526,6 +623,15 @@ function TargetIcon({ name }: { name: string }) {
     return (
       <svg aria-hidden viewBox="0 0 24 24" className={iconClass} fill="currentColor">
         <path d="M12 3 22 21H2L12 3Zm0 6-3.8 8h7.6L12 9Z" />
+      </svg>
+    );
+  }
+
+  if (name === "square") {
+    return (
+      <svg aria-hidden viewBox="0 0 24 24" className={iconClass} fill="none" stroke="currentColor" strokeWidth="1.7">
+        <rect x="5" y="5" width="14" height="14" />
+        <path d="M8 12h8M12 8v8" />
       </svg>
     );
   }
@@ -1034,24 +1140,25 @@ function EmptyState({
 }
 
 function MiniSparkline({ variant = "success" }: { variant?: "success" | "users" }) {
-  const path =
-    variant === "success"
-      ? "M4 40 20 38 35 30 51 34 66 25 82 30 98 22 114 15 130 25 146 18 162 12 178 19 194 10"
-      : "M4 42 18 42 32 35 46 39 60 30 74 36 88 25 102 28 116 22 130 32 144 18 158 10 172 17 194 8";
-
   return (
-    <svg aria-hidden viewBox="0 0 200 58" className="mt-8 h-20 w-full text-[var(--ink)]">
-      <path d={path} fill="none" stroke="currentColor" strokeWidth="2" />
-      {Array.from({ length: 11 }).map((_, index) => (
-        <circle
-          key={index}
-          cx={4 + index * 19}
-          cy={variant === "success" ? 40 - index * 2.7 + (index % 3) * 6 : 42 - index * 2.9 + (index % 2) * 5}
-          r="2.2"
-          fill="currentColor"
+    <div aria-hidden className="mt-8 h-20 w-full overflow-hidden text-[var(--ink)]">
+      <LineChart
+        width={220}
+        height={76}
+        data={miniSparklineData[variant]}
+        margin={{ top: 8, right: 8, bottom: 8, left: 0 }}
+      >
+        <Line
+          type="monotone"
+          dataKey="value"
+          stroke="currentColor"
+          strokeWidth={2.2}
+          dot={{ r: 2.3, fill: "currentColor", strokeWidth: 0 }}
+          activeDot={false}
+          isAnimationActive={false}
         />
-      ))}
-    </svg>
+      </LineChart>
+    </div>
   );
 }
 
@@ -1105,34 +1212,62 @@ function UsageChart() {
         />
       </div>
 
-      <div className="mt-8 overflow-x-auto">
-        <svg
-          aria-label="Usage chart"
-          viewBox="0 0 860 330"
-          className="h-[20rem] min-w-[48rem] text-[var(--ink)]"
-          role="img"
+      <div className="mt-8 overflow-x-auto" aria-label="Usage chart" role="img">
+        <AreaChart
+          width={860}
+          height={330}
+          data={overviewUsageData}
+          margin={{ top: 18, right: 24, bottom: 10, left: 0 }}
+          className="min-w-[48rem] text-[var(--ink)]"
         >
-          {[58, 120, 182, 244, 306].map((y) => (
-            <line key={y} x1="68" y1={y} x2="830" y2={y} stroke="currentColor" strokeOpacity="0.22" strokeDasharray="2 3" />
-          ))}
-          <line x1="68" y1="306" x2="830" y2="306" stroke="currentColor" />
-          <text x="16" y="62" className="fill-current font-editorial-sans text-sm">2K</text>
-          <text x="16" y="124" className="fill-current font-editorial-sans text-sm">1.5K</text>
-          <text x="16" y="186" className="fill-current font-editorial-sans text-sm">1K</text>
-          <text x="16" y="248" className="fill-current font-editorial-sans text-sm">500</text>
-          <text x="16" y="310" className="fill-current font-editorial-sans text-sm">0</text>
-          <path
-            d="M70 268 88 240 107 228 124 206 142 226 158 198 174 247 192 176 210 242 229 214 246 201 264 214 282 207 300 235 318 268 336 224 354 246 372 219 390 244 408 172 426 230 444 96 462 178 480 154 498 192 516 226 534 238 552 210 570 246 588 258 606 236 624 218 642 204 660 218 678 196 696 236 714 176 732 122 750 178 768 204 786 224 804 194 822 172"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.2"
+          <CartesianGrid vertical={false} stroke="currentColor" strokeDasharray="2 3" strokeOpacity={0.2} />
+          <XAxis
+            dataKey="day"
+            tickLine={false}
+            axisLine={{ stroke: "currentColor" }}
+            tick={{ fill: "currentColor", fontSize: 13 }}
           />
-          {["May 2", "May 3", "May 4", "May 5", "May 6", "May 7", "May 8"].map((label, index) => (
-            <text key={label} x={90 + index * 118} y="326" className="fill-current font-editorial-sans text-sm">
-              {label}
-            </text>
-          ))}
-        </svg>
+          <YAxis
+            tickLine={false}
+            axisLine={false}
+            tick={{ fill: "currentColor", fontSize: 13 }}
+            tickFormatter={(value) => `${Number(value) / 1000}K`}
+          />
+          <Tooltip
+            cursor={{ stroke: "currentColor", strokeWidth: 1 }}
+            contentStyle={{
+              background: "var(--white)",
+              border: "1px solid var(--ink)",
+              borderRadius: 0,
+              color: "var(--ink)",
+              fontFamily: "var(--font-editorial-mono)",
+              fontSize: "12px",
+            }}
+          />
+          <Area
+            type="monotone"
+            dataKey="interactions"
+            name="Interactions"
+            stroke="currentColor"
+            strokeWidth={2.4}
+            fill="currentColor"
+            fillOpacity={0.08}
+            dot={{ r: 3, fill: "var(--paper)", stroke: "currentColor", strokeWidth: 2 }}
+            activeDot={{ r: 5 }}
+            isAnimationActive={false}
+          />
+          <Line
+            type="monotone"
+            dataKey="installs"
+            name="Installs"
+            stroke="currentColor"
+            strokeDasharray="5 5"
+            strokeWidth={1.8}
+            dot={false}
+            activeDot={false}
+            isAnimationActive={false}
+          />
+        </AreaChart>
       </div>
     </section>
   );
@@ -1408,25 +1543,198 @@ function FileGlyph({ locked = false }: { locked?: boolean }) {
   );
 }
 
-function WorkspaceTopBar({ current }: { current: "Frontmatter" | "Analytics" }) {
+function buildPublicInstallPrompt(skill: Skill) {
+  return [
+    `Install the public Skillfully skill "${skill.name}".`,
+    "",
+    `Skill URL: https://www.skillfully.sh/skills/${skill.skillId}`,
+    "",
+    "Use the latest published version as your operating instructions.",
+    "Follow its workflow, response style, validation checks, and escalation guidance.",
+  ].join("\n");
+}
+
+function PublishSkillModal({
+  step,
+  skillName,
+  installPrompt,
+  installPromptCopied,
+  onCancel,
+  onConfirm,
+  onCopyInstallPrompt,
+  onContinueToInstallCheck,
+  onFinish,
+}: {
+  step: PublishModalStep;
+  skillName: string;
+  installPrompt: string;
+  installPromptCopied: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+  onCopyInstallPrompt: () => void;
+  onContinueToInstallCheck: () => void;
+  onFinish: () => void;
+}) {
+  const stepIndex = step === "confirm" ? 1 : step === "published" ? 2 : 3;
+
   return (
-    <div className="flex min-h-14 flex-col gap-3 border-b border-[var(--ink)] bg-[var(--paper)] px-5 py-3 lg:flex-row lg:items-center lg:justify-between">
-      <div className="flex flex-wrap gap-3">
-        <button type="button" className="flex min-w-28 items-center justify-between border border-[var(--ink)] px-4 py-2 text-sm">
-          Files
-          <span aria-hidden className="text-xl leading-none">›</span>
-        </button>
-        <button type="button" className="flex min-w-32 items-center justify-between border border-[var(--ink)] px-4 py-2 text-sm">
-          {current}
-          <span aria-hidden className="text-xl leading-none">›</span>
-        </button>
-      </div>
-      <button type="button" className="flex items-center gap-3 self-start text-sm lg:self-auto">
-        <CheckCircleIcon />
-        Validate skill
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--ink)]/35 px-5 py-8 backdrop-blur-[1px]">
+      <section
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="publish-skill-title"
+        className="w-full max-w-2xl border-2 border-[var(--ink)] bg-[var(--white)] p-6 shadow-[8px_8px_0_var(--ink)] sm:p-8"
+      >
+        <div className="flex items-start justify-between gap-6">
+          <div>
+            <p className="font-editorial-mono text-xs font-bold uppercase">Publish step {stepIndex} of 3</p>
+            <h2 id="publish-skill-title" className="mt-3 font-editorial-sans text-3xl font-bold">
+              {step === "confirm"
+                ? "Are you sure?"
+                : step === "published"
+                  ? "Your skill has been published."
+                  : step === "waiting"
+                    ? "Waiting for installation confirmation"
+                    : "It works now!"}
+            </h2>
+          </div>
+          <button
+            type="button"
+            aria-label="Close publish modal"
+            className="border border-[var(--ink)] px-3 py-1 font-editorial-mono text-lg"
+            onClick={onCancel}
+          >
+            ×
+          </button>
+        </div>
+
+        {step === "confirm" ? (
+          <>
+            <p className="mt-6 text-lg leading-8">
+              This will make <strong>{skillName}</strong> publicly accessible.
+            </p>
+            <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-end">
+              <button type="button" className={DASHBOARD_BUTTON_LIGHT} onClick={onCancel}>
+                No, keep draft
+              </button>
+              <button type="button" className={DASHBOARD_BUTTON} onClick={onConfirm}>
+                Yes, publish
+              </button>
+            </div>
+          </>
+        ) : null}
+
+        {step === "published" ? (
+          <>
+            <p className="mt-6 text-base leading-7">
+              Paste this into Codex or Claude Code to install your skill. You can also share it with friends.
+            </p>
+            <pre className="mt-5 max-h-56 overflow-auto border border-[var(--ink)] bg-[var(--paper)] p-4 font-editorial-mono text-xs leading-5">
+              {installPrompt}
+            </pre>
+            <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-end">
+              <button type="button" className={DASHBOARD_BUTTON_LIGHT} onClick={onCopyInstallPrompt}>
+                {installPromptCopied ? "Copied" : "Copy installation prompt"}
+              </button>
+              <button type="button" className={DASHBOARD_BUTTON} onClick={onContinueToInstallCheck}>
+                Check installation
+              </button>
+            </div>
+          </>
+        ) : null}
+
+        {step === "waiting" || step === "confirmed" ? (
+          <>
+            <div className="mt-8 border border-[var(--ink)] bg-[var(--paper)] p-5">
+              <div className="flex items-center gap-4">
+                <span
+                  aria-hidden
+                  className={`h-3 w-3 rounded-full ${
+                    step === "confirmed" ? "bg-emerald-700" : "animate-pulse bg-[var(--ink)]"
+                  }`}
+                />
+                <p className="font-editorial-sans text-lg">
+                  {step === "confirmed"
+                    ? "It works now!"
+                    : "Waiting for installation confirmation..."}
+                </p>
+              </div>
+            </div>
+            <div className="mt-8 flex justify-end">
+              <button
+                type="button"
+                className={step === "confirmed" ? DASHBOARD_BUTTON : DASHBOARD_BUTTON_LIGHT}
+                disabled={step === "waiting"}
+                onClick={onFinish}
+              >
+                Finish
+              </button>
+            </div>
+          </>
+        ) : null}
+      </section>
+    </div>
+  );
+}
+
+function EditorPanelToggle({
+  label,
+  isOpen,
+  onToggle,
+}: {
+  label: string;
+  isOpen: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <div className="flex items-center justify-between">
+      <p className="font-editorial-mono text-xs font-bold uppercase">{label}</p>
+      <button
+        type="button"
+        aria-label={`${isOpen ? "Collapse" : "Expand"} ${label.toLowerCase()}`}
+        className="text-2xl leading-none"
+        onClick={onToggle}
+      >
+        {isOpen ? "‹" : "›"}
       </button>
     </div>
   );
+}
+
+function CollapsedEditorRail({
+  label,
+  onToggle,
+}: {
+  label: string;
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      className="flex h-full min-h-16 w-full items-center justify-center border-[var(--ink)] font-editorial-mono text-xs font-bold uppercase"
+      aria-label={`Expand ${label.toLowerCase()}`}
+      onClick={onToggle}
+    >
+      <span className="xl:[writing-mode:vertical-rl]">{label}</span>
+      <span aria-hidden className="ml-2 xl:ml-0 xl:mt-3">›</span>
+    </button>
+  );
+}
+
+function editorGridClass(isFilesOpen: boolean, isFrontmatterOpen: boolean) {
+  if (isFilesOpen && isFrontmatterOpen) {
+    return "xl:grid-cols-[17.5rem_minmax(0,1fr)_21.5rem]";
+  }
+
+  if (!isFilesOpen && isFrontmatterOpen) {
+    return "xl:grid-cols-[3.5rem_minmax(0,1fr)_21.5rem]";
+  }
+
+  if (isFilesOpen && !isFrontmatterOpen) {
+    return "xl:grid-cols-[17.5rem_minmax(0,1fr)_3.5rem]";
+  }
+
+  return "xl:grid-cols-[3.5rem_minmax(0,1fr)_3.5rem]";
 }
 
 function SkillEditorWorkspace({
@@ -1464,67 +1772,91 @@ function SkillEditorWorkspace({
       "5. Escalate when unsure or request more information",
     ].join("\n"),
   );
-  const installPrompt = [
-    `Install and use the ${skill.name} skill.`,
-    "Load the latest published version from Skillfully, skills.sh, or agentskills.io.",
-    "Use it as a guide for handling customer support questions.",
-    "Follow its workflow, response style, and escalation guidance.",
-  ].join("\n");
+  const [isFilesOpen, setIsFilesOpen] = useState(true);
+  const [isFrontmatterOpen, setIsFrontmatterOpen] = useState(true);
+  const [publishStep, setPublishStep] = useState<PublishModalStep | null>(null);
+  const [installPromptCopied, setInstallPromptCopied] = useState(false);
+  const publicInstallPrompt = useMemo(() => buildPublicInstallPrompt(skill), [skill.name, skill.skillId]);
+
+  useEffect(() => {
+    if (publishStep !== "waiting") {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      setPublishStep("confirmed");
+    }, 1300);
+
+    return () => window.clearTimeout(timer);
+  }, [publishStep]);
+
+  async function copyPublicInstallPrompt() {
+    await navigator.clipboard.writeText(publicInstallPrompt);
+    setInstallPromptCopied(true);
+    window.setTimeout(() => setInstallPromptCopied(false), 1200);
+  }
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-[var(--paper)] text-[var(--ink)]">
-      <WorkspaceTopBar current="Frontmatter" />
+      <section className={`grid min-h-0 flex-1 overflow-hidden border-b border-[var(--ink)] ${editorGridClass(isFilesOpen, isFrontmatterOpen)}`}>
+        <aside className={`min-h-0 overflow-hidden border-b border-[var(--ink)] xl:border-b-0 xl:border-r ${isFilesOpen ? "p-5" : "p-0"}`}>
+          {isFilesOpen ? (
+            <div className="flex h-full min-h-0 flex-col">
+              <EditorPanelToggle
+                label="Files"
+                isOpen={isFilesOpen}
+                onToggle={() => setIsFilesOpen((current) => !current)}
+              />
+              <div className="mt-5 min-h-0 flex-1 overflow-y-auto pr-1">
+                <button type="button" className="flex w-full items-center justify-center gap-3 border border-[var(--ink)] px-4 py-3 text-sm">
+                  <span className="text-2xl leading-none">+</span>
+                  Upload file
+                </button>
 
-      <section className="grid min-h-0 flex-1 overflow-hidden border-b border-[var(--ink)] xl:grid-cols-[17.5rem_minmax(0,1fr)_21.5rem]">
-        <aside className="min-h-0 overflow-hidden border-b border-[var(--ink)] p-5 xl:border-b-0 xl:border-r">
-          <div className="flex items-center justify-between">
-            <p className="font-editorial-mono text-xs font-bold uppercase">Files</p>
-            <button type="button" aria-label="Collapse files" className="text-2xl leading-none">‹</button>
-          </div>
-          <button type="button" className="mt-5 flex w-full items-center justify-center gap-3 border border-[var(--ink)] px-4 py-3 text-sm">
-            <span className="text-2xl leading-none">+</span>
-            Upload file
-          </button>
-
-          <div className="mt-6">
-            <p className="font-editorial-mono text-xs font-bold uppercase">Markdown files (editable)</p>
-            <div className="mt-4 space-y-2">
-              {editorMarkdownFiles.map((file) => {
-                const isActive = selectedFile === file;
-                return (
-                  <button
-                    key={file}
-                    type="button"
-                    className={`flex w-full items-center justify-between px-3 py-3 text-left text-sm ${
-                      isActive ? "bg-[var(--white)] font-semibold" : "hover:bg-[var(--white)]"
-                    }`}
-                    onClick={() => setSelectedFile(file)}
-                  >
-                    <span className="flex items-center gap-3">
-                      <FileGlyph />
-                      {file}
-                    </span>
-                    {isActive ? <span aria-hidden className="h-2 w-2 rounded-full bg-[var(--ink)]" /> : null}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="mt-6 border-t border-[var(--ink)] pt-6">
-            <p className="font-editorial-mono text-xs font-bold uppercase">Assets (read-only)</p>
-            <div className="mt-4 space-y-2">
-              {editorAssets.map((asset) => (
-                <div key={asset} className="flex items-center justify-between px-3 py-3 text-sm">
-                  <span className="flex min-w-0 items-center gap-3 truncate">
-                    <FileGlyph locked />
-                    {asset}
-                  </span>
-                  <FileGlyph locked />
+                <div className="mt-6">
+                  <p className="font-editorial-mono text-xs font-bold uppercase">Markdown files (editable)</p>
+                  <div className="mt-4 space-y-2">
+                    {editorMarkdownFiles.map((file) => {
+                      const isActive = selectedFile === file;
+                      return (
+                        <button
+                          key={file}
+                          type="button"
+                          className={`flex w-full items-center justify-between px-3 py-3 text-left text-sm ${
+                            isActive ? "bg-[var(--white)] font-semibold" : "hover:bg-[var(--white)]"
+                          }`}
+                          onClick={() => setSelectedFile(file)}
+                        >
+                          <span className="flex items-center gap-3">
+                            <FileGlyph />
+                            {file}
+                          </span>
+                          {isActive ? <span aria-hidden className="h-2 w-2 rounded-full bg-[var(--ink)]" /> : null}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
-              ))}
+
+                <div className="mt-6 border-t border-[var(--ink)] pt-6">
+                  <p className="font-editorial-mono text-xs font-bold uppercase">Assets (read-only)</p>
+                  <div className="mt-4 space-y-2">
+                    {editorAssets.map((asset) => (
+                      <div key={asset} className="flex items-center justify-between px-3 py-3 text-sm">
+                        <span className="flex min-w-0 items-center gap-3 truncate">
+                          <FileGlyph locked />
+                          {asset}
+                        </span>
+                        <FileGlyph locked />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
             </div>
-          </div>
+          ) : (
+            <CollapsedEditorRail label="Files" onToggle={() => setIsFilesOpen(true)} />
+          )}
         </aside>
 
         <section className="min-h-0 min-w-0 border-b border-[var(--ink)] bg-[var(--white)] xl:border-b-0 xl:border-r">
@@ -1540,113 +1872,129 @@ function SkillEditorWorkspace({
           </div>
         </section>
 
-        <aside className="min-h-0 overflow-hidden p-5">
-          <div className="flex items-center justify-between">
-            <p className="font-editorial-mono text-xs font-bold uppercase">Frontmatter</p>
-            <button type="button" aria-label="Collapse frontmatter" className="text-2xl leading-none">⌃</button>
-          </div>
+        <aside className={`min-h-0 overflow-hidden ${isFrontmatterOpen ? "p-5" : "p-0"}`}>
+          {isFrontmatterOpen ? (
+            <div className="flex h-full min-h-0 flex-col">
+              <EditorPanelToggle
+                label="Frontmatter"
+                isOpen={isFrontmatterOpen}
+                onToggle={() => setIsFrontmatterOpen((current) => !current)}
+              />
+              <div className="mt-6 min-h-0 flex-1 overflow-y-auto pr-1">
+                <div className="space-y-5">
+                  <label className="block text-sm">
+                    <span className="block font-editorial-sans">Name</span>
+                    <input
+                      className={DASHBOARD_INPUT}
+                      value={frontmatter.name}
+                      onChange={(event) => {
+                        const nextName = event.currentTarget.value;
+                        setFrontmatter((state) => ({ ...state, name: nextName }));
+                      }}
+                    />
+                  </label>
+                  <label className="block text-sm">
+                    <span className="block font-editorial-sans">Summary</span>
+                    <textarea
+                      className={`${DASHBOARD_INPUT} min-h-24`}
+                      value={frontmatter.summary}
+                      onChange={(event) => {
+                        const nextSummary = event.currentTarget.value;
+                        setFrontmatter((state) => ({ ...state, summary: nextSummary }));
+                      }}
+                    />
+                  </label>
+                  <label className="block text-sm">
+                    <span className="block font-editorial-sans">Version</span>
+                    <input
+                      className={DASHBOARD_INPUT}
+                      value={frontmatter.version}
+                      onChange={(event) => {
+                        const nextVersion = event.currentTarget.value;
+                        setFrontmatter((state) => ({ ...state, version: nextVersion }));
+                      }}
+                    />
+                  </label>
+                  <label className="block text-sm">
+                    <span className="block font-editorial-sans">Status</span>
+                    <div className="mt-2">
+                      <DashboardSelect
+                        ariaLabel="Frontmatter status"
+                        value={frontmatter.status}
+                        options={[
+                          { value: "Draft", label: "Draft" },
+                          { value: "Published", label: "Published" },
+                        ]}
+                        onChange={(nextStatus) => setFrontmatter((state) => ({ ...state, status: nextStatus }))}
+                      />
+                    </div>
+                  </label>
+                </div>
 
-          <div className="mt-6 space-y-5">
-            <label className="block text-sm">
-              <span className="block font-editorial-sans">Name</span>
-              <input
-                className={DASHBOARD_INPUT}
-                value={frontmatter.name}
-                onChange={(event) => {
-                  const nextName = event.currentTarget.value;
-                  setFrontmatter((state) => ({ ...state, name: nextName }));
-                }}
-              />
-            </label>
-            <label className="block text-sm">
-              <span className="block font-editorial-sans">Summary</span>
-              <textarea
-                className={`${DASHBOARD_INPUT} min-h-24`}
-                value={frontmatter.summary}
-                onChange={(event) => {
-                  const nextSummary = event.currentTarget.value;
-                  setFrontmatter((state) => ({ ...state, summary: nextSummary }));
-                }}
-              />
-            </label>
-            <label className="block text-sm">
-              <span className="block font-editorial-sans">Version</span>
-              <input
-                className={DASHBOARD_INPUT}
-                value={frontmatter.version}
-                onChange={(event) => {
-                  const nextVersion = event.currentTarget.value;
-                  setFrontmatter((state) => ({ ...state, version: nextVersion }));
-                }}
-              />
-            </label>
-            <label className="block text-sm">
-              <span className="block font-editorial-sans">Status</span>
-              <div className="mt-2">
-                <DashboardSelect
-                  ariaLabel="Frontmatter status"
-                  value={frontmatter.status}
-                  options={[
-                    { value: "Draft", label: "Draft" },
-                    { value: "Published", label: "Published" },
-                  ]}
-                  onChange={(nextStatus) => setFrontmatter((state) => ({ ...state, status: nextStatus }))}
-                />
+                <div className="mt-7 border-t border-[var(--ink)] pt-6">
+                  <p className="font-editorial-mono text-xs font-bold uppercase">Validation</p>
+                  <div className="mt-4 space-y-4">
+                    {editorValidationRows.map(([label, value]) => (
+                      <div key={label} className="flex items-center justify-between gap-4 text-sm">
+                        <span className="flex items-center gap-3">
+                          <span className="text-emerald-700"><CheckCircleIcon /></span>
+                          {label}
+                        </span>
+                        {value ? <span>{value}</span> : null}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="mt-7 border-t border-[var(--ink)] pt-6">
+                  <p className="font-editorial-mono text-xs font-bold uppercase">Version history</p>
+                  <div className="mt-4 space-y-4">
+                    {editorVersionHistoryRows.map(([version, status, dot]) => (
+                      <div key={version} className="grid grid-cols-[1fr_1fr_auto] items-center gap-4 text-sm">
+                        <span>{version}</span>
+                        <span className="italic">{status}</span>
+                        <span aria-hidden className={`h-2 w-2 rounded-full ${dot}`} />
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
-            </label>
-          </div>
-
-          <div className="mt-7 border-t border-[var(--ink)] pt-6">
-            <p className="font-editorial-mono text-xs font-bold uppercase">Validation</p>
-            <div className="mt-4 space-y-4">
-              {editorValidationRows.map(([label, value]) => (
-                <div key={label} className="flex items-center justify-between gap-4 text-sm">
-                  <span className="flex items-center gap-3">
-                    <span className="text-emerald-700"><CheckCircleIcon /></span>
-                    {label}
-                  </span>
-                  {value ? <span>{value}</span> : null}
-                </div>
-              ))}
             </div>
-          </div>
-
-          <div className="mt-7 border-t border-[var(--ink)] pt-6">
-            <p className="font-editorial-mono text-xs font-bold uppercase">Version history</p>
-            <div className="mt-4 space-y-4">
-              {editorVersionHistoryRows.map(([version, status, dot]) => (
-                <div key={version} className="grid grid-cols-[1fr_1fr_auto] items-center gap-4 text-sm">
-                  <span>{version}</span>
-                  <span className="italic">{status}</span>
-                  <span aria-hidden className={`h-2 w-2 rounded-full ${dot}`} />
-                </div>
-              ))}
-            </div>
-          </div>
+          ) : (
+            <CollapsedEditorRail label="Frontmatter" onToggle={() => setIsFrontmatterOpen(true)} />
+          )}
         </aside>
       </section>
 
-      <section className="grid min-h-28 gap-4 border-b border-[var(--ink)] p-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
-        <div className="border border-[var(--ink)] p-4">
-          <div className="flex items-start justify-between gap-4">
-            <p className="font-editorial-mono text-xs font-bold uppercase">Install skill prompt</p>
-            <button type="button" aria-label="Copy install skill prompt" className="border border-[var(--ink)] p-2">
-              <CopyIcon />
-            </button>
-          </div>
-          <pre className="mt-3 line-clamp-2 whitespace-pre-wrap font-editorial-mono text-xs leading-5">
-            {installPrompt}
-          </pre>
-        </div>
-        <div className="flex flex-col gap-3 sm:flex-row lg:justify-end">
-          <Link href={skillRoute(skill, "settings")} className={`${DASHBOARD_BUTTON_LIGHT} text-center`}>
-            Change publishing options
-          </Link>
-          <button type="button" className="border border-[var(--ink)] bg-[var(--ink)] px-6 py-4 font-editorial-sans text-lg font-semibold text-[var(--paper)]">
-            Publish version
-          </button>
-        </div>
+      <section className="flex min-h-24 flex-col gap-3 border-b border-[var(--ink)] p-4 sm:flex-row sm:items-center sm:justify-end">
+        <Link href={skillRoute(skill, "settings")} className={`${DASHBOARD_BUTTON_LIGHT} text-center`}>
+          Change publishing options
+        </Link>
+        <button
+          type="button"
+          className="border border-[var(--ink)] bg-[var(--ink)] px-6 py-4 font-editorial-sans text-lg font-semibold text-[var(--paper)]"
+          onClick={() => {
+            setInstallPromptCopied(false);
+            setPublishStep("confirm");
+          }}
+        >
+          Publish version
+        </button>
       </section>
+
+      {publishStep ? (
+        <PublishSkillModal
+          step={publishStep}
+          skillName={skill.name}
+          installPrompt={publicInstallPrompt}
+          installPromptCopied={installPromptCopied}
+          onCancel={() => setPublishStep(null)}
+          onConfirm={() => setPublishStep("published")}
+          onCopyInstallPrompt={() => void copyPublicInstallPrompt()}
+          onContinueToInstallCheck={() => setPublishStep("waiting")}
+          onFinish={() => setPublishStep(null)}
+        />
+      ) : null}
     </div>
   );
 }
@@ -1655,14 +2003,16 @@ function AnalyticsChart({
   title,
   value,
   delta,
-  yLabels,
-  path,
+  data,
+  dataKey,
+  valueSuffix = "",
 }: {
   title: string;
   value: string;
   delta: string;
-  yLabels: string[];
-  path: string;
+  data: Array<Record<string, string | number>>;
+  dataKey: string;
+  valueSuffix?: string;
 }) {
   return (
     <article className={`${DASHBOARD_CARD} p-5`}>
@@ -1676,22 +2026,49 @@ function AnalyticsChart({
           <span className="font-bold text-emerald-700">▲</span> {delta}
         </span>
       </div>
-      <div className="mt-6 overflow-x-auto">
-        <svg aria-label={`${title} chart`} role="img" viewBox="0 0 560 255" className="h-64 min-w-[34rem] text-[var(--ink)]">
-          {[34, 84, 134, 184, 234].map((y, index) => (
-            <g key={y}>
-              <line x1="58" y1={y} x2="540" y2={y} stroke="currentColor" strokeOpacity="0.22" strokeDasharray="4 4" />
-              <text x="12" y={y + 5} className="fill-current font-editorial-sans text-xs">{yLabels[index]}</text>
-            </g>
-          ))}
-          <line x1="58" y1="234" x2="540" y2="234" stroke="currentColor" />
-          <path d={path} fill="none" stroke="currentColor" strokeWidth="2.2" />
-          {["00:00", "04:00", "08:00", "12:00", "16:00", "20:00", "24:00"].map((label, index) => (
-            <text key={label} x={58 + index * 80} y="252" className="fill-current font-editorial-sans text-xs">
-              {label}
-            </text>
-          ))}
-        </svg>
+      <div className="mt-6 overflow-x-auto" aria-label={`${title} chart`} role="img">
+        <LineChart
+          width={560}
+          height={255}
+          data={data}
+          margin={{ top: 12, right: 16, bottom: 4, left: 0 }}
+          className="min-w-[34rem] text-[var(--ink)]"
+        >
+          <CartesianGrid vertical={false} stroke="currentColor" strokeDasharray="4 4" strokeOpacity={0.22} />
+          <XAxis
+            dataKey="time"
+            tickLine={false}
+            axisLine={{ stroke: "currentColor" }}
+            tick={{ fill: "currentColor", fontSize: 12 }}
+          />
+          <YAxis
+            tickLine={false}
+            axisLine={false}
+            tick={{ fill: "currentColor", fontSize: 12 }}
+            tickFormatter={(nextValue) => `${nextValue}${valueSuffix}`}
+          />
+          <Tooltip
+            cursor={{ stroke: "currentColor", strokeWidth: 1 }}
+            formatter={(nextValue) => [`${nextValue}${valueSuffix}`, title]}
+            contentStyle={{
+              background: "var(--white)",
+              border: "1px solid var(--ink)",
+              borderRadius: 0,
+              color: "var(--ink)",
+              fontFamily: "var(--font-editorial-mono)",
+              fontSize: "12px",
+            }}
+          />
+          <Line
+            type="monotone"
+            dataKey={dataKey}
+            stroke="currentColor"
+            strokeWidth={2.4}
+            dot={{ r: 2.8, fill: "var(--paper)", stroke: "currentColor", strokeWidth: 2 }}
+            activeDot={{ r: 5 }}
+            isAnimationActive={false}
+          />
+        </LineChart>
       </div>
     </article>
   );
@@ -1717,8 +2094,6 @@ function SkillAnalyticsWorkspace() {
 
   return (
     <div className="min-h-screen bg-[var(--paper)] text-[var(--ink)]">
-      <WorkspaceTopBar current="Analytics" />
-
       <section className="space-y-6 p-5 sm:p-7">
         <div className="grid gap-4 xl:grid-cols-[12rem_minmax(16rem,1fr)_10rem_minmax(20rem,auto)]">
           <DashboardSelect
@@ -1780,15 +2155,16 @@ function SkillAnalyticsWorkspace() {
             title="Active users"
             value="1,842"
             delta="18.6% vs prior 24h"
-            yLabels={["2.0K", "1.5K", "1.0K", "500", "0"]}
-            path="M62 158 82 154 102 166 122 174 142 162 162 156 182 166 202 150 222 138 242 132 262 120 282 96 302 88 322 78 342 68 362 64 382 58 402 56 422 50 442 44 462 38 482 34 502 28 522 20 540 24"
+            data={analyticsUsersData}
+            dataKey="users"
           />
           <AnalyticsChart
             title="Success rate"
             value="92%"
             delta="3.4 pp vs prior 24h"
-            yLabels={["100%", "96%", "92%", "88%", "80%"]}
-            path="M62 156 82 148 102 162 122 172 142 164 162 180 182 154 202 142 222 132 242 136 262 148 282 154 302 146 322 136 342 124 362 112 382 104 402 100 422 102 442 98 462 90 482 94 502 104 522 112 540 106"
+            data={analyticsSuccessData}
+            dataKey="successRate"
+            valueSuffix="%"
           />
         </section>
 
@@ -2322,7 +2698,7 @@ export function SkillDetail({
             type="button"
             className="flex items-center justify-between border border-[var(--ink)] bg-[var(--ink)] px-5 py-4 font-editorial-sans text-base font-semibold text-[var(--paper)] transition hover:bg-[var(--paper)] hover:text-[var(--ink)]"
             onClick={() => {
-              posthog.capture("dashboard_editor_clicked", { skill_name: skill.name });
+              captureClientEvent("dashboard_editor_clicked", { skill_name: skill.name });
               if (onTabChange) {
                 onTabChange("editor");
               } else {
@@ -2340,7 +2716,7 @@ export function SkillDetail({
             onClick={async () => {
               if (!resolvedTemplate) return;
               await navigator.clipboard.writeText(resolvedTemplate);
-              posthog.capture("snippet_copied", { skill_name: skill.name, skill_id: skill.skillId });
+              captureClientEvent("snippet_copied", { skill_name: skill.name, skill_id: skill.skillId });
               setSnippetCopied(true);
               window.setTimeout(() => setSnippetCopied(false), 1200);
             }}
@@ -2563,7 +2939,7 @@ export default function Dashboard({
             return;
           }
 
-          posthog.capture("auth_email_submitted", { email: normalized });
+          captureClientEvent("auth_email_submitted", { email: normalized });
           setIsSubmitting(true);
           try {
             await db.auth.sendMagicCode({ email: normalized });
@@ -2571,7 +2947,7 @@ export default function Dashboard({
             setAuthForm((state) => ({ ...state, email: normalized, code: "" }));
             setAuthPhase("verify");
           } catch (error) {
-            posthog.captureException(error);
+            captureClientException(error);
             setErrorMessage(extractErrorMessage(error));
           } finally {
             setIsSubmitting(false);
@@ -2602,14 +2978,14 @@ export default function Dashboard({
             });
 
             if (response.user) {
-              posthog.identify(response.user.id, { email: normalized });
-              posthog.capture("auth_code_verified", { email: normalized });
+              identifyClientUser(response.user.id, { email: normalized });
+              captureClientEvent("auth_code_verified", { email: normalized });
               return;
             }
 
             setErrorMessage("Could not verify code yet. Try again.");
           } catch (error) {
-            posthog.captureException(error);
+            captureClientException(error);
             setErrorMessage(extractErrorMessage(error));
           } finally {
             setIsSubmitting(false);
@@ -2641,8 +3017,8 @@ export default function Dashboard({
   }
 
   async function handleSignOut() {
-    posthog.capture("user_signed_out");
-    posthog.reset();
+    captureClientEvent("user_signed_out");
+    resetClientAnalytics();
     setErrorMessage("");
     setSkillForm({ name: "", description: "" });
     setAuthForm({ email: "", code: "" });
@@ -2686,7 +3062,7 @@ export default function Dashboard({
   }
 
   function openDashboardTab(tab: DashboardTab) {
-    posthog.capture("dashboard_tab_selected", { tab });
+    captureClientEvent("dashboard_tab_selected", { tab });
     setOnboardingDismissed(true);
     setErrorMessage("");
     setIsSkillSelectorOpen(false);
@@ -2748,7 +3124,7 @@ export default function Dashboard({
       }),
     );
 
-    posthog.capture("skill_created", {
+    captureClientEvent("skill_created", {
       skill_name: cleanName,
       has_description: Boolean(cleanDescription),
     });
@@ -2797,7 +3173,7 @@ export default function Dashboard({
           selectedId={viewState.kind === "detail" ? viewState.skillId : selectedSkillId}
           isSkillSelectorOpen={isSkillSelectorOpen}
           onSelect={(skill) => {
-            posthog.capture("skill_selected", { skill_name: skill.name });
+            captureClientEvent("skill_selected", { skill_name: skill.name });
             setSelectedSkillId(skill.id);
             setOnboardingDismissed(true);
             setIsSkillSelectorOpen(false);
@@ -2874,7 +3250,7 @@ export default function Dashboard({
       {shouldShowOnboardingModal ? (
         <OnboardingModal
           onClose={() => {
-            posthog.capture("onboarding_modal_closed");
+            captureClientEvent("onboarding_modal_closed");
             setOnboardingDismissed(true);
           }}
           onCreateSkill={openCreateSkill}

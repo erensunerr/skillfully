@@ -1,6 +1,6 @@
 "use client";
 
-import { type ComponentType, type FormEvent, type ReactNode, useEffect, useMemo, useState } from "react";
+import { type ComponentType, type FormEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Select, { type SingleValue, type StylesConfig } from "react-select";
@@ -73,6 +73,15 @@ type RecentFeedbackRow = {
 };
 
 type PublishModalStep = "confirm" | "published" | "waiting" | "confirmed";
+type SkillEditorFile = {
+  id: string;
+  path: string;
+  kind: string;
+  mimeType?: string | null;
+  contentText?: string | null;
+  storageUrl?: string | null;
+  updatedAt?: number | null;
+};
 
 const DASHBOARD_CARD = "border border-[var(--ink)] bg-[var(--paper)] text-[var(--ink)]";
 const DASHBOARD_PANEL = "border border-[var(--ink)] bg-[var(--white)] text-[var(--ink)]";
@@ -253,6 +262,59 @@ const editorVersionHistoryRows = [
   ["v2.2.0", "Published", "bg-emerald-700"],
   ["v2.1.0", "Published", "bg-emerald-700"],
 ] satisfies Array<[string, string, string]>;
+
+function defaultEditorMarkdown(skill: Skill) {
+  const summary = skill.description || "Helps agents answer customer support questions clearly and safely.";
+  return [
+    `# ${skill.name}`,
+    "",
+    summary,
+    "",
+    "> Be concise, cite sources, and escalate when the answer is unknown or sensitive.",
+    "",
+    "## When to use",
+    "",
+    "- Answer questions about product features and how they work",
+    "- Help customers understand pricing, plans, and promotions",
+    "- Clarify billing, payments, refunds, and account issues",
+    "",
+    "## Workflow",
+    "",
+    "1. Understand the customer's question and context",
+    "2. Search trusted sources and gather relevant information",
+    "3. Draft a clear, concise answer with sources",
+    "4. Confirm accuracy and compliance",
+    "5. Escalate when unsure or request more information",
+  ].join("\n");
+}
+
+function fallbackEditorFiles(skill: Skill): SkillEditorFile[] {
+  return [
+    ...editorMarkdownFiles.map((path, index) => ({
+      id: `local-${skill.id || skill.skillId}-${path}`,
+      path,
+      kind: "markdown",
+      mimeType: "text/markdown",
+      contentText: index === 0 ? defaultEditorMarkdown(skill) : `# ${path.replace(/\.md$/i, "")}\n\n`,
+    })),
+    ...editorAssets.map((path) => ({
+      id: `local-${skill.id || skill.skillId}-${path}`,
+      path,
+      kind: "asset",
+      mimeType: path.endsWith(".pdf") ? "application/pdf" : "image/png",
+      storageUrl: null,
+    })),
+  ];
+}
+
+function isEditableSkillFile(file: SkillEditorFile) {
+  return file.kind === "markdown" || file.mimeType?.startsWith("text/") || file.contentText !== undefined;
+}
+
+function sortSkillFiles(files: SkillEditorFile[]) {
+  return [...files].sort((a, b) => a.path.localeCompare(b.path));
+}
+
 const analyticsFeedbackRows = [
   ["May 12, 2025 23:41", "positive", "Claude", "Answered the billing question clearly and linked the correct help article."],
   ["May 12, 2025 22:18", "neutral", "Cursor", "Useful overall, but the refund edge case was not covered in the skill."],
@@ -460,30 +522,50 @@ function useOptionalRouter() {
   }
 }
 
-function dashboardAuthHeaders(user: AppUser) {
-  if (isUsingLocalPreviewDb || !user.refresh_token) {
-    return {
-      "content-type": "application/json",
-      "x-skillfully-preview-user-id": user.id,
-      "x-skillfully-preview-user-email": user.email || "preview@skillfully.local",
-    };
+function dashboardAuthHeaders(user: AppUser, contentType: string | null = "application/json") {
+  const headers: Record<string, string> = {};
+  if (contentType) {
+    headers["content-type"] = contentType;
   }
 
-  return {
-    "content-type": "application/json",
-    authorization: `Bearer ${user.refresh_token}`,
-  };
+  if (isUsingLocalPreviewDb || !user.refresh_token) {
+    headers["x-skillfully-preview-user-id"] = user.id;
+    headers["x-skillfully-preview-user-email"] = user.email || "preview@skillfully.local";
+    return headers;
+  }
+
+  headers.authorization = `Bearer ${user.refresh_token}`;
+  return headers;
 }
 
 async function dashboardJson<T>(user: AppUser, path: string, init: RequestInit = {}) {
   const headers = new Headers(init.headers);
-  for (const [key, value] of Object.entries(dashboardAuthHeaders(user))) {
+  for (const [key, value] of Object.entries(dashboardAuthHeaders(user, "application/json"))) {
     headers.set(key, value);
   }
 
   const response = await fetch(path, {
     ...init,
     headers,
+  });
+  const payload = (await response.json()) as T & { error?: string };
+  if (!response.ok) {
+    throw new Error(payload.error || `Request failed: ${response.status}`);
+  }
+  return payload;
+}
+
+async function dashboardFormData<T>(user: AppUser, path: string, body: FormData, init: RequestInit = {}) {
+  const headers = new Headers(init.headers);
+  for (const [key, value] of Object.entries(dashboardAuthHeaders(user, null))) {
+    headers.set(key, value);
+  }
+
+  const response = await fetch(path, {
+    ...init,
+    method: init.method || "POST",
+    headers,
+    body,
   });
   const payload = (await response.json()) as T & { error?: string };
   if (!response.ok) {
@@ -1776,42 +1858,35 @@ function SkillEditorWorkspace({
   skill: Skill;
   user?: AppUser | null;
 }) {
-  const [selectedFile, setSelectedFile] = useState<(typeof editorMarkdownFiles)[number]>("SKILL.md");
+  const [files, setFiles] = useState<SkillEditorFile[]>(() => fallbackEditorFiles(skill));
+  const [selectedFileId, setSelectedFileId] = useState(() => fallbackEditorFiles(skill)[0]?.id ?? "");
+  const [dirtyFileIds, setDirtyFileIds] = useState<Set<string>>(() => new Set());
   const [frontmatter, setFrontmatter] = useState({
     name: skill.name,
     summary: skill.description || "Helps agents answer customer support questions clearly and safely.",
     version: "v2.4.0",
     status: "Draft",
   });
-  const [editorMarkdown, setEditorMarkdown] = useState(() =>
-    [
-      `# ${skill.name}`,
-      "",
-      frontmatter.summary,
-      "",
-      "> Be concise, cite sources, and escalate when the answer is unknown or sensitive.",
-      "",
-      "## When to use",
-      "",
-      "- Answer questions about product features and how they work",
-      "- Help customers understand pricing, plans, and promotions",
-      "- Clarify billing, payments, refunds, and account issues",
-      "",
-      "## Workflow",
-      "",
-      "1. Understand the customer's question and context",
-      "2. Search trusted sources and gather relevant information",
-      "3. Draft a clear, concise answer with sources",
-      "4. Confirm accuracy and compliance",
-      "5. Escalate when unsure or request more information",
-    ].join("\n"),
-  );
   const [isFilesOpen, setIsFilesOpen] = useState(true);
   const [isFrontmatterOpen, setIsFrontmatterOpen] = useState(true);
   const [publishStep, setPublishStep] = useState<PublishModalStep | null>(null);
   const [installPromptCopied, setInstallPromptCopied] = useState(false);
   const [publishError, setPublishError] = useState("");
+  const [fileStatus, setFileStatus] = useState("Editor changes save to Skillfully.");
+  const [isFileLoading, setIsFileLoading] = useState(false);
+  const [isFileSaving, setIsFileSaving] = useState(false);
+  const [isUploadingFile, setIsUploadingFile] = useState(false);
+  const uploadInputRef = useRef<HTMLInputElement | null>(null);
   const publicInstallPrompt = useMemo(() => buildPublicInstallPrompt(skill), [skill.name, skill.skillId]);
+  const markdownFiles = files.filter(isEditableSkillFile);
+  const assetFiles = files.filter((file) => !isEditableSkillFile(file));
+  const selectedFile =
+    files.find((file) => file.id === selectedFileId) ?? markdownFiles[0] ?? files[0] ?? null;
+  const selectedFileIsEditable = selectedFile ? isEditableSkillFile(selectedFile) : false;
+  const selectedFileIsDirty = selectedFile ? dirtyFileIds.has(selectedFile.id) : false;
+  const selectedMarkdown = selectedFileIsEditable ? selectedFile?.contentText ?? "" : "";
+  const canPersistFiles = Boolean(user && !isUsingLocalPreviewDb);
+  const hasBlockingUnsavedChanges = canPersistFiles && dirtyFileIds.size > 0;
 
   useEffect(() => {
     if (publishStep !== "waiting") {
@@ -1824,6 +1899,155 @@ function SkillEditorWorkspace({
 
     return () => window.clearTimeout(timer);
   }, [publishStep]);
+
+  useEffect(() => {
+    const fallbackFiles = fallbackEditorFiles(skill);
+    setFrontmatter((state) => ({
+      ...state,
+      name: skill.name,
+      summary: skill.description || "Helps agents answer customer support questions clearly and safely.",
+    }));
+    setDirtyFileIds(new Set());
+
+    if (!user || isUsingLocalPreviewDb) {
+      setFiles(fallbackFiles);
+      setSelectedFileId(fallbackFiles[0]?.id ?? "");
+      setFileStatus("Local preview changes are kept in memory.");
+      return;
+    }
+
+    let active = true;
+    setIsFileLoading(true);
+    setFileStatus("Loading skill files...");
+    dashboardJson<{ files: SkillEditorFile[] }>(user, `/api/dashboard/skills/${skill.skillId}/files`)
+      .then((payload) => {
+        if (!active) return;
+        const loadedFiles = sortSkillFiles(payload.files.length > 0 ? payload.files : fallbackFiles);
+        setFiles(loadedFiles);
+        setSelectedFileId((current) => {
+          if (loadedFiles.some((file) => file.id === current)) {
+            return current;
+          }
+          return loadedFiles.find(isEditableSkillFile)?.id ?? loadedFiles[0]?.id ?? "";
+        });
+        setFileStatus("Editor changes save to Skillfully.");
+      })
+      .catch((error) => {
+        if (!active) return;
+        captureClientException(error);
+        setFiles(fallbackFiles);
+        setSelectedFileId(fallbackFiles[0]?.id ?? "");
+        setFileStatus(`Could not load saved files: ${extractErrorMessage(error)}`);
+      })
+      .finally(() => {
+        if (active) {
+          setIsFileLoading(false);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [skill.id, skill.skillId, skill.name, skill.description, user?.id, user?.refresh_token]);
+
+  function updateSelectedMarkdown(markdown: string) {
+    if (!selectedFile || !selectedFileIsEditable) {
+      return;
+    }
+
+    setFiles((currentFiles) =>
+      currentFiles.map((file) =>
+        file.id === selectedFile.id ? { ...file, contentText: markdown } : file,
+      ),
+    );
+    setDirtyFileIds((current) => {
+      const next = new Set(current);
+      next.add(selectedFile.id);
+      return next;
+    });
+    setFileStatus("Unsaved changes.");
+  }
+
+  async function saveSelectedFile() {
+    if (!selectedFile || !selectedFileIsEditable) {
+      return;
+    }
+
+    if (!user || isUsingLocalPreviewDb) {
+      setFileStatus("Local preview changes are kept in memory.");
+      return;
+    }
+
+    setIsFileSaving(true);
+    setFileStatus("Saving changes...");
+    try {
+      const payload = await dashboardJson<{ file: SkillEditorFile }>(
+        user,
+        `/api/dashboard/skills/${skill.skillId}/files/${selectedFile.id}`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({
+            path: selectedFile.path,
+            content_text: selectedFile.contentText ?? "",
+          }),
+        },
+      );
+      setFiles((currentFiles) => sortSkillFiles(
+        currentFiles.map((file) => (file.id === payload.file.id ? payload.file : file)),
+      ));
+      setDirtyFileIds((current) => {
+        const next = new Set(current);
+        next.delete(payload.file.id);
+        return next;
+      });
+      setFileStatus("Saved in Skillfully.");
+    } catch (error) {
+      captureClientException(error);
+      setFileStatus(`Save failed: ${extractErrorMessage(error)}`);
+    } finally {
+      setIsFileSaving(false);
+    }
+  }
+
+  async function uploadSkillFile(file: File | null | undefined) {
+    if (!file) {
+      return;
+    }
+
+    if (!user || isUsingLocalPreviewDb) {
+      setFileStatus("Uploads require connected Skillfully storage.");
+      return;
+    }
+
+    const body = new FormData();
+    body.append("file", file);
+    body.append("path", file.name);
+    setIsUploadingFile(true);
+    setFileStatus(`Uploading ${file.name}...`);
+    try {
+      const payload = await dashboardFormData<{ file: SkillEditorFile }>(
+        user,
+        `/api/dashboard/skills/${skill.skillId}/files`,
+        body,
+      );
+      setFiles((currentFiles) => sortSkillFiles([
+        ...currentFiles.filter((currentFile) => currentFile.id !== payload.file.id),
+        payload.file,
+      ]));
+      if (isEditableSkillFile(payload.file)) {
+        setSelectedFileId(payload.file.id);
+      }
+      setFileStatus(`Uploaded ${payload.file.path}.`);
+    } catch (error) {
+      captureClientException(error);
+      setFileStatus(`Upload failed: ${extractErrorMessage(error)}`);
+    } finally {
+      setIsUploadingFile(false);
+      if (uploadInputRef.current) {
+        uploadInputRef.current.value = "";
+      }
+    }
+  }
 
   async function copyPublicInstallPrompt() {
     await navigator.clipboard.writeText(publicInstallPrompt);
@@ -1871,48 +2095,69 @@ function SkillEditorWorkspace({
                 onToggle={() => setIsFilesOpen((current) => !current)}
               />
               <div className="mt-5 min-h-0 flex-1 overflow-y-auto pr-1">
-                <button type="button" className="flex w-full items-center justify-center gap-3 border border-[var(--ink)] px-4 py-3 text-sm">
+                <button
+                  type="button"
+                  className="flex w-full items-center justify-center gap-3 border border-[var(--ink)] px-4 py-3 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+                  disabled={!canPersistFiles || isUploadingFile}
+                  onClick={() => uploadInputRef.current?.click()}
+                >
                   <span className="text-2xl leading-none">+</span>
-                  Upload file
+                  {isUploadingFile ? "Uploading..." : "Upload file"}
                 </button>
+                <input
+                  ref={uploadInputRef}
+                  type="file"
+                  className="sr-only"
+                  onChange={(event) => void uploadSkillFile(event.currentTarget.files?.[0])}
+                />
 
                 <div className="mt-6">
                   <p className="font-editorial-mono text-xs font-bold uppercase">Markdown files (editable)</p>
                   <div className="mt-4 space-y-2">
-                    {editorMarkdownFiles.map((file) => {
-                      const isActive = selectedFile === file;
+                    {markdownFiles.map((file) => {
+                      const isActive = selectedFile?.id === file.id;
+                      const isDirty = dirtyFileIds.has(file.id);
                       return (
                         <button
-                          key={file}
+                          key={file.id}
                           type="button"
                           className={`flex w-full items-center justify-between px-3 py-3 text-left text-sm ${
                             isActive ? "bg-[var(--white)] font-semibold" : "hover:bg-[var(--white)]"
                           }`}
-                          onClick={() => setSelectedFile(file)}
+                          onClick={() => setSelectedFileId(file.id)}
                         >
                           <span className="flex items-center gap-3">
                             <FileGlyph />
-                            {file}
+                            {file.path}
                           </span>
-                          {isActive ? <span aria-hidden className="h-2 w-2 rounded-full bg-[var(--ink)]" /> : null}
+                          <span className="flex items-center gap-2">
+                            {isDirty ? <span className="font-editorial-mono text-[0.62rem] uppercase">Unsaved</span> : null}
+                            {isActive ? <span aria-hidden className="h-2 w-2 rounded-full bg-[var(--ink)]" /> : null}
+                          </span>
                         </button>
                       );
                     })}
+                    {markdownFiles.length === 0 ? (
+                      <p className="px-3 py-3 font-editorial-mono text-xs uppercase">No editable files yet.</p>
+                    ) : null}
                   </div>
                 </div>
 
                 <div className="mt-6 border-t border-[var(--ink)] pt-6">
                   <p className="font-editorial-mono text-xs font-bold uppercase">Assets (read-only)</p>
                   <div className="mt-4 space-y-2">
-                    {editorAssets.map((asset) => (
-                      <div key={asset} className="flex items-center justify-between px-3 py-3 text-sm">
+                    {assetFiles.map((asset) => (
+                      <div key={asset.id} className="flex items-center justify-between px-3 py-3 text-sm">
                         <span className="flex min-w-0 items-center gap-3 truncate">
                           <FileGlyph locked />
-                          {asset}
+                          {asset.path}
                         </span>
                         <FileGlyph locked />
                       </div>
                     ))}
+                    {assetFiles.length === 0 ? (
+                      <p className="px-3 py-3 font-editorial-mono text-xs uppercase">No assets uploaded.</p>
+                    ) : null}
                   </div>
                 </div>
               </div>
@@ -1926,11 +2171,19 @@ function SkillEditorWorkspace({
           <div className="flex h-full min-h-0 flex-col">
             <div className="flex min-h-12 items-center justify-between border-b border-[var(--ink)] px-5">
               <p className="font-editorial-mono text-xs font-bold uppercase">Markdown editor</p>
-              <span className="font-editorial-mono text-xs">MDXEditor</span>
+              <span className="font-editorial-mono text-xs">
+                {isFileLoading ? "Loading files..." : selectedFile?.path || "No file selected"}
+              </span>
             </div>
             <div className="sr-only">When to use Workflow</div>
             <div className="min-h-0 flex-1">
-              <MdxMarkdownEditor markdown={editorMarkdown} onChange={setEditorMarkdown} />
+              {selectedFileIsEditable ? (
+                <MdxMarkdownEditor markdown={selectedMarkdown} onChange={updateSelectedMarkdown} />
+              ) : (
+                <div className="h-full min-h-72 border border-[var(--ink)] bg-[var(--paper)] p-5 font-editorial-mono text-xs uppercase">
+                  Select an editable markdown file.
+                </div>
+              )}
             </div>
           </div>
         </section>
@@ -2030,23 +2283,35 @@ function SkillEditorWorkspace({
       </section>
 
       <section className="flex min-h-24 flex-col gap-3 border-b border-[var(--ink)] p-4 sm:flex-row sm:items-center sm:justify-end">
+        <p className="mr-auto border border-[var(--ink)] bg-[var(--white)] p-3 font-editorial-mono text-xs font-bold uppercase">
+          {fileStatus}
+        </p>
         {publishError ? (
-          <p className="mr-auto border border-red-600 bg-red-50 p-3 font-editorial-mono text-xs font-bold uppercase text-red-700">
+          <p className="border border-red-600 bg-red-50 p-3 font-editorial-mono text-xs font-bold uppercase text-red-700">
             {publishError}
           </p>
         ) : null}
+        <button
+          type="button"
+          className={`${DASHBOARD_BUTTON_LIGHT} disabled:cursor-not-allowed disabled:opacity-50`}
+          disabled={!selectedFileIsEditable || isFileSaving || (!selectedFileIsDirty && canPersistFiles)}
+          onClick={() => void saveSelectedFile()}
+        >
+          {isFileSaving ? "Saving..." : "Save changes"}
+        </button>
         <Link href={skillRoute(skill, "settings")} className={`${DASHBOARD_BUTTON_LIGHT} text-center`}>
           Change publishing options
         </Link>
         <button
           type="button"
-          className="border border-[var(--ink)] bg-[var(--ink)] px-6 py-4 font-editorial-sans text-lg font-semibold text-[var(--paper)]"
+          className="border border-[var(--ink)] bg-[var(--ink)] px-6 py-4 font-editorial-sans text-lg font-semibold text-[var(--paper)] disabled:cursor-not-allowed disabled:opacity-50"
+          disabled={hasBlockingUnsavedChanges || isFileLoading || isFileSaving || isUploadingFile}
           onClick={() => {
             setInstallPromptCopied(false);
             setPublishStep("confirm");
           }}
         >
-          Publish version
+          {hasBlockingUnsavedChanges ? "Save before publish" : "Publish version"}
         </button>
       </section>
 

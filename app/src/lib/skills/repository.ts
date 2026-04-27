@@ -124,6 +124,15 @@ function hashText(value: string) {
   return crypto.createHash("sha256").update(value).digest("hex");
 }
 
+function nextDraftVersionLabel(version: string) {
+  const match = version.match(/^(\d+)\.(\d+)\.(\d+)(.*)$/);
+  if (!match) {
+    return `${version}.1`;
+  }
+
+  return `${match[1]}.${match[2]}.${Number(match[3]) + 1}${match[4] || ""}`;
+}
+
 function defaultGitHubRepo() {
   return {
     repoFullName: process.env.SKILLFULLY_DEFAULT_SKILLS_REPO || "erensunerr/skillfully-skills",
@@ -575,12 +584,14 @@ export async function recordPublishResult({
 export async function markDraftPublished({
   store = defaultSkillStore,
   now = () => Date.now(),
+  idGenerator = () => crypto.randomUUID(),
   ownerId,
   skillId,
   versionId,
 }: {
   store?: SkillStore;
   now?: () => number;
+  idGenerator?: () => string;
   ownerId: string;
   skillId: string;
   versionId: string;
@@ -589,19 +600,58 @@ export async function markDraftPublished({
   if (!skill) {
     throw new Error("skill not found");
   }
+  const versionRows = await store.query({
+    skillVersions: {
+      $: {
+        where: {
+          ownerId,
+          skillId,
+        },
+      },
+    },
+  });
+  const version = (versionRows.skillVersions ?? [])
+    .map((row) => rowWithId(row) as SkillVersionRow)
+    .find((row) => row.id === versionId);
+  if (!version) {
+    throw new Error("draft version not found");
+  }
   const files = await listSkillFiles({ store, ownerId, skillId, versionId });
   const currentTime = now();
   const manifest = buildSkillManifest({
     skill,
     version: {
       id: versionId,
-      version: "0.1.0",
+      version: version.version,
       status: "published",
     },
     files: files.map((file) => ({
       ...file,
       storageUrl: file.storageUrl ?? null,
     })),
+  });
+  const nextDraftVersionId = idGenerator();
+  const nextDraftVersion: SkillVersionRow = {
+    id: nextDraftVersionId,
+    ownerId,
+    skillId,
+    version: nextDraftVersionLabel(version.version),
+    status: "draft",
+    summary: version.summary,
+    createdAt: currentTime,
+    updatedAt: currentTime,
+  };
+  const nextDraftFiles = files.map((file) => {
+    const nextFileId = idGenerator();
+    const nextFile: SkillFileRow = {
+      ...file,
+      id: nextFileId,
+      versionId: nextDraftVersionId,
+      fileKey: `${skillId}:${nextDraftVersionId}:${file.path}`,
+      createdAt: currentTime,
+      updatedAt: currentTime,
+    };
+    return nextFile;
   });
 
   await store.transact([
@@ -611,10 +661,13 @@ export async function markDraftPublished({
       updatedAt: currentTime,
       publishedAt: currentTime,
     }),
+    store.create("skillVersions", nextDraftVersionId, withoutId(nextDraftVersion)),
+    ...nextDraftFiles.map((file) => store.create("skillFiles", file.id, withoutId(file))),
     store.update("skills", skill.id, {
       status: "published",
       visibility: "public",
       publishedVersionId: versionId,
+      currentDraftVersionId: nextDraftVersionId,
       updatedAt: currentTime,
     }),
   ]);

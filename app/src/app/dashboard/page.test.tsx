@@ -97,6 +97,8 @@ test("dashboard skill detail renders the editor tab UI", async () => {
   assert.match(html, /MDXEditor/i);
   assert.match(html, /When to use/);
   assert.match(html, /Workflow/);
+  assert.match(html, /Save changes/);
+  assert.match(html, /Editor changes save to Skillfully/i);
   assert.match(html, /Skill standard passed/);
   assert.match(html, /Version history/);
   assert.doesNotMatch(html, /Publishing destinations/);

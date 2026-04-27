@@ -40,7 +40,7 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
       },
     });
 
-    if (result.results.some((entry) => entry.status === "published" || entry.status === "submitted")) {
+    if (result.results.some((entry) => entry.status !== "failed")) {
       await markDraftPublished({ ownerId: user.id, skillId, versionId: context.version.id });
     }
 

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { createSkillDraft, listSkillFiles, updateSkillFileText } from "./repository";
+import { createSkillDraft, listSkillFiles, markDraftPublished, updateSkillFileText } from "./repository";
 
 type Row = Record<string, unknown>;
 
@@ -116,4 +116,53 @@ test("listSkillFiles and updateSkillFileText enforce ownership and normalized pa
       }),
     /skill file not found/,
   );
+});
+
+test("markDraftPublished freezes the published version and opens a new editable draft", async () => {
+  const store = new InMemorySkillStore();
+  let counter = 0;
+  const created = await createSkillDraft({
+    store,
+    now: () => 1700000000000,
+    idGenerator: () => `id_${++counter}`,
+    skillIdGenerator: () => "sk_demo",
+    ownerId: "user-1",
+    name: "Demo",
+    description: "Demo skill",
+    baseUrl: "https://www.skillfully.sh",
+  });
+  await updateSkillFileText({
+    store,
+    now: () => 1700000000100,
+    ownerId: "user-1",
+    fileId: created.file.id,
+    contentText: "# Published content",
+  });
+
+  await markDraftPublished({
+    store,
+    now: () => 1700000000200,
+    ownerId: "user-1",
+    skillId: "sk_demo",
+    versionId: created.version.id,
+  });
+
+  const versions = Object.entries(store.rows.skillVersions).map(([id, row]) => ({ id, ...row }));
+  const publishedVersions = versions.filter((version) => version.status === "published");
+  const draftVersions = versions.filter((version) => version.status === "draft");
+  assert.equal(publishedVersions.length, 1);
+  assert.equal(draftVersions.length, 1);
+  assert.notEqual(draftVersions[0].id, created.version.id);
+
+  const skill = Object.values(store.rows.skills)[0];
+  assert.equal(skill.publishedVersionId, created.version.id);
+  assert.equal(skill.currentDraftVersionId, draftVersions[0].id);
+  assert.equal(skill.visibility, "public");
+
+  const draftFiles = Object.values(store.rows.skillFiles).filter(
+    (file) => file.versionId === draftVersions[0].id,
+  );
+  assert.equal(draftFiles.length, 1);
+  assert.equal(draftFiles[0].path, "SKILL.md");
+  assert.equal(draftFiles[0].contentText, "# Published content");
 });

@@ -18,9 +18,9 @@
 - Modify: `app/src/instant.schema.ts`
 - Modify: `app/src/instant.perms.ts`
 
-- [ ] Add `$files`, skill versioning, file, publishing target, publish run, directory submission, GitHub installation, GitHub repository, and import entities.
-- [ ] Add path-based `$files` permissions and owner-based entity rules.
-- [ ] Run `cd app && npm test`.
+- [x] Add `$files`, skill versioning, file, publishing target, publish run, directory submission, GitHub installation, GitHub repository, and import entities.
+- [x] Add path-based `$files` permissions and owner-based entity rules.
+- [x] Run `cd app && npm test`.
 
 ### Task 2: File And Manifest Utilities
 
@@ -28,9 +28,9 @@
 - Create: `app/src/lib/skills/skill-files.ts`
 - Test: `app/src/lib/skills/skill-files.test.ts`
 
-- [ ] Write failing tests for slug/path normalization, default `SKILL.md`, manifest generation, and update excerpt consent insertion.
-- [ ] Implement utilities.
-- [ ] Run focused tests.
+- [x] Write failing tests for slug/path normalization, default `SKILL.md`, manifest generation, and update excerpt consent insertion.
+- [x] Implement utilities.
+- [x] Run focused tests.
 
 ### Task 3: Publishing Adapters
 
@@ -41,9 +41,9 @@
 - Create: `app/src/lib/publishing/publish.ts`
 - Test: `app/src/lib/publishing/publish.test.ts`
 
-- [ ] Write failing tests for default Skillfully repo selection, imported repo selection, consent gating, and publish status transitions.
-- [ ] Implement adapters and orchestration.
-- [ ] Run focused tests.
+- [x] Write failing tests for default Skillfully repo selection, imported repo selection, consent gating, and publish status transitions.
+- [x] Implement adapters and orchestration.
+- [x] Run focused tests.
 
 ## Chunk 2: Routes And Dashboard Wiring
 
@@ -58,9 +58,9 @@
 - Create: `app/src/app/api/dashboard/skills/[skillId]/publish/route.ts`
 - Create: `app/src/app/api/dashboard/skills/[skillId]/targets/[targetKind]/route.ts`
 
-- [ ] Add authenticated route handlers for create, read/update, file list/create/update/upload, target settings, and publish.
-- [ ] Return stable JSON contracts for the dashboard.
-- [ ] Run route/service tests.
+- [x] Add authenticated route handlers for create, read/update, file list/create/update/upload, target settings, and publish.
+- [x] Return stable JSON contracts for the dashboard.
+- [x] Run route/service tests.
 
 ### Task 5: Public And GitHub Routes
 
@@ -70,32 +70,31 @@
 - Create: `app/src/app/api/github/webhook/route.ts`
 - Create: `app/src/app/api/github/callback/route.ts`
 
-- [ ] Add public manifest/file reads for published versions.
-- [ ] Add GitHub App webhook signature verification and installation persistence.
-- [ ] Add callback handling for installation setup redirects.
+- [x] Add public manifest/file reads for published versions.
+- [x] Add GitHub App webhook signature verification and installation persistence.
+- [x] Add callback handling for installation setup redirects.
 
 ### Task 6: Dashboard Integration
 
 **Files:**
-- Modify: `app/src/lib/db.ts`
 - Modify: `app/src/app/dashboard/page.tsx`
 - Modify: `app/src/app/dashboard/onboarding-modal.tsx`
 - Modify: `app/src/app/dashboard/page.test.tsx`
 
-- [ ] Replace direct create-skill transactions with `/api/dashboard/skills`.
-- [ ] Persist editor file edits through file routes.
-- [ ] Trigger publish through `/api/dashboard/skills/[skillId]/publish`.
-- [ ] Add GitHub import and consent states without losing current local preview behavior.
+- [x] Replace direct create-skill transactions with `/api/dashboard/skills`.
+- [x] Persist editor file edits through file routes.
+- [x] Trigger publish through `/api/dashboard/skills/[skillId]/publish`.
+- [x] Add GitHub import and consent states without losing current local preview behavior.
 
 ## Chunk 3: Verification And Docs
 
 ### Task 7: Documentation And Memory
 
 **Files:**
-- Modify: `docs/skillfullysh/memories/2026-04-26-memory.md`
+- Modify: `docs/skillfullysh/memories/2026-04-27-memory.md`
 - Modify: `docs/skillfullysh/memories/TOC.md`
 
-- [ ] Record the functional publishing/backend pass.
-- [ ] Run `cd app && npm test`.
-- [ ] Run `cd app && npm run build`.
-- [ ] Commit and push one atomic change set.
+- [x] Record the functional publishing/backend pass.
+- [x] Run `cd app && npm test`.
+- [x] Run `cd app && npm run build`.
+- [x] Commit and push one atomic change set.

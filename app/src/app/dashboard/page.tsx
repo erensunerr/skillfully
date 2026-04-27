@@ -14,7 +14,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { db } from "@/lib/db";
+import { db, isUsingLocalPreviewDb } from "@/lib/db";
 import {
   captureClientEvent,
   captureClientException,
@@ -458,6 +458,38 @@ function useOptionalRouter() {
       push: () => undefined,
     };
   }
+}
+
+function dashboardAuthHeaders(user: AppUser) {
+  if (isUsingLocalPreviewDb || !user.refresh_token) {
+    return {
+      "content-type": "application/json",
+      "x-skillfully-preview-user-id": user.id,
+      "x-skillfully-preview-user-email": user.email || "preview@skillfully.local",
+    };
+  }
+
+  return {
+    "content-type": "application/json",
+    authorization: `Bearer ${user.refresh_token}`,
+  };
+}
+
+async function dashboardJson<T>(user: AppUser, path: string, init: RequestInit = {}) {
+  const headers = new Headers(init.headers);
+  for (const [key, value] of Object.entries(dashboardAuthHeaders(user))) {
+    headers.set(key, value);
+  }
+
+  const response = await fetch(path, {
+    ...init,
+    headers,
+  });
+  const payload = (await response.json()) as T & { error?: string };
+  if (!response.ok) {
+    throw new Error(payload.error || `Request failed: ${response.status}`);
+  }
+  return payload;
 }
 
 function extractErrorMessage(error: unknown) {
@@ -1739,8 +1771,10 @@ function editorGridClass(isFilesOpen: boolean, isFrontmatterOpen: boolean) {
 
 function SkillEditorWorkspace({
   skill,
+  user,
 }: {
   skill: Skill;
+  user?: AppUser | null;
 }) {
   const [selectedFile, setSelectedFile] = useState<(typeof editorMarkdownFiles)[number]>("SKILL.md");
   const [frontmatter, setFrontmatter] = useState({
@@ -1776,6 +1810,7 @@ function SkillEditorWorkspace({
   const [isFrontmatterOpen, setIsFrontmatterOpen] = useState(true);
   const [publishStep, setPublishStep] = useState<PublishModalStep | null>(null);
   const [installPromptCopied, setInstallPromptCopied] = useState(false);
+  const [publishError, setPublishError] = useState("");
   const publicInstallPrompt = useMemo(() => buildPublicInstallPrompt(skill), [skill.name, skill.skillId]);
 
   useEffect(() => {
@@ -1794,6 +1829,34 @@ function SkillEditorWorkspace({
     await navigator.clipboard.writeText(publicInstallPrompt);
     setInstallPromptCopied(true);
     window.setTimeout(() => setInstallPromptCopied(false), 1200);
+  }
+
+  async function publishVersion() {
+    setPublishError("");
+    if (!user || isUsingLocalPreviewDb) {
+      setPublishStep("published");
+      return;
+    }
+
+    try {
+      const result = await dashboardJson<{
+        results: Array<{ targetKind: string; status: string; error?: string }>;
+      }>(user, `/api/dashboard/skills/${skill.skillId}/publish`, {
+        method: "POST",
+      });
+      const failures = result.results.filter((entry) => entry.status === "failed");
+      if (failures.length > 0) {
+        setPublishError(
+          failures.map((entry) => `${entry.targetKind}: ${entry.error || "failed"}`).join(" | "),
+        );
+      }
+      if (result.results.some((entry) => entry.status !== "failed")) {
+        setPublishStep("published");
+      }
+    } catch (error) {
+      captureClientException(error);
+      setPublishError(extractErrorMessage(error));
+    }
   }
 
   return (
@@ -1967,6 +2030,11 @@ function SkillEditorWorkspace({
       </section>
 
       <section className="flex min-h-24 flex-col gap-3 border-b border-[var(--ink)] p-4 sm:flex-row sm:items-center sm:justify-end">
+        {publishError ? (
+          <p className="mr-auto border border-red-600 bg-red-50 p-3 font-editorial-mono text-xs font-bold uppercase text-red-700">
+            {publishError}
+          </p>
+        ) : null}
         <Link href={skillRoute(skill, "settings")} className={`${DASHBOARD_BUTTON_LIGHT} text-center`}>
           Change publishing options
         </Link>
@@ -1989,7 +2057,7 @@ function SkillEditorWorkspace({
           installPrompt={publicInstallPrompt}
           installPromptCopied={installPromptCopied}
           onCancel={() => setPublishStep(null)}
-          onConfirm={() => setPublishStep("published")}
+          onConfirm={() => void publishVersion()}
           onCopyInstallPrompt={() => void copyPublicInstallPrompt()}
           onContinueToInstallCheck={() => setPublishStep("waiting")}
           onFinish={() => setPublishStep(null)}
@@ -2622,6 +2690,7 @@ export function AccountSettingsWorkspace({
 export function SkillDetail({
   skill,
   entries,
+  user,
   onBack,
   activeTab = "overview",
   onTabChange,
@@ -2631,6 +2700,7 @@ export function SkillDetail({
 }: {
   skill: Skill;
   entries: Feedback[];
+  user?: AppUser | null;
   onBack: () => void;
   activeTab?: DashboardTab;
   onTabChange?: (tab: DashboardTab) => void;
@@ -2649,7 +2719,7 @@ export function SkillDetail({
   const activeUsers = totalRated > 0 ? Math.max(totalRated * 37, 128).toLocaleString() : "2,304";
 
   if (activeTab === "editor") {
-    return <SkillEditorWorkspace skill={skill} />;
+    return <SkillEditorWorkspace skill={skill} user={user} />;
   }
 
   if (activeTab === "analytics") {
@@ -3098,7 +3168,7 @@ export default function Dashboard({
     setScreen("detail");
   }
 
-  function createSkill(name: string, description: string) {
+  async function createSkill(name: string, description: string) {
     if (!user) {
       return;
     }
@@ -3110,35 +3180,59 @@ export default function Dashboard({
     }
 
     const cleanDescription = description.trim() || undefined;
-    const newSkillEntityId = id();
+    setIsSubmitting(true);
 
-    const newSkillId = randomSkillId();
+    try {
+      let createdSkillId: string;
+      let createdEntityId: string;
 
-    db.transact(
-      db.tx.skills[newSkillEntityId].create({
-        ownerId: user.id,
-        name: cleanName,
-        description: cleanDescription,
-        skillId: newSkillId,
-        createdAt: Date.now(),
-      }),
-    );
+      if (isUsingLocalPreviewDb) {
+        const newSkillEntityId = id();
+        const newSkillId = randomSkillId();
+        db.transact(
+          db.tx.skills[newSkillEntityId].create({
+            ownerId: user.id,
+            name: cleanName,
+            description: cleanDescription,
+            skillId: newSkillId,
+            createdAt: Date.now(),
+          }),
+        );
+        createdSkillId = newSkillId;
+        createdEntityId = newSkillEntityId;
+      } else {
+        const response = await dashboardJson<{ skill: Skill }>(user, "/api/dashboard/skills", {
+          method: "POST",
+          body: JSON.stringify({
+            name: cleanName,
+            description: cleanDescription,
+          }),
+        });
+        createdSkillId = response.skill.skillId;
+        createdEntityId = response.skill.id;
+      }
 
-    captureClientEvent("skill_created", {
-      skill_name: cleanName,
-      has_description: Boolean(cleanDescription),
-    });
+      captureClientEvent("skill_created", {
+        skill_name: cleanName,
+        has_description: Boolean(cleanDescription),
+      });
 
-    setSkillForm({ name: "", description: "" });
-    setModalSkillForm({ name: "", description: "" });
-    setSelectedSkillId(newSkillEntityId);
-    setActiveTab("overview");
-    setOnboardingDismissed(true);
-    setIsCreateSkillModalOpen(false);
-    setIsSkillSelectorOpen(false);
-    setScreen("detail");
-    setErrorMessage("");
-    router.push(`/dashboard/${newSkillId}/overview`);
+      setSkillForm({ name: "", description: "" });
+      setModalSkillForm({ name: "", description: "" });
+      setSelectedSkillId(createdEntityId);
+      setActiveTab("overview");
+      setOnboardingDismissed(true);
+      setIsCreateSkillModalOpen(false);
+      setIsSkillSelectorOpen(false);
+      setScreen("detail");
+      setErrorMessage("");
+      router.push(`/dashboard/${createdSkillId}/overview`);
+    } catch (error) {
+      captureClientException(error);
+      setErrorMessage(extractErrorMessage(error));
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   function createSkillFromModal(name: string, description: string) {
@@ -3221,6 +3315,7 @@ export default function Dashboard({
             <SkillDetail
               skill={selectedSkill}
               entries={selectedFeedback}
+              user={user}
               activeTab={activeTab}
               feedbackTemplate={feedbackTemplate}
               feedbackTemplateError={feedbackTemplateError}

@@ -1,0 +1,621 @@
+import crypto from "node:crypto";
+
+import { adminDb } from "@/lib/adminDb";
+import {
+  buildSkillManifest,
+  createDefaultSkillFile,
+  normalizeSkillFilePath,
+  skillSlug,
+} from "./skill-files";
+import type { PublishContext, PublishResult } from "@/lib/publishing/types";
+
+type EntityName =
+  | "skills"
+  | "skillVersions"
+  | "skillFiles"
+  | "publishingTargets"
+  | "publishRuns"
+  | "directorySubmissions"
+  | "githubInstallations"
+  | "githubRepositories"
+  | "skillImports";
+
+type Row = Record<string, unknown>;
+type QueryInput = Record<string, { $?: { where?: Record<string, unknown>; order?: Record<string, "asc" | "desc"> } }>;
+
+export type SkillStore = {
+  query(query: QueryInput): Promise<Record<string, Row[]>>;
+  create(entity: EntityName, id: string, values: Row): unknown;
+  update(entity: EntityName, id: string, values: Row): unknown;
+  transact(ops: unknown[]): Promise<void>;
+};
+
+export type SkillRow = {
+  id: string;
+  ownerId: string;
+  name: string;
+  description?: string;
+  skillId: string;
+  slug: string;
+  status: string;
+  visibility: string;
+  sourceMode: string;
+  originalRepoFullName?: string;
+  originalSkillPath?: string;
+  currentDraftVersionId: string;
+  publishedVersionId?: string;
+  createdAt: number;
+  updatedAt: number;
+};
+
+export type SkillVersionRow = {
+  id: string;
+  ownerId: string;
+  skillId: string;
+  version: string;
+  status: string;
+  summary?: string;
+  manifestJson?: unknown;
+  createdAt: number;
+  updatedAt: number;
+  publishedAt?: number;
+};
+
+export type SkillFileRow = {
+  id: string;
+  ownerId: string;
+  skillId: string;
+  versionId: string;
+  fileKey: string;
+  path: string;
+  kind: string;
+  mimeType?: string;
+  size?: number;
+  sha256?: string;
+  contentText?: string;
+  storageFileId?: string;
+  storageUrl?: string;
+  createdAt: number;
+  updatedAt: number;
+};
+
+export type PublishingTargetRow = {
+  id: string;
+  ownerId: string;
+  skillId: string;
+  targetKind: string;
+  status: string;
+  repoFullName?: string;
+  installationId?: string;
+  skillRoot?: string;
+  baseBranch?: string;
+  autoMerge?: boolean;
+  consentStatus?: string;
+  configJson?: unknown;
+  createdAt: number;
+  updatedAt: number;
+};
+
+function makeAdminStore(): SkillStore {
+  const tx = adminDb.tx as unknown as Record<EntityName, Record<string, {
+    create: (values: Row) => unknown;
+    update: (values: Row) => unknown;
+  }>>;
+
+  return {
+    async query(query) {
+      return adminDb.query(query as never) as Promise<Record<string, Row[]>>;
+    },
+    create(entity, id, values) {
+      return tx[entity][id].create(values);
+    },
+    update(entity, id, values) {
+      return tx[entity][id].update(values);
+    },
+    async transact(ops) {
+      await adminDb.transact(ops as never);
+    },
+  };
+}
+
+export const defaultSkillStore = makeAdminStore();
+
+function hashText(value: string) {
+  return crypto.createHash("sha256").update(value).digest("hex");
+}
+
+function defaultGitHubRepo() {
+  return {
+    repoFullName: process.env.SKILLFULLY_DEFAULT_SKILLS_REPO || "erensunerr/skillfully-skills",
+    installationId: process.env.SKILLFULLY_DEFAULT_GITHUB_INSTALLATION_ID || "",
+    baseBranch: process.env.SKILLFULLY_DEFAULT_SKILLS_REPO_BRANCH || "main",
+  };
+}
+
+function rowWithId<T extends Row>(row: T): T & { id: string } {
+  return row as T & { id: string };
+}
+
+export async function createSkillDraft({
+  store = defaultSkillStore,
+  now = () => Date.now(),
+  idGenerator = () => crypto.randomUUID(),
+  skillIdGenerator,
+  ownerId,
+  name,
+  description,
+  baseUrl,
+  sourceMode = "managed",
+  originalRepoFullName,
+  originalSkillPath,
+}: {
+  store?: SkillStore;
+  now?: () => number;
+  idGenerator?: () => string;
+  skillIdGenerator: () => string;
+  ownerId: string;
+  name: string;
+  description?: string | null;
+  baseUrl: string;
+  sourceMode?: string;
+  originalRepoFullName?: string | null;
+  originalSkillPath?: string | null;
+}) {
+  const cleanName = name.trim();
+  if (!cleanName) {
+    throw new Error("skill name is required");
+  }
+
+  const currentTime = now();
+  const entityId = idGenerator();
+  const versionId = idGenerator();
+  const fileId = idGenerator();
+  const generatedSkillId = skillIdGenerator();
+  const slug = skillSlug(cleanName);
+  const cleanDescription = description?.trim() || undefined;
+  const feedbackUrl = `${baseUrl.replace(/\/+$/, "")}/feedback/${generatedSkillId}`;
+  const defaultFile = createDefaultSkillFile({
+    name: cleanName,
+    description: cleanDescription,
+    feedbackUrl,
+  });
+  const repo = defaultGitHubRepo();
+
+  const skill: SkillRow = {
+    id: entityId,
+    ownerId,
+    name: cleanName,
+    description: cleanDescription,
+    skillId: generatedSkillId,
+    slug,
+    status: "draft",
+    visibility: "private",
+    sourceMode,
+    ...(originalRepoFullName ? { originalRepoFullName } : {}),
+    ...(originalSkillPath ? { originalSkillPath } : {}),
+    currentDraftVersionId: versionId,
+    createdAt: currentTime,
+    updatedAt: currentTime,
+  };
+  const version: SkillVersionRow = {
+    id: versionId,
+    ownerId,
+    skillId: generatedSkillId,
+    version: "0.1.0",
+    status: "draft",
+    summary: cleanDescription,
+    createdAt: currentTime,
+    updatedAt: currentTime,
+  };
+  const file: SkillFileRow = {
+    id: fileId,
+    ownerId,
+    skillId: generatedSkillId,
+    versionId,
+    fileKey: `${generatedSkillId}:${versionId}:SKILL.md`,
+    path: defaultFile.path,
+    kind: defaultFile.kind,
+    mimeType: "text/markdown",
+    size: Buffer.byteLength(defaultFile.contentText),
+    sha256: hashText(defaultFile.contentText),
+    contentText: defaultFile.contentText,
+    createdAt: currentTime,
+    updatedAt: currentTime,
+  };
+
+  const targets: PublishingTargetRow[] = [
+    {
+      id: idGenerator(),
+      ownerId,
+      skillId: generatedSkillId,
+      targetKind: "github",
+      status: "enabled",
+      repoFullName: sourceMode === "github_import" && originalRepoFullName ? originalRepoFullName : repo.repoFullName,
+      installationId: sourceMode === "github_import" ? undefined : repo.installationId,
+      skillRoot: sourceMode === "github_import" && originalSkillPath ? originalSkillPath : `skills/${slug}`,
+      baseBranch: repo.baseBranch,
+      autoMerge: sourceMode !== "github_import",
+      consentStatus: sourceMode === "github_import" ? "pending" : "granted",
+      createdAt: currentTime,
+      updatedAt: currentTime,
+    },
+    ...(["lobehub", "clawhub", "hermes"] as const).map((targetKind): PublishingTargetRow => ({
+      id: idGenerator(),
+      ownerId,
+      skillId: generatedSkillId,
+      targetKind,
+      status: "enabled",
+      consentStatus: "granted",
+      createdAt: currentTime,
+      updatedAt: currentTime,
+    })),
+  ];
+
+  await store.transact([
+    store.create("skills", entityId, withoutId(skill)),
+    store.create("skillVersions", versionId, withoutId(version)),
+    store.create("skillFiles", fileId, withoutId(file)),
+    ...targets.map((target) => store.create("publishingTargets", target.id, withoutId(target))),
+  ]);
+
+  return { skill, version, file, targets };
+}
+
+function withoutId<T extends { id: string }>(row: T) {
+  const { id: _id, ...values } = row;
+  return values;
+}
+
+export async function getSkillForOwner({
+  store = defaultSkillStore,
+  ownerId,
+  skillId,
+}: {
+  store?: SkillStore;
+  ownerId: string;
+  skillId: string;
+}) {
+  const rows = await store.query({
+    skills: {
+      $: {
+        where: {
+          ownerId,
+          skillId,
+        },
+      },
+    },
+  });
+  const skill = rows.skills?.[0];
+  return skill ? rowWithId(skill) as SkillRow : null;
+}
+
+export async function getDraftVersion({
+  store = defaultSkillStore,
+  ownerId,
+  skillId,
+}: {
+  store?: SkillStore;
+  ownerId: string;
+  skillId: string;
+}) {
+  const rows = await store.query({
+    skillVersions: {
+      $: {
+        where: {
+          ownerId,
+          skillId,
+          status: "draft",
+        },
+      },
+    },
+  });
+  const version = rows.skillVersions?.[0];
+  return version ? rowWithId(version) as SkillVersionRow : null;
+}
+
+export async function listSkillFiles({
+  store = defaultSkillStore,
+  ownerId,
+  skillId,
+  versionId,
+}: {
+  store?: SkillStore;
+  ownerId: string;
+  skillId: string;
+  versionId: string;
+}) {
+  const rows = await store.query({
+    skillFiles: {
+      $: {
+        where: {
+          ownerId,
+          skillId,
+          versionId,
+        },
+      },
+    },
+  });
+
+  return (rows.skillFiles ?? [])
+    .map((row) => rowWithId(row) as SkillFileRow)
+    .sort((a, b) => a.path.localeCompare(b.path));
+}
+
+export async function listPublishingTargets({
+  store = defaultSkillStore,
+  ownerId,
+  skillId,
+}: {
+  store?: SkillStore;
+  ownerId: string;
+  skillId: string;
+}) {
+  const rows = await store.query({
+    publishingTargets: {
+      $: {
+        where: {
+          ownerId,
+          skillId,
+        },
+      },
+    },
+  });
+
+  return (rows.publishingTargets ?? []).map((row) => rowWithId(row) as PublishingTargetRow);
+}
+
+export async function updateSkillFileText({
+  store = defaultSkillStore,
+  now = () => Date.now(),
+  ownerId,
+  fileId,
+  contentText,
+  path,
+}: {
+  store?: SkillStore;
+  now?: () => number;
+  ownerId: string;
+  fileId: string;
+  contentText: string;
+  path?: string;
+}) {
+  const rows = await store.query({
+    skillFiles: {
+      $: {
+        where: {
+          ownerId,
+        },
+      },
+    },
+  });
+  const existing = (rows.skillFiles ?? []).find((row) => row.id === fileId);
+  if (!existing) {
+    throw new Error("skill file not found");
+  }
+
+  const updatedPath = path ? normalizeSkillFilePath(path) : String(existing.path);
+  const currentTime = now();
+  const values = {
+    path: updatedPath,
+    contentText,
+    size: Buffer.byteLength(contentText),
+    sha256: hashText(contentText),
+    updatedAt: currentTime,
+  };
+  await store.transact([store.update("skillFiles", fileId, values)]);
+  return {
+    ...(rowWithId(existing) as SkillFileRow),
+    ...values,
+  };
+}
+
+export async function createSkillFile({
+  store = defaultSkillStore,
+  now = () => Date.now(),
+  idGenerator = () => crypto.randomUUID(),
+  ownerId,
+  skillId,
+  versionId,
+  path,
+  kind,
+  contentText,
+  mimeType,
+  storageFileId,
+  storageUrl,
+}: {
+  store?: SkillStore;
+  now?: () => number;
+  idGenerator?: () => string;
+  ownerId: string;
+  skillId: string;
+  versionId: string;
+  path: string;
+  kind: string;
+  contentText?: string | null;
+  mimeType?: string | null;
+  storageFileId?: string | null;
+  storageUrl?: string | null;
+}) {
+  const skill = await getSkillForOwner({ store, ownerId, skillId });
+  if (!skill) {
+    throw new Error("skill not found");
+  }
+  const version = await getDraftVersion({ store, ownerId, skillId });
+  if (!version || version.id !== versionId) {
+    throw new Error("draft version not found");
+  }
+
+  const normalizedPath = normalizeSkillFilePath(path);
+  const currentTime = now();
+  const text = contentText ?? undefined;
+  const id = idGenerator();
+  const file: SkillFileRow = {
+    id,
+    ownerId,
+    skillId,
+    versionId,
+    fileKey: `${skillId}:${versionId}:${normalizedPath}`,
+    path: normalizedPath,
+    kind,
+    ...(mimeType ? { mimeType } : {}),
+    ...(text ? { size: Buffer.byteLength(text), sha256: hashText(text), contentText: text } : {}),
+    ...(storageFileId ? { storageFileId } : {}),
+    ...(storageUrl ? { storageUrl } : {}),
+    createdAt: currentTime,
+    updatedAt: currentTime,
+  };
+
+  await store.transact([store.create("skillFiles", id, withoutId(file))]);
+  return file;
+}
+
+export async function buildPublishContextForSkill({
+  store = defaultSkillStore,
+  ownerId,
+  skillId,
+}: {
+  store?: SkillStore;
+  ownerId: string;
+  skillId: string;
+}): Promise<PublishContext> {
+  const skill = await getSkillForOwner({ store, ownerId, skillId });
+  if (!skill) {
+    throw new Error("skill not found");
+  }
+  const version = await getDraftVersion({ store, ownerId, skillId });
+  if (!version) {
+    throw new Error("draft version not found");
+  }
+  const files = await listSkillFiles({ store, ownerId, skillId, versionId: version.id });
+  const targets = await listPublishingTargets({ store, ownerId, skillId });
+  const githubTarget = targets.find((target) => target.targetKind === "github");
+
+  return {
+    skill: {
+      skillId: skill.skillId,
+      slug: skill.slug || skillSlug(skill.name),
+      name: skill.name,
+      sourceMode: skill.sourceMode,
+      originalSkillPath: skill.originalSkillPath,
+    },
+    version: {
+      id: version.id,
+      version: version.version,
+    },
+    files: files.map((file) => ({
+      path: file.path,
+      kind: file.kind,
+      contentText: file.contentText,
+      storageUrl: file.storageUrl,
+    })),
+    defaultGitHubRepo: defaultGitHubRepo(),
+    githubTarget: githubTarget
+      ? {
+          repoFullName: githubTarget.repoFullName || defaultGitHubRepo().repoFullName,
+          installationId: githubTarget.installationId || defaultGitHubRepo().installationId,
+          skillRoot: githubTarget.skillRoot,
+          baseBranch: githubTarget.baseBranch,
+          autoMerge: githubTarget.autoMerge,
+        }
+      : null,
+  };
+}
+
+export async function recordPublishResult({
+  store = defaultSkillStore,
+  now = () => Date.now(),
+  ownerId,
+  skillId,
+  versionId,
+  result,
+}: {
+  store?: SkillStore;
+  now?: () => number;
+  ownerId: string;
+  skillId: string;
+  versionId: string;
+  result: PublishResult;
+}) {
+  const currentTime = now();
+  const id = crypto.randomUUID();
+  const ops = [
+    store.create("publishRuns", id, {
+      ownerId,
+      skillId,
+      versionId,
+      targetKind: result.targetKind,
+      status: result.status,
+      startedAt: currentTime,
+      completedAt: currentTime,
+      pullRequestUrl: result.url,
+      error: result.error,
+      detailsJson: result.details,
+    }),
+  ];
+
+  if (result.status === "manual_ready") {
+    ops.push(
+      store.create("directorySubmissions", crypto.randomUUID(), {
+        ownerId,
+        skillId,
+        versionId,
+        targetKind: result.targetKind,
+        status: result.status,
+        packetJson: result.packet,
+        externalUrl: result.url,
+        createdAt: currentTime,
+        updatedAt: currentTime,
+      }),
+    );
+  }
+
+  await store.transact(ops);
+}
+
+export async function markDraftPublished({
+  store = defaultSkillStore,
+  now = () => Date.now(),
+  ownerId,
+  skillId,
+  versionId,
+}: {
+  store?: SkillStore;
+  now?: () => number;
+  ownerId: string;
+  skillId: string;
+  versionId: string;
+}) {
+  const skill = await getSkillForOwner({ store, ownerId, skillId });
+  if (!skill) {
+    throw new Error("skill not found");
+  }
+  const files = await listSkillFiles({ store, ownerId, skillId, versionId });
+  const currentTime = now();
+  const manifest = buildSkillManifest({
+    skill,
+    version: {
+      id: versionId,
+      version: "0.1.0",
+      status: "published",
+    },
+    files: files.map((file) => ({
+      ...file,
+      storageUrl: file.storageUrl ?? null,
+    })),
+  });
+
+  await store.transact([
+    store.update("skillVersions", versionId, {
+      status: "published",
+      manifestJson: manifest,
+      updatedAt: currentTime,
+      publishedAt: currentTime,
+    }),
+    store.update("skills", skill.id, {
+      status: "published",
+      visibility: "public",
+      publishedVersionId: versionId,
+      updatedAt: currentTime,
+    }),
+  ]);
+}

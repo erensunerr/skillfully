@@ -50,6 +50,11 @@ export function OnboardingModal({
 }) {
   const [importState, setImportState] = useState<OnboardingImportState>("idle");
   const isConnecting = importState === "connecting";
+  const githubInstallUrl =
+    process.env.NEXT_PUBLIC_GITHUB_APP_INSTALL_URL ||
+    (process.env.NEXT_PUBLIC_GITHUB_APP_SLUG
+      ? `https://github.com/apps/${process.env.NEXT_PUBLIC_GITHUB_APP_SLUG}/installations/new`
+      : "");
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -119,6 +124,10 @@ export function OnboardingModal({
                 disabled={isConnecting}
                 onClick={() => {
                   captureClientEvent("onboarding_github_connect_clicked");
+                  if (githubInstallUrl) {
+                    window.location.href = githubInstallUrl;
+                    return;
+                  }
                   setImportState("connecting");
                 }}
               >
@@ -133,7 +142,7 @@ export function OnboardingModal({
                 }`}
               >
                 {importState === "unavailable"
-                  ? "GitHub import is coming later. Create a skill manually for now."
+                  ? "GitHub App installation is not configured yet. Create a skill manually for now."
                   : ""}
               </p>
             </article>

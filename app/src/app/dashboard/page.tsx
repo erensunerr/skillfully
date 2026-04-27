@@ -1,7 +1,6 @@
 "use client";
 
-import { type FormEvent, type ReactNode, useEffect, useMemo, useState } from "react";
-import dynamic from "next/dynamic";
+import { type ComponentType, type FormEvent, type ReactNode, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Select, { type SingleValue, type StylesConfig } from "react-select";
@@ -46,6 +45,11 @@ type SelectOption = {
   label: string;
 };
 
+type MdxMarkdownEditorProps = {
+  markdown: string;
+  onChange: (markdown: string) => void;
+};
+
 type RecentFeedbackRow = {
   sentiment: "positive" | "neutral" | "negative";
   rating: string;
@@ -64,18 +68,6 @@ const DASHBOARD_INPUT =
 
 const FEEDBACK_SNIPPET_URL = "/feedback-template.md";
 const validSkillRouteTabs: SkillRouteTab[] = ["overview", "editor", "analytics", "settings"];
-
-const MdxMarkdownEditor = dynamic(
-  () => import("./mdx-editor-client").then((mod) => mod.MdxMarkdownEditor),
-  {
-    ssr: false,
-    loading: () => (
-      <div className="h-full min-h-72 border border-[var(--ink)] bg-[var(--paper)] p-5 font-editorial-mono text-xs uppercase">
-        MDXEditor loading...
-      </div>
-    ),
-  },
-);
 
 const fallbackFeedbackRows: RecentFeedbackRow[] = [
   {
@@ -331,6 +323,34 @@ function DashboardSelect({
       }}
     />
   );
+}
+
+function MdxMarkdownEditor(props: MdxMarkdownEditorProps) {
+  const [Editor, setEditor] = useState<ComponentType<MdxMarkdownEditorProps> | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    import("./mdx-editor-client").then((mod) => {
+      if (isMounted) {
+        setEditor(() => mod.MdxMarkdownEditor);
+      }
+    });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  if (!Editor) {
+    return (
+      <div className="h-full min-h-72 border border-[var(--ink)] bg-[var(--paper)] p-5 font-editorial-mono text-xs uppercase">
+        MDXEditor loading...
+      </div>
+    );
+  }
+
+  return <Editor {...props} />;
 }
 
 function useOptionalRouter() {
@@ -736,22 +756,22 @@ export function SkillSelector({
     skillOptions.find((option) => option.id === selectedId) ?? skillOptions[0] ?? null;
 
   return (
-    <div className="relative">
+    <div className="relative min-w-0">
       <button
         type="button"
         aria-haspopup="listbox"
         aria-expanded={isOpen}
-        className="flex w-full items-center justify-between border border-[var(--ink)] bg-[var(--paper)] px-4 py-3 text-left font-editorial-mono text-sm transition hover:bg-[var(--white)]"
+        className="flex w-full min-w-0 items-center justify-between gap-3 border border-[var(--ink)] bg-[var(--paper)] px-4 py-3 text-left font-editorial-mono text-sm transition hover:bg-[var(--white)]"
         onClick={onToggle}
       >
-        <span className="truncate">{selectedOption?.name ?? "No skills yet"}</span>
+        <span className="min-w-0 truncate">{selectedOption?.name ?? "No skills yet"}</span>
         <span aria-hidden className="text-xl leading-none">{isOpen ? "⌃" : "⌄"}</span>
       </button>
 
       {isOpen ? (
         <div
           role="listbox"
-          className="absolute left-0 top-[calc(100%+0.45rem)] z-30 w-72 border border-[var(--ink)] bg-[var(--white)] p-2 shadow-[6px_6px_0_var(--ink)]"
+          className="absolute left-0 top-[calc(100%+0.45rem)] z-30 w-[min(18rem,calc(100vw-2.5rem))] border border-[var(--ink)] bg-[var(--white)] p-2 shadow-[6px_6px_0_var(--ink)]"
         >
           <div className="space-y-1">
             {skillOptions.map((option) => {
@@ -898,12 +918,12 @@ function DashboardSidebar({
   ] satisfies Array<[DashboardTab, string]>;
 
   return (
-    <aside className="flex min-h-0 flex-col border-b border-[var(--ink)] bg-[var(--paper)] text-[var(--ink)] lg:sticky lg:top-0 lg:h-screen lg:w-60 lg:overflow-hidden lg:border-b-0 lg:border-r">
-      <div className="border-b border-[var(--ink)] px-5 py-6">
+    <aside className="flex min-h-0 w-full max-w-full min-w-0 flex-col overflow-hidden border-b border-[var(--ink)] bg-[var(--paper)] text-[var(--ink)] lg:sticky lg:top-0 lg:h-screen lg:w-60 lg:border-b-0 lg:border-r">
+      <div className="border-b border-[var(--ink)] px-5 py-4 lg:py-6">
         <BrandMark />
       </div>
 
-      <div className="px-5 py-7">
+      <div className="min-w-0 px-5 py-4 lg:py-7">
         <p className="mb-3 font-editorial-mono text-xs font-bold uppercase">Skill</p>
         <SkillSelector
           skills={skills}
@@ -915,14 +935,14 @@ function DashboardSidebar({
         />
       </div>
 
-      <nav className="border-y border-[var(--ink)] font-editorial-sans text-sm">
+      <nav className="grid grid-cols-2 border-y border-[var(--ink)] font-editorial-sans text-sm sm:grid-cols-4 lg:block">
         {navItems.map(([tab, label]) => {
           const isActive = activeTab === tab;
           return (
             <button
               key={tab}
               type="button"
-              className={`flex w-full items-center gap-3 border-l-4 px-5 py-4 text-left ${
+              className={`flex w-full items-center gap-3 border-l-4 px-4 py-3 text-left lg:px-5 lg:py-4 ${
                 isActive
                   ? "border-[var(--ink)] bg-[var(--ink)] font-semibold text-[var(--paper)]"
                   : "border-transparent hover:bg-[var(--white)]"
@@ -936,7 +956,7 @@ function DashboardSidebar({
         })}
       </nav>
 
-      <div className="mt-auto space-y-5 px-5 py-6">
+      <div className="grid gap-3 px-5 py-4 sm:grid-cols-2 lg:mt-auto lg:block lg:space-y-5 lg:py-6">
         <button
           type="button"
           className="flex w-full items-center gap-3 border border-[var(--ink)] px-4 py-3 text-left font-editorial-mono text-sm hover:bg-[var(--white)]"
@@ -946,7 +966,7 @@ function DashboardSidebar({
           New Skill
         </button>
 
-        <div className="border border-[var(--ink)] p-4">
+        <div className="hidden border border-[var(--ink)] p-4 lg:block">
           <p className="font-editorial-mono text-xs font-bold uppercase">Need help?</p>
           <p className="mt-3 text-sm leading-6">
             Read the guide to learn how to build great agent skills.
@@ -956,28 +976,32 @@ function DashboardSidebar({
           </button>
         </div>
 
-        <button
-          type="button"
-          className={`flex w-full items-center gap-3 px-4 py-3 text-left text-sm ${
-            activeTab === "account"
-              ? "bg-[var(--ink)] font-semibold text-[var(--paper)]"
-              : "border border-[var(--ink)] hover:bg-[var(--white)]"
-          }`}
-          onClick={() => onTabChange("account")}
-        >
-          <DashboardIcon name="account" />
-          Account Settings
-        </button>
-        <p className="truncate font-editorial-mono text-[0.68rem] text-[var(--ink)]/65">
-          {displayUserEmail(user)}
-        </p>
-        <button
-          type="button"
-          className="mt-2 font-editorial-mono text-[0.68rem] font-bold uppercase underline"
-          onClick={onSignOut}
-        >
-          Sign out
-        </button>
+        <div className="min-w-0 space-y-2 sm:col-span-2 lg:space-y-3">
+          <button
+            type="button"
+            className={`flex w-full items-center gap-3 px-4 py-3 text-left text-sm ${
+              activeTab === "account"
+                ? "bg-[var(--ink)] font-semibold text-[var(--paper)]"
+                : "border border-[var(--ink)] hover:bg-[var(--white)]"
+            }`}
+            onClick={() => onTabChange("account")}
+          >
+            <DashboardIcon name="account" />
+            Account Settings
+          </button>
+          <div className="flex min-w-0 items-center justify-between gap-4 lg:block">
+            <p className="min-w-0 truncate font-editorial-mono text-[0.68rem] text-[var(--ink)]/65">
+              {displayUserEmail(user)}
+            </p>
+            <button
+              type="button"
+              className="shrink-0 font-editorial-mono text-[0.68rem] font-bold uppercase underline lg:mt-2"
+              onClick={onSignOut}
+            >
+              Sign out
+            </button>
+          </div>
+        </div>
       </div>
     </aside>
   );
@@ -1451,8 +1475,8 @@ function SkillEditorWorkspace({
     <div className="flex h-full min-h-0 flex-col bg-[var(--paper)] text-[var(--ink)]">
       <WorkspaceTopBar current="Frontmatter" />
 
-      <section className="grid min-h-0 flex-1 border-b border-[var(--ink)] xl:grid-cols-[17.5rem_minmax(0,1fr)_21.5rem]">
-        <aside className="min-h-0 border-b border-[var(--ink)] p-5 xl:border-b-0 xl:border-r">
+      <section className="grid min-h-0 flex-1 overflow-hidden border-b border-[var(--ink)] xl:grid-cols-[17.5rem_minmax(0,1fr)_21.5rem]">
+        <aside className="min-h-0 overflow-hidden border-b border-[var(--ink)] p-5 xl:border-b-0 xl:border-r">
           <div className="flex items-center justify-between">
             <p className="font-editorial-mono text-xs font-bold uppercase">Files</p>
             <button type="button" aria-label="Collapse files" className="text-2xl leading-none">‹</button>
@@ -1516,7 +1540,7 @@ function SkillEditorWorkspace({
           </div>
         </section>
 
-        <aside className="min-h-0 p-5">
+        <aside className="min-h-0 overflow-hidden p-5">
           <div className="flex items-center justify-between">
             <p className="font-editorial-mono text-xs font-bold uppercase">Frontmatter</p>
             <button type="button" aria-label="Collapse frontmatter" className="text-2xl leading-none">⌃</button>
@@ -2761,7 +2785,7 @@ export default function Dashboard({
     >
       <div aria-hidden className="marketing-noise" />
       <div
-        className={`grid min-h-screen transition-opacity lg:h-screen lg:grid-cols-[15rem_minmax(0,1fr)] ${
+        className={`grid min-h-screen min-w-0 grid-cols-1 transition-opacity lg:h-screen lg:grid-cols-[15rem_minmax(0,1fr)] ${
           shouldShowOnboardingModal ? "opacity-45" : ""
         }`}
         aria-hidden={shouldShowOnboardingModal ? true : undefined}

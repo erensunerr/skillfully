@@ -196,13 +196,14 @@ function DashboardPreview() {
         <div className="p-4 sm:p-6">
           <div className="flex items-center justify-between gap-4">
             <h3 className="font-editorial-sans text-2xl font-semibold">Overview</h3>
-            <select
+            <button
+              type="button"
               aria-label="Preview date range"
-              className="border border-[var(--ink)] bg-[var(--paper)] px-3 py-2 font-editorial-mono text-[0.7rem]"
-              defaultValue="dec"
+              className="flex items-center gap-3 border border-[var(--ink)] bg-[var(--paper)] px-3 py-2 font-editorial-mono text-[0.7rem]"
             >
-              <option value="dec">Dec 1</option>
-            </select>
+              Dec 1
+              <span aria-hidden>⌄</span>
+            </button>
           </div>
 
           <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">

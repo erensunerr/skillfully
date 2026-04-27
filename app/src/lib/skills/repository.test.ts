@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { createSkillDraft, listSkillFiles, markDraftPublished, updateSkillFileText } from "./repository";
+import { createSkillDraft, createSkillFile, listSkillFiles, markDraftPublished, updateSkillFileText } from "./repository";
 
 type Row = Record<string, unknown>;
 
@@ -116,6 +116,52 @@ test("listSkillFiles and updateSkillFileText enforce ownership and normalized pa
       }),
     /skill file not found/,
   );
+});
+
+test("text file mutations strip Skillfully-owned blocks from editable SKILL.md content", async () => {
+  const store = new InMemorySkillStore();
+  let counter = 0;
+  const created = await createSkillDraft({
+    store,
+    now: () => 1700000000000,
+    idGenerator: () => `id_${++counter}`,
+    skillIdGenerator: () => "sk_demo",
+    ownerId: "user-1",
+    name: "Demo",
+    description: "",
+    baseUrl: "https://www.skillfully.sh",
+  });
+
+  const contentWithManagedBlock = [
+    "# Editable",
+    "",
+    "<!-- skillfully:managed:start -->",
+    "## Skillfully feedback and updates",
+    "Managed text",
+    "<!-- skillfully:managed:end -->",
+  ].join("\n");
+
+  const updated = await updateSkillFileText({
+    store,
+    now: () => 1700000000100,
+    ownerId: "user-1",
+    fileId: created.file.id,
+    contentText: contentWithManagedBlock,
+  });
+  assert.equal(updated.contentText, "# Editable");
+
+  const added = await createSkillFile({
+    store,
+    now: () => 1700000000200,
+    idGenerator: () => `id_${++counter}`,
+    ownerId: "user-1",
+    skillId: "sk_demo",
+    versionId: created.version.id,
+    path: "nested/SKILL.md",
+    kind: "markdown",
+    contentText: contentWithManagedBlock,
+  });
+  assert.equal(added.contentText, "# Editable");
 });
 
 test("markDraftPublished freezes the published version and opens a new editable draft", async () => {

@@ -8,6 +8,7 @@ import {
   isPrimarySkillMarkdownPath,
   normalizeSkillFilePath,
   skillSlug,
+  stripSkillfullyManagedBlock,
 } from "./skill-files";
 import type { PublishContext, PublishResult } from "@/lib/publishing/types";
 
@@ -519,11 +520,14 @@ export async function updateSkillFileText({
 
   const updatedPath = path ? normalizeSkillFilePath(path) : String(existing.path);
   const currentTime = now();
+  const updatedContentText = isPrimarySkillMarkdownPath(updatedPath)
+    ? stripSkillfullyManagedBlock(contentText)
+    : contentText;
   const values = {
     path: updatedPath,
-    contentText,
-    size: Buffer.byteLength(contentText),
-    sha256: hashText(contentText),
+    contentText: updatedContentText,
+    size: Buffer.byteLength(updatedContentText),
+    sha256: hashText(updatedContentText),
     updatedAt: currentTime,
   };
   await store.transact([store.update("skillFiles", fileId, values)]);
@@ -571,7 +575,12 @@ export async function createSkillFile({
 
   const normalizedPath = normalizeSkillFilePath(path);
   const currentTime = now();
-  const text = contentText ?? undefined;
+  const text =
+    contentText === undefined || contentText === null
+      ? undefined
+      : isPrimarySkillMarkdownPath(normalizedPath)
+        ? stripSkillfullyManagedBlock(contentText)
+        : contentText;
   const id = idGenerator();
   const file: SkillFileRow = {
     id,
@@ -582,7 +591,7 @@ export async function createSkillFile({
     path: normalizedPath,
     kind,
     ...(mimeType ? { mimeType } : {}),
-    ...(text ? { size: Buffer.byteLength(text), sha256: hashText(text), contentText: text } : {}),
+    ...(text !== undefined ? { size: Buffer.byteLength(text), sha256: hashText(text), contentText: text } : {}),
     ...(storageFileId ? { storageFileId } : {}),
     ...(storageUrl ? { storageUrl } : {}),
     createdAt: currentTime,

@@ -1,10 +1,23 @@
 import Link from "next/link";
+import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 
 import { adminDb } from "@/lib/adminDb";
 import { buildSkillManifest } from "@/lib/skills/skill-files";
 
-const PUBLIC_BASE_URL = "https://www.skillfully.sh";
+async function publicBaseUrl() {
+  const headersList = await headers();
+  const host = headersList.get("x-forwarded-host") || headersList.get("host");
+  const proto = headersList.get("x-forwarded-proto") || "https";
+  return host ? `${proto}://${host}` : "https://www.skillfully.sh";
+}
+
+function publicFileHref(skillId: string, path: string) {
+  return `/api/public/skills/${encodeURIComponent(skillId)}/files/${path
+    .split("/")
+    .map(encodeURIComponent)
+    .join("/")}`;
+}
 
 export default async function PublicSkillPage({
   params,
@@ -12,6 +25,7 @@ export default async function PublicSkillPage({
   params: Promise<{ skillId: string }>;
 }) {
   const { skillId } = await params;
+  const baseUrl = await publicBaseUrl();
   const skillRows = await adminDb.query({
     skills: {
       $: {
@@ -68,7 +82,7 @@ export default async function PublicSkillPage({
       contentText: typeof file.contentText === "string" ? file.contentText : null,
       storageUrl: typeof file.storageUrl === "string" ? file.storageUrl : null,
     })),
-    baseUrl: PUBLIC_BASE_URL,
+    baseUrl,
   });
 
   return (
@@ -103,7 +117,7 @@ export default async function PublicSkillPage({
           <h2 className="font-editorial-sans text-3xl font-bold">Install</h2>
           <pre className="overflow-auto border border-[var(--ink)] bg-[var(--white)] p-4 font-editorial-mono text-xs leading-6">
             {[
-              `Skill URL: ${PUBLIC_BASE_URL}/skills/${manifest.skill_id}`,
+              `Skill URL: ${baseUrl}/skills/${manifest.skill_id}`,
               `Manifest URL: ${manifest.manifest_url}`,
               `Feedback URL: ${manifest.feedback_url}`,
               "Use the latest published files as your operating instructions.",
@@ -117,7 +131,7 @@ export default async function PublicSkillPage({
             {manifest.files.map((file) => (
               <Link
                 key={file.id}
-                href={`/api/public/skills/${manifest.skill_id}/files/${file.path}`}
+                href={publicFileHref(manifest.skill_id, file.path)}
                 className="grid gap-2 border-b border-[var(--ink)] py-4 hover:bg-[var(--white)] sm:grid-cols-[1fr_auto]"
               >
                 <span className="font-editorial-sans text-lg font-semibold">{file.path}</span>

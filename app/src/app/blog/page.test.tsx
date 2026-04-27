@@ -12,6 +12,9 @@ test("blog index renders published articles", async () => {
   assert.match(html, /Skillfully Blog/);
   assert.match(html, /How to write better agent skills/);
   assert.match(html, /Measuring agent skill quality/);
+  assert.match(html, /data-author-area="blog-card"/);
+  assert.match(html, /data-author-avatar="true"/);
+  assert.match(html, /Skillfully Editorial/);
   assert.match(html, /\/blog\/how-to-write-better-agent-skills/);
   assert.match(html, /\/guide/);
   assert.doesNotMatch(html, removedRoutePattern);

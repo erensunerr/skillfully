@@ -1,3 +1,8 @@
+import {
+  skillfullyEditorialAuthor,
+  type ArticleAuthor,
+} from "@/content/authors";
+
 export type ArticleBlock =
   | {
       type: "paragraph";
@@ -26,7 +31,7 @@ export type BlogArticle = {
   category: string;
   publishedAt: string;
   readTime: string;
-  author: string;
+  author: ArticleAuthor;
   sections: ArticleSection[];
   nextSlug?: string;
 };
@@ -40,7 +45,7 @@ export const blogArticles: BlogArticle[] = [
     category: "Skill authoring",
     publishedAt: "Apr 25, 2026",
     readTime: "7 min read",
-    author: "Skillfully",
+    author: skillfullyEditorialAuthor,
     nextSlug: "measuring-agent-skill-quality",
     sections: [
       {
@@ -108,7 +113,7 @@ export const blogArticles: BlogArticle[] = [
     category: "Analytics",
     publishedAt: "Apr 25, 2026",
     readTime: "5 min read",
-    author: "Skillfully",
+    author: skillfullyEditorialAuthor,
     nextSlug: "how-to-write-better-agent-skills",
     sections: [
       {

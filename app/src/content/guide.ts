@@ -1,3 +1,8 @@
+import {
+  skillfullyEditorialAuthor,
+  type ArticleAuthor,
+} from "@/content/authors";
+
 export type GuideSection = {
   id: string;
   title: string;
@@ -10,6 +15,7 @@ export type GuideArticle = {
   number: string;
   title: string;
   subtitle: string;
+  author: ArticleAuthor;
   sections: GuideSection[];
 };
 
@@ -20,6 +26,7 @@ export const guideArticles: GuideArticle[] = [
     title: "Start with agent skills",
     subtitle:
       "Define the repeatable job before you worry about snippets, metrics, or sharing.",
+    author: skillfullyEditorialAuthor,
     sections: [
       {
         id: "what-a-skill-is-for",
@@ -79,6 +86,7 @@ export const guideArticles: GuideArticle[] = [
     title: "Design the skill contract",
     subtitle:
       "Turn the skill from a loose instruction into a contract the agent can execute consistently.",
+    author: skillfullyEditorialAuthor,
     sections: [
       {
         id: "inputs-the-agent-can-trust",
@@ -138,6 +146,7 @@ export const guideArticles: GuideArticle[] = [
     title: "Install feedback collection",
     subtitle:
       "Wire Skillfully into the skill without making feedback the main task.",
+    author: skillfullyEditorialAuthor,
     sections: [
       {
         id: "create-the-tracked-skill",
@@ -197,6 +206,7 @@ export const guideArticles: GuideArticle[] = [
     title: "Read skill feedback",
     subtitle:
       "Use ratings and run notes to find the instructions that need to change first.",
+    author: skillfullyEditorialAuthor,
     sections: [
       {
         id: "start-with-rating-mix",
@@ -256,6 +266,7 @@ export const guideArticles: GuideArticle[] = [
     title: "Improve and publish skills",
     subtitle:
       "Turn repeated feedback into a stable skill that other agents and teammates can trust.",
+    author: skillfullyEditorialAuthor,
     sections: [
       {
         id: "edit-one-failure-mode",
@@ -313,6 +324,10 @@ export const guideArticles: GuideArticle[] = [
 
 export function getGuideArticle(slug: string) {
   return guideArticles.find((article) => article.slug === slug);
+}
+
+export function getFirstGuideArticle() {
+  return guideArticles[0];
 }
 
 export function getNextGuideArticle(article: GuideArticle) {

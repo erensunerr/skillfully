@@ -14,6 +14,9 @@ test("guide article route renders one article with five sections", async () => {
 
   assert.match(html, /Start with agent skills/);
   assert.match(html, /Table of Contents/);
+  assert.match(html, /data-author-area="guide-article"/);
+  assert.match(html, /data-author-avatar="true"/);
+  assert.match(html, /Skillfully Editorial/);
   assert.match(html, /What a skill is for/);
   assert.match(html, /Choose the first workflow/);
   assert.match(html, /\/guide\/design-the-skill-contract/);

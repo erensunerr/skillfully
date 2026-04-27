@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+
+import { AuthorByline } from "@/app/article-author";
 import {
   getGuideArticle,
   getNextGuideArticle,
@@ -71,16 +73,23 @@ export default async function GuideArticlePage({ params }: GuideArticleRouteProp
         </div>
       </header>
 
-      <section className="bg-[var(--ink)] px-5 pb-16 pt-20 text-center text-[var(--white)] sm:pt-24">
+      <section className="overflow-hidden bg-[var(--ink)] px-5 pb-16 pt-20 text-center text-[var(--white)] sm:pt-24">
         <p className="font-editorial-mono text-xs font-bold uppercase text-neutral-400">
           Article {article.number} / 5 sections
         </p>
-        <h1 className="mx-auto mt-8 max-w-4xl font-editorial-sans text-5xl font-bold leading-none sm:text-7xl">
+        <h1 className="mx-auto mt-8 max-w-[12ch] font-editorial-sans text-4xl font-bold leading-none sm:max-w-4xl sm:text-7xl">
           {article.title}
         </h1>
-        <p className="mx-auto mt-8 max-w-2xl text-lg leading-8 text-neutral-300">
+        <p className="mx-auto mt-8 max-w-[24ch] text-lg leading-8 text-neutral-300 sm:max-w-2xl">
           {article.subtitle}
         </p>
+        <AuthorByline
+          area="guide-article"
+          author={article.author}
+          className="mt-8 w-full justify-center"
+          dark
+          meta={[`Article ${article.number}`, "5 sections"]}
+        />
 
         <div className="mx-auto mt-14 max-w-5xl rounded-xl bg-white px-5 py-3 text-[var(--ink)]">
           <div className="flex flex-wrap items-center justify-center gap-2">

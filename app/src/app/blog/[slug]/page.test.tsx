@@ -14,6 +14,9 @@ test("blog article route renders a published article", async () => {
 
   assert.match(html, /How to write better agent skills/);
   assert.match(html, /Table of Contents/);
+  assert.match(html, /data-author-area="blog-article"/);
+  assert.match(html, /data-author-avatar="true"/);
+  assert.match(html, /Skillfully Editorial/);
   assert.match(html, /Instrument the outcome/);
   assert.match(html, /\/blog/);
   assert.match(html, /\/guide/);

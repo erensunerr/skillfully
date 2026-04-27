@@ -1,4 +1,6 @@
 import Link from "next/link";
+
+import { AuthorByline } from "@/app/article-author";
 import { blogArticles } from "@/content/blog";
 
 export default function BlogPage() {
@@ -54,9 +56,12 @@ export default function BlogPage() {
                   <Link href={`/blog/${article.slug}`}>{article.title}</Link>
                 </h2>
                 <p className="mt-4 max-w-2xl text-lg leading-8">{article.subtitle}</p>
-                <p className="mt-5 font-editorial-mono text-xs uppercase text-neutral-600">
-                  {article.publishedAt} / {article.readTime} / {article.author}
-                </p>
+                <AuthorByline
+                  area="blog-card"
+                  author={article.author}
+                  className="mt-6"
+                  meta={[article.publishedAt, article.readTime]}
+                />
               </div>
               <Link
                 href={`/blog/${article.slug}`}

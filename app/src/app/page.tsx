@@ -7,14 +7,6 @@ import { SchematicGraphic } from "./hero-schematic";
 const marqueeCopy =
   "NOW ONBOARDING DESIGN PARTNERS BUILDING AGENT SKILLS FOR CLAUDE, CURSOR, GOOSE, AND LOCAL AGENTS.";
 
-const usageRows = [
-  ["research-summarizer", "612", "82%"],
-  ["code-review-checklist", "438", "76%"],
-  ["market-analysis", "324", "71%"],
-  ["onboarding-flow", "251", "86%"],
-  ["sql-query-helper", "217", "73%"],
-] satisfies Array<[string, string, string]>;
-
 const featureCards = [
   {
     number: "01",
@@ -66,7 +58,7 @@ const personaCards = [
       "Find gaps and unclear steps",
       "Improve with real feedback",
     ],
-    tags: ["onboarding-flow", "market-analysis", "compliance-check", "report-generator"],
+    tags: ["onboarding-flow", "analysis-workflow", "compliance-check", "report-generator"],
   },
 ] satisfies Array<{
   label: string;
@@ -161,10 +153,10 @@ function MarqueeBand() {
 
 function DashboardPreview() {
   const metrics = [
-    ["Total skills", "24", "+3 this week"],
-    ["Skill runs", "1,842", "+18.3%"],
-    ["Success rate", "78%", "-2.1%"],
-    ["Feedback", "312", "+27.6%"],
+    ["Total skills", "0", "Create or import a skill"],
+    ["Skill runs", "0", "Connect runtime tracking"],
+    ["Success rate", "0%", "Waiting for feedback"],
+    ["Feedback", "0", "Submit first feedback"],
   ] satisfies Array<[string, string, string]>;
 
   return (
@@ -201,7 +193,7 @@ function DashboardPreview() {
               aria-label="Preview date range"
               className="flex items-center gap-3 border border-[var(--ink)] bg-[var(--paper)] px-3 py-2 font-editorial-mono text-[0.7rem]"
             >
-              Dec 1
+              Live data
               <span aria-hidden>⌄</span>
             </button>
           </div>
@@ -230,19 +222,9 @@ function DashboardPreview() {
               <div className="font-editorial-mono text-[0.68rem] font-bold uppercase">
                 Recent feedback
               </div>
-              {[
-                ["market-analysis", "Agent missed key comparator", "2m"],
-                ["code-review-checklist", "Outdated example", "1h"],
-                ["research-summarizer", "Confusing output format", "3h"],
-              ].map(([skill, note, time]) => (
-                <div key={skill} className="mt-4 border-b border-[var(--ink)]/20 pb-3 last:border-b-0">
-                  <div className="flex items-center justify-between gap-2 font-editorial-mono text-[0.64rem]">
-                    <span>{skill}</span>
-                    <span>{time}</span>
-                  </div>
-                  <p className="mt-1 text-sm leading-5 text-[var(--ink)]/70">{note}</p>
-                </div>
-              ))}
+              <div className="mt-4 border border-dashed border-[var(--ink)]/35 bg-[var(--paper)] p-4 text-sm leading-5 text-[var(--ink)]/70">
+                No feedback yet. Feedback appears here after a published skill receives submissions.
+              </div>
               <Link href="/dashboard" className="mt-4 block font-editorial-mono text-[0.68rem] uppercase">
                 View all feedback +
               </Link>
@@ -269,38 +251,15 @@ function UsageTable({ compact = false }: { compact?: boolean }) {
             </tr>
           </thead>
           <tbody>
-            {usageRows.map(([skill, runs, success], index) => (
-              <tr key={skill} className="border-t border-[var(--ink)]/15">
-                <td className="py-3">{skill}</td>
-                <td className="py-3">{runs}</td>
-                <td className="py-3">{success}</td>
-                {compact ? null : (
-                  <td className="py-3">
-                    <Sparkline index={index} />
-                  </td>
-                )}
-              </tr>
-            ))}
+            <tr className="border-t border-[var(--ink)]/15">
+              <td colSpan={compact ? 3 : 4} className="py-6 text-center text-[var(--ink)]/65">
+                No usage data yet.
+              </td>
+            </tr>
           </tbody>
         </table>
       </div>
     </div>
-  );
-}
-
-function Sparkline({ index }: { index: number }) {
-  const paths = [
-    "M1 14 9 11 17 13 25 7 33 10 41 5 49 8",
-    "M1 8 9 10 17 6 25 7 33 12 41 9 49 11",
-    "M1 12 9 13 17 11 25 10 33 8 41 9 49 6",
-    "M1 15 9 12 17 14 25 11 33 7 41 8 49 4",
-    "M1 9 9 11 17 8 25 13 33 10 41 12 49 9",
-  ];
-
-  return (
-    <svg aria-hidden viewBox="0 0 50 18" className="h-5 w-16">
-      <path d={paths[index]} fill="none" stroke="currentColor" strokeWidth="1.5" />
-    </svg>
   );
 }
 
@@ -314,25 +273,25 @@ function FeedbackVisual() {
       <div className="font-bold uppercase">Feedback detail</div>
       <div className="mt-5 grid grid-cols-[5rem_1fr] gap-y-2">
         <span className="text-[var(--ink)]/55">Skill</span>
-        <span>market-analysis</span>
+        <span>No skill selected</span>
         <span className="text-[var(--ink)]/55">Agent</span>
-        <span>Claude 3.5</span>
+        <span>Pending feedback</span>
         <span className="text-[var(--ink)]/55">Run ID</span>
-        <span>b47e9e7</span>
+        <span>Not recorded</span>
         <span className="text-[var(--ink)]/55">Time</span>
-        <span>Apr 7, 2026 8:41 AM</span>
+        <span>Waiting for submission</span>
       </div>
       <div className="mt-5 border-t border-[var(--ink)] pt-4">
         <div className="font-bold">What worked</div>
-        <p className="mt-2">Good data source selection</p>
+        <p className="mt-2">No feedback yet.</p>
       </div>
       <div className="mt-4 border-t border-[var(--ink)]/30 pt-4">
         <div className="font-bold">What failed</div>
-        <p className="mt-2">Missed competitor benchmark</p>
+        <p className="mt-2">No feedback yet.</p>
       </div>
       <div className="mt-4 border-t border-[var(--ink)]/30 pt-4">
         <div className="font-bold">Suggested fix</div>
-        <p className="mt-2">Add example for missing data handling</p>
+        <p className="mt-2">No feedback yet.</p>
       </div>
     </div>
   );
@@ -340,21 +299,21 @@ function FeedbackVisual() {
 
 function DiffVisual() {
   const lines = [
-    ["Returns a list of key competitors.", "Returns a list of key competitors."],
-    ["Use available sources to gather data.", "If data is missing, gather the gap."],
-    ["Summarize findings in a table.", "Summarize findings in a table."],
+    ["Use the current skill instructions.", "Use the current skill instructions."],
+    ["Add more detail when a gap is found.", "Add more detail when a gap is found."],
+    ["Verify the result before finishing.", "Verify the result before finishing."],
   ] satisfies Array<[string, string]>;
 
   return (
     <div className="border border-[var(--ink)] bg-[var(--white)] p-4">
       <div className="font-editorial-mono text-[0.68rem] font-bold uppercase">
-        Skill: market-analysis
+        Skill instructions
       </div>
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
-        {["v1.2.0", "v1.3.0"].map((version, column) => (
+        {["Current", "Draft"].map((version, column) => (
           <div key={version} className="border border-[var(--ink)]/40">
             <div className="border-b border-[var(--ink)]/40 px-3 py-2 font-editorial-mono text-[0.62rem]">
-              {version} {column === 0 ? "Current" : "Draft"}
+              {version}
             </div>
             <div className="p-2 font-editorial-mono text-[0.58rem] leading-5">
               {lines.map((line, index) => (
@@ -368,7 +327,7 @@ function DiffVisual() {
                         : "bg-[var(--paper)]"
                   }`}
                 >
-                  <span>{index + 4}</span>
+                  <span>{index + 1}</span>
                   <span>{line[column]}</span>
                 </div>
               ))}
@@ -382,11 +341,10 @@ function DiffVisual() {
 
 function StatusVisual() {
   const rows = [
-    ["research-summarizer", "Production ready", "bg-emerald-600"],
-    ["code-review-checklist", "Needs review", "bg-amber-500"],
-    ["market-analysis", "New feedback", "bg-orange-500"],
-    ["onboarding-flow", "Production ready", "bg-emerald-600"],
-    ["sql-query-helper", "Draft", "bg-[var(--gray)]"],
+    ["Created skill", "Waiting", "bg-[var(--gray)]"],
+    ["Published version", "Waiting", "bg-[var(--gray)]"],
+    ["Connected feedback", "Waiting", "bg-[var(--gray)]"],
+    ["Directory submission", "Waiting", "bg-[var(--gray)]"],
   ] satisfies Array<[string, string, string]>;
 
   return (

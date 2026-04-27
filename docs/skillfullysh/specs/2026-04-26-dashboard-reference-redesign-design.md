@@ -12,14 +12,13 @@ Replace the older high-contrast dashboard UI with a monochrome operational dashb
 ## Content Contract
 
 - Sidebar with Skillfully brand, skill selector, `Overview`, `Editor`, `Analytics`, `Settings`, user email, and sign out.
-- Skill header with selected skill name, `v2.3.0`, `Published`, `Go to Editor`, and `Copy installation prompt`.
-- Overview metrics for `Success rate` and `Active users`.
-- Large `Usage over time` chart with date-range selector.
-- `Skill health` checklist with uptime, error rate, p95 response time, successful runs, failed runs, and safety incidents.
-- `Needs attention` and `Feedback sentiment` panels.
+- Skill header with selected skill name, real draft/published status, `Go to Editor`, and `Copy installation prompt`.
+- Overview metrics derived from submitted feedback only: success rate and feedback received.
+- `Usage over time` renders an empty state until runtime usage events exist.
+- `Feedback sentiment` derives percentages from real feedback and renders a no-feedback state when empty.
 - `Recent feedback` table.
-- `Publishing & directory status` targets.
-- `Version snapshot` table.
+- `Publishing & directory status` describes configured adapter capabilities without fake published versions.
+- `Version snapshot` reflects stored draft/published version ids, or an empty state.
 
 ## Visual Direction
 
@@ -35,7 +34,7 @@ Replace the older high-contrast dashboard UI with a monochrome operational dashb
 - Creating skills still uses the existing `db.transact` path.
 - The copy action still uses the existing feedback template and clipboard behavior.
 - `Go to Editor` opens the existing create/edit surface for now.
-- Analytics, publishing, and version data are visual placeholders until the real data model is added later.
+- Analytics, publishing, and version sections must not seed demo data. They render real data from InstantDB when available and explicit empty/configuration states otherwise.
 
 ## Responsiveness
 

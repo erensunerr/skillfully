@@ -4,16 +4,6 @@ import { type ComponentType, type FormEvent, type ReactNode, useEffect, useMemo,
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Select, { type SingleValue, type StylesConfig } from "react-select";
-import {
-  Area,
-  AreaChart,
-  CartesianGrid,
-  Line,
-  LineChart,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
 import { db, isUsingLocalPreviewDb } from "@/lib/db";
 import {
   captureClientEvent,
@@ -69,7 +59,7 @@ type RecentFeedbackRow = {
   sentiment: "positive" | "neutral" | "negative";
   rating: string;
   feedback: string;
-  version: string;
+  createdAt: string;
 };
 
 type PublishModalStep = "confirm" | "published" | "waiting" | "confirmed";
@@ -95,215 +85,48 @@ const DASHBOARD_INPUT =
 const FEEDBACK_SNIPPET_URL = "/feedback-template.md";
 const validSkillRouteTabs: SkillRouteTab[] = ["overview", "editor", "analytics", "settings"];
 
-const fallbackFeedbackRows: RecentFeedbackRow[] = [
-  {
-    sentiment: "positive",
-    rating: "5/5",
-    feedback: "Great job! This solved my issue in seconds.",
-    version: "v2.3.0",
-  },
-  {
-    sentiment: "positive",
-    rating: "4/5",
-    feedback: "Very helpful and accurate responses. Thank you!",
-    version: "v2.3.0",
-  },
-  {
-    sentiment: "neutral",
-    rating: "3/5",
-    feedback: "It works, but sometimes the answers are generic.",
-    version: "v2.2.0",
-  },
-  {
-    sentiment: "negative",
-    rating: "2/5",
-    feedback: "Takes too long to respond on the app.",
-    version: "v2.2.0",
-  },
-  {
-    sentiment: "negative",
-    rating: "1/5",
-    feedback: "Got an error while trying to authenticate my account.",
-    version: "v2.3.0",
-  },
-];
-
-const healthRows = [
-  ["Performance", "99.1% uptime", "wave"],
-  ["Error rate", "0.6%", "warning"],
-  ["Response time (p95)", "1.3s", "clock"],
-  ["Successful runs", "6,492", "check"],
-  ["Failed runs", "39", "x"],
-  ["Safety incidents", "0", "shield"],
-] satisfies Array<[string, string, string]>;
-
-const attentionRows = [
-  {
-    tone: "bg-red-600",
-    title: "Spikes in negative feedback (authentication)",
-    body: "18 negative ratings in the last 7 days",
-  },
-  {
-    tone: "bg-amber-500",
-    title: "High response latency (retry module)",
-    body: "p95 response time above 1.2s",
-  },
-  {
-    tone: "bg-amber-500",
-    title: "Error rate increased on mobile clients",
-    body: "0.6% error rate on mobile vs 0.2% on web",
-  },
-] satisfies Array<{ tone: string; title: string; body: string }>;
-
-const miniSparklineData = {
-  success: [
-    { label: "1", value: 81 },
-    { label: "2", value: 83 },
-    { label: "3", value: 88 },
-    { label: "4", value: 86 },
-    { label: "5", value: 91 },
-    { label: "6", value: 89 },
-    { label: "7", value: 94 },
-    { label: "8", value: 97 },
-    { label: "9", value: 92 },
-    { label: "10", value: 96 },
-    { label: "11", value: 98 },
-  ],
-  users: [
-    { label: "1", value: 220 },
-    { label: "2", value: 226 },
-    { label: "3", value: 260 },
-    { label: "4", value: 248 },
-    { label: "5", value: 310 },
-    { label: "6", value: 292 },
-    { label: "7", value: 352 },
-    { label: "8", value: 344 },
-    { label: "9", value: 382 },
-    { label: "10", value: 334 },
-    { label: "11", value: 420 },
-  ],
-} satisfies Record<"success" | "users", Array<{ label: string; value: number }>>;
-
-const overviewUsageData = [
-  { day: "May 2", interactions: 610, installs: 96 },
-  { day: "May 3", interactions: 720, installs: 112 },
-  { day: "May 4", interactions: 680, installs: 104 },
-  { day: "May 5", interactions: 940, installs: 136 },
-  { day: "May 6", interactions: 880, installs: 128 },
-  { day: "May 7", interactions: 1240, installs: 172 },
-  { day: "May 8", interactions: 1160, installs: 164 },
-  { day: "May 9", interactions: 1310, installs: 188 },
-  { day: "May 10", interactions: 1190, installs: 176 },
-  { day: "May 11", interactions: 1420, installs: 205 },
-  { day: "May 12", interactions: 1560, installs: 234 },
-  { day: "May 13", interactions: 1480, installs: 221 },
-] satisfies Array<{ day: string; interactions: number; installs: number }>;
-
-const analyticsUsersData = [
-  { time: "00:00", users: 860 },
-  { time: "02:00", users: 910 },
-  { time: "04:00", users: 880 },
-  { time: "06:00", users: 1010 },
-  { time: "08:00", users: 1180 },
-  { time: "10:00", users: 1260 },
-  { time: "12:00", users: 1430 },
-  { time: "14:00", users: 1510 },
-  { time: "16:00", users: 1640 },
-  { time: "18:00", users: 1720 },
-  { time: "20:00", users: 1842 },
-  { time: "22:00", users: 1788 },
-  { time: "24:00", users: 1816 },
-] satisfies Array<{ time: string; users: number }>;
-
-const analyticsSuccessData = [
-  { time: "00:00", successRate: 88 },
-  { time: "02:00", successRate: 89 },
-  { time: "04:00", successRate: 87 },
-  { time: "06:00", successRate: 86 },
-  { time: "08:00", successRate: 88 },
-  { time: "10:00", successRate: 90 },
-  { time: "12:00", successRate: 89 },
-  { time: "14:00", successRate: 91 },
-  { time: "16:00", successRate: 92 },
-  { time: "18:00", successRate: 93 },
-  { time: "20:00", successRate: 92 },
-  { time: "22:00", successRate: 94 },
-  { time: "24:00", successRate: 92 },
-] satisfies Array<{ time: string; successRate: number }>;
-
-const publishingTargets = [
-  ["skills.sh", "Published", "v2.3.0", "View on skills.sh", "terminal"],
-  ["GitHub", "Published", "v2.3.0", "View on GitHub", "github"],
-  ["LobeHub Skills", "Pending", "-", "Open lobehub.com/skills", "circle"],
-  ["ClawHub", "Pending", "-", "Open clawhub.ai", "triangle"],
-  ["Hermes Skills Hub", "Pending", "-", "Open Hermes", "square"],
-  ["Skillfully directory", "Coming soon", "-", "Learn more", "circle"],
-] satisfies Array<[string, string, string, string, string]>;
-
-const versionRows = [
-  ["v2.3.0", "Published", "May 8, 2025", "Improved authentication flow and reduced response latency."],
-  ["v2.2.0", "Published", "May 1, 2025", "Added retry module and mobile performance improvements."],
-  ["v2.1.0", "Published", "Apr 24, 2025", "Expanded FAQ coverage and improved intent detection."],
-  ["v2.0.0", "Published", "Apr 15, 2025", "Major rewrite with new plugin architecture."],
-  ["v1.0.0", "Published", "Apr 1, 2025", "Initial public release."],
+const publishingDestinationRows = [
+  ["skills.sh", "Available after publish", "Public manifest and Skillfully listing", "terminal"],
+  ["GitHub", "Creates a pull request on publish", "Uses the configured GitHub target", "github"],
+  ["LobeHub Skills", "Generates a submission packet", "Manual directory adapter", "circle"],
+  ["ClawHub", "Generates a submission packet", "Manual directory adapter", "triangle"],
+  ["Hermes Skills Hub", "Generates a submission packet", "Manual directory adapter", "square"],
 ] satisfies Array<[string, string, string, string]>;
 
-const editorMarkdownFiles = ["SKILL.md", "README.md", "examples.md", "changelog.md"] as const;
-const editorAssets = ["assets/logo.png", "faq.pdf"] as const;
-const editorValidationRows = [
-  ["Skill standard passed", ""],
-  ["Required fields complete", ""],
-  ["Markdown files", "4"],
-  ["Read-only assets", "2"],
-] satisfies Array<[string, string]>;
-const editorVersionHistoryRows = [
-  ["v2.4.0", "Draft", "bg-[var(--ink)]"],
-  ["v2.3.0", "Published", "bg-emerald-700"],
-  ["v2.2.0", "Published", "bg-emerald-700"],
-  ["v2.1.0", "Published", "bg-emerald-700"],
-] satisfies Array<[string, string, string]>;
-
 function defaultEditorMarkdown(skill: Skill) {
-  const summary = skill.description || "Helps agents answer customer support questions clearly and safely.";
+  const summary = skill.description || "Describe what this skill helps an agent do.";
   return [
     `# ${skill.name}`,
     "",
     summary,
     "",
-    "> Be concise, cite sources, and escalate when the answer is unknown or sensitive.",
+    "> Use this skill only when it matches the user's task.",
     "",
     "## When to use",
     "",
-    "- Answer questions about product features and how they work",
-    "- Help customers understand pricing, plans, and promotions",
-    "- Clarify billing, payments, refunds, and account issues",
+    "- The user asks for work that this skill is designed to handle",
+    "- The needed source files, tools, or context are available",
+    "- The expected output can be verified before finishing",
     "",
     "## Workflow",
     "",
-    "1. Understand the customer's question and context",
-    "2. Search trusted sources and gather relevant information",
-    "3. Draft a clear, concise answer with sources",
-    "4. Confirm accuracy and compliance",
-    "5. Escalate when unsure or request more information",
+    "1. Read the user's request and identify the concrete goal",
+    "2. Gather the relevant project context before editing",
+    "3. Make the smallest change that satisfies the task",
+    "4. Verify the result with an appropriate command or check",
+    "5. Report what changed and any remaining risk",
   ].join("\n");
 }
 
 function fallbackEditorFiles(skill: Skill): SkillEditorFile[] {
   return [
-    ...editorMarkdownFiles.map((path, index) => ({
-      id: `local-${skill.id || skill.skillId}-${path}`,
-      path,
+    {
+      id: `local-${skill.id || skill.skillId}-SKILL.md`,
+      path: "SKILL.md",
       kind: "markdown",
       mimeType: "text/markdown",
-      contentText: index === 0 ? defaultEditorMarkdown(skill) : `# ${path.replace(/\.md$/i, "")}\n\n`,
-    })),
-    ...editorAssets.map((path) => ({
-      id: `local-${skill.id || skill.skillId}-${path}`,
-      path,
-      kind: "asset",
-      mimeType: path.endsWith(".pdf") ? "application/pdf" : "image/png",
-      storageUrl: null,
-    })),
+      contentText: defaultEditorMarkdown(skill),
+    },
   ];
 }
 
@@ -315,30 +138,12 @@ function sortSkillFiles(files: SkillEditorFile[]) {
   return [...files].sort((a, b) => a.path.localeCompare(b.path));
 }
 
-const analyticsFeedbackRows = [
-  ["May 12, 2025 23:41", "positive", "Claude", "Answered the billing question clearly and linked the correct help article."],
-  ["May 12, 2025 22:18", "neutral", "Cursor", "Useful overall, but the refund edge case was not covered in the skill."],
-  ["May 12, 2025 21:07", "negative", "Goose", "Escalation guidance was missing when the user asked about account access."],
-  ["May 12, 2025 19:56", "positive", "Codex", "Response was concise and easy to reuse."],
-  ["May 12, 2025 18:32", "neutral", "Agent run", "The plan change example helped, but pricing details were slightly outdated."],
-  ["May 12, 2025 17:15", "positive", "Claude", "Handled the question well and cited a trusted source."],
-  ["May 12, 2025 15:42", "negative", "Cursor", "Good tone, but the workflow should mention when to stop and ask for clarification."],
-  ["May 12, 2025 14:08", "neutral", "Goose", "Information was mostly correct, but the refund policy ambiguity is still confusing."],
-] satisfies Array<[string, RecentFeedbackRow["sentiment"], string, string]>;
-
-const skillSelectorFallbackSkills = [
-  ["demo-skill", "Customer support workflow"],
-  ["seo-audit", "Growth and content review"],
-  ["customer-support", "Support response assistant"],
-] satisfies Array<[string, string]>;
-
 const skillSettingsPublishingRows = [
-  ["skills.sh", "Publish on release", "Enabled", "terminal", "bg-emerald-700"],
-  ["GitHub", "Create PR on publish", "Enabled", "github", "bg-emerald-700"],
-  ["LobeHub Skills", "Manual submission after publish", "Ready", "circle", "bg-amber-500"],
-  ["ClawHub", "Manual submission after publish", "Ready", "triangle", "bg-amber-500"],
-  ["Hermes Skills Hub", "Manual submission after publish", "Ready", "square", "bg-amber-500"],
-  ["Skillfully directory", "Coming soon", "Disabled", "square", "bg-[var(--gray)]"],
+  ["skills.sh", "Publish on release", "Configured", "terminal", "bg-emerald-700"],
+  ["GitHub", "Create PR on publish", "Configured", "github", "bg-emerald-700"],
+  ["LobeHub Skills", "Manual submission packet", "Configured", "circle", "bg-emerald-700"],
+  ["ClawHub", "Manual submission packet", "Configured", "triangle", "bg-emerald-700"],
+  ["Hermes Skills Hub", "Manual submission packet", "Configured", "square", "bg-emerald-700"],
 ] satisfies Array<[string, string, string, string, string]>;
 
 function randomSkillId() {
@@ -377,19 +182,16 @@ function displayUserEmail(user: AppUser | null | undefined) {
 function displayAccountName(user: AppUser | null | undefined) {
   const email = user?.email;
   if (!email) {
-    return "Jane Developer";
+    return "Account";
   }
 
-  const handle = email.split("@")[0] || "Jane";
-  if (handle.toLowerCase() === "jane") {
-    return "Jane Developer";
-  }
+  const handle = email.split("@")[0] || "Account";
 
   return handle
     .split(/[._-]/)
     .filter(Boolean)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ") || "Jane Developer";
+    .join(" ") || "Account";
 }
 
 function skillInitials(name: string) {
@@ -406,7 +208,16 @@ function slugifySkillName(name: string) {
     .trim()
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "") || "demo-skill";
+    .replace(/^-+|-+$/g, "") || "skill";
+}
+
+function formatTimestamp(value: number | Date | null | undefined) {
+  const millis = toMillis(value);
+  if (!millis) {
+    return "Unknown";
+  }
+
+  return `${new Date(millis).toISOString().replace("T", " ").slice(0, 16)} UTC`;
 }
 
 function isSkillRouteTab(value: DashboardTab): value is SkillRouteTab {
@@ -963,14 +774,6 @@ export function SkillSelector({
       description: skill.description || "Skillfully skill",
       skill,
     })),
-    ...skillSelectorFallbackSkills
-      .filter(([name]) => !skills.some((skill) => skill.name.toLowerCase() === name.toLowerCase()))
-      .map(([name, description]) => ({
-        id: `preview-${name}`,
-        name,
-        description,
-        skill: null,
-      })),
   ];
   const selectedOption =
     skillOptions.find((option) => option.id === selectedId) ?? skillOptions[0] ?? null;
@@ -994,6 +797,11 @@ export function SkillSelector({
           className="absolute left-0 top-[calc(100%+0.45rem)] z-30 w-[min(18rem,calc(100vw-2.5rem))] border border-[var(--ink)] bg-[var(--white)] p-2 shadow-[6px_6px_0_var(--ink)]"
         >
           <div className="space-y-1">
+            {skillOptions.length === 0 ? (
+              <p className="px-3 py-3 font-editorial-mono text-xs uppercase text-[var(--ink)]/65">
+                No skills yet.
+              </p>
+            ) : null}
             {skillOptions.map((option) => {
               const isSelected =
                 option.id === selectedId ||
@@ -1070,7 +878,7 @@ export function CreateSkillModal({
               className={`${DASHBOARD_INPUT} bg-[var(--paper)]`}
               onChange={(event) => onChange({ ...form, name: event.currentTarget.value })}
               name="name"
-              placeholder="e.g. billing-support"
+              placeholder="e.g. code-review"
               required
             />
           </label>
@@ -1253,39 +1061,14 @@ function EmptyState({
   );
 }
 
-function MiniSparkline({ variant = "success" }: { variant?: "success" | "users" }) {
-  return (
-    <div aria-hidden className="mt-8 h-20 w-full overflow-hidden text-[var(--ink)]">
-      <LineChart
-        width={220}
-        height={76}
-        data={miniSparklineData[variant]}
-        margin={{ top: 8, right: 8, bottom: 8, left: 0 }}
-      >
-        <Line
-          type="monotone"
-          dataKey="value"
-          stroke="currentColor"
-          strokeWidth={2.2}
-          dot={{ r: 2.3, fill: "currentColor", strokeWidth: 0 }}
-          activeDot={false}
-          isAnimationActive={false}
-        />
-      </LineChart>
-    </div>
-  );
-}
-
 function MetricCard({
   label,
   value,
-  delta,
-  chart,
+  detail,
 }: {
   label: string;
   value: string;
-  delta: string;
-  chart: "success" | "users";
+  detail: string;
 }) {
   return (
     <article className={`${DASHBOARD_CARD} p-6 sm:p-8`}>
@@ -1293,95 +1076,30 @@ function MetricCard({
       <div className="mt-8 font-editorial-sans text-5xl font-semibold sm:text-6xl">
         {value}
       </div>
-      <p className="mt-4 font-editorial-sans text-base">
-        <span className="font-bold text-emerald-700">↑ {delta}</span> vs last 7 days
-      </p>
-      <MiniSparkline variant={chart} />
+      <p className="mt-4 font-editorial-sans text-base text-[var(--ink)]/70">{detail}</p>
     </article>
   );
 }
 
 function UsageChart() {
-  const [range, setRange] = useState("7");
-
   return (
     <section className={`${DASHBOARD_CARD} p-6 sm:p-8`}>
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p className="font-editorial-mono text-xs font-bold uppercase">Usage over time</p>
-          <div className="mt-10 flex flex-wrap gap-8 text-sm">
-            <span>Total interactions <strong className="ml-3 font-semibold">6,842</strong></span>
-            <span className="hidden h-6 border-l border-[var(--ink)]/30 sm:inline-block" />
-            <span>Avg. daily <strong className="ml-3 font-semibold">977</strong></span>
-          </div>
+          <p className="mt-4 max-w-xl text-sm leading-6 text-[var(--ink)]/70">
+            Runtime usage events are not connected yet.
+          </p>
         </div>
-        <DashboardSelect
-          ariaLabel="Usage chart date range"
-          value={range}
-          options={[
-            { value: "7", label: "Last 7 days" },
-            { value: "30", label: "Last 30 days" },
-          ]}
-          onChange={setRange}
-        />
       </div>
 
-      <div className="mt-8 overflow-x-auto" aria-label="Usage chart" role="img">
-        <AreaChart
-          width={860}
-          height={330}
-          data={overviewUsageData}
-          margin={{ top: 18, right: 24, bottom: 10, left: 0 }}
-          className="min-w-[48rem] text-[var(--ink)]"
-        >
-          <CartesianGrid vertical={false} stroke="currentColor" strokeDasharray="2 3" strokeOpacity={0.2} />
-          <XAxis
-            dataKey="day"
-            tickLine={false}
-            axisLine={{ stroke: "currentColor" }}
-            tick={{ fill: "currentColor", fontSize: 13 }}
-          />
-          <YAxis
-            tickLine={false}
-            axisLine={false}
-            tick={{ fill: "currentColor", fontSize: 13 }}
-            tickFormatter={(value) => `${Number(value) / 1000}K`}
-          />
-          <Tooltip
-            cursor={{ stroke: "currentColor", strokeWidth: 1 }}
-            contentStyle={{
-              background: "var(--white)",
-              border: "1px solid var(--ink)",
-              borderRadius: 0,
-              color: "var(--ink)",
-              fontFamily: "var(--font-editorial-mono)",
-              fontSize: "12px",
-            }}
-          />
-          <Area
-            type="monotone"
-            dataKey="interactions"
-            name="Interactions"
-            stroke="currentColor"
-            strokeWidth={2.4}
-            fill="currentColor"
-            fillOpacity={0.08}
-            dot={{ r: 3, fill: "var(--paper)", stroke: "currentColor", strokeWidth: 2 }}
-            activeDot={{ r: 5 }}
-            isAnimationActive={false}
-          />
-          <Line
-            type="monotone"
-            dataKey="installs"
-            name="Installs"
-            stroke="currentColor"
-            strokeDasharray="5 5"
-            strokeWidth={1.8}
-            dot={false}
-            activeDot={false}
-            isAnimationActive={false}
-          />
-        </AreaChart>
+      <div className="mt-8 flex min-h-64 items-center justify-center border border-dashed border-[var(--ink)]/40 bg-[var(--white)] p-8 text-center">
+        <div>
+          <p className="font-editorial-sans text-xl font-semibold">No usage data yet</p>
+          <p className="mt-2 max-w-md text-sm leading-6 text-[var(--ink)]/65">
+            This chart will populate after Skillfully records install or invocation events for this skill.
+          </p>
+        </div>
       </div>
     </section>
   );
@@ -1391,16 +1109,7 @@ function SkillHealth() {
   return (
     <section className={`${DASHBOARD_CARD} p-6 sm:p-8`}>
       <p className="font-editorial-mono text-xs font-bold uppercase">Skill health</p>
-      <div className="mt-6">
-        {healthRows.map(([label, value, icon]) => (
-          <div key={label} className="grid grid-cols-[2rem_1fr_auto_auto] items-center gap-4 border-t border-[var(--ink)]/25 py-4 first:border-t-0">
-            <StatusIcon name={icon} />
-            <span className="text-sm sm:text-base">{label}</span>
-            <span className="text-right text-sm sm:text-base">{value}</span>
-            <span aria-hidden className="h-2.5 w-2.5 rounded-full bg-emerald-700" />
-          </div>
-        ))}
-      </div>
+      <p className="mt-6 text-sm leading-6 text-[var(--ink)]/70">Health checks appear after runtime telemetry is connected.</p>
     </section>
   );
 }
@@ -1409,18 +1118,7 @@ function AttentionPanel() {
   return (
     <section className={`${DASHBOARD_CARD} p-6`}>
       <p className="font-editorial-mono text-xs font-bold uppercase">Needs attention</p>
-      <div className="mt-6 space-y-6">
-        {attentionRows.map((row) => (
-          <button key={row.title} type="button" className="grid w-full grid-cols-[0.7rem_1fr_auto] gap-4 text-left">
-            <span aria-hidden className={`mt-2 h-2.5 w-2.5 rounded-full ${row.tone}`} />
-            <span>
-              <span className="block font-editorial-sans text-base font-semibold">{row.title}</span>
-              <span className="mt-1 block text-sm text-[var(--ink)]/70">{row.body}</span>
-            </span>
-            <span aria-hidden className="text-2xl leading-none">›</span>
-          </button>
-        ))}
-      </div>
+      <p className="mt-6 text-sm leading-6 text-[var(--ink)]/70">No attention items yet.</p>
     </section>
   );
 }
@@ -1436,9 +1134,9 @@ function SentimentPanel({ entries }: { entries: Feedback[] }) {
           negative: Math.round((counts.negative / total) * 100),
         }
       : {
-          positive: 68,
-          neutral: 22,
-          negative: 10,
+          positive: 0,
+          neutral: 0,
+          negative: 0,
         };
 
   return (
@@ -1466,17 +1164,18 @@ function SentimentPanel({ entries }: { entries: Feedback[] }) {
       </div>
       <div className="mt-8 flex justify-between border-t border-[var(--ink)] pt-5 text-sm">
         <span>Total</span>
-        <span>100%</span>
+        <span>{total === 1 ? "1 feedback" : `${total} feedback`}</span>
       </div>
+      {total === 0 ? (
+        <p className="mt-4 border border-dashed border-[var(--ink)]/35 bg-[var(--white)] p-4 text-sm text-[var(--ink)]/70">
+          No feedback yet.
+        </p>
+      ) : null}
     </section>
   );
 }
 
 function feedbackRowsFromEntries(entries: Feedback[]) {
-  if (entries.length === 0) {
-    return fallbackFeedbackRows;
-  }
-
   return [...entries]
     .sort((a, b) => toMillis(b.createdAt) - toMillis(a.createdAt))
     .slice(0, 5)
@@ -1488,7 +1187,7 @@ function feedbackRowsFromEntries(entries: Feedback[]) {
         sentiment,
         rating: sentiment === "positive" ? "5/5" : sentiment === "neutral" ? "3/5" : "1/5",
         feedback: entry.feedback,
-        version: "v2.3.0",
+        createdAt: formatTimestamp(entry.createdAt),
       };
     });
 }
@@ -1526,20 +1225,28 @@ function RecentFeedbackTable({ entries }: { entries: Feedback[] }) {
               <th className="px-6 py-4 font-bold">Sentiment</th>
               <th className="px-4 py-4 font-bold">Rating</th>
               <th className="px-4 py-4 font-bold">Feedback</th>
-              <th className="px-6 py-4 text-right font-bold">Version</th>
+              <th className="px-6 py-4 text-right font-bold">Received</th>
             </tr>
           </thead>
           <tbody>
-            {rows.map((row, index) => (
-              <tr key={`${row.feedback}-${index}`} className="border-b border-[var(--ink)]/20 last:border-b-0">
-                <td className="px-6 py-4">
-                  <SentimentBadge sentiment={row.sentiment} />
+            {rows.length === 0 ? (
+              <tr>
+                <td colSpan={4} className="px-6 py-8 text-center text-sm text-[var(--ink)]/65">
+                  No feedback yet.
                 </td>
-                <td className="px-4 py-4 font-editorial-sans font-semibold">{row.rating}</td>
-                <td className="px-4 py-4">{row.feedback}</td>
-                <td className="px-6 py-4 text-right font-editorial-mono text-xs">{row.version}</td>
               </tr>
-            ))}
+            ) : (
+              rows.map((row, index) => (
+                <tr key={`${row.feedback}-${index}`} className="border-b border-[var(--ink)]/20 last:border-b-0">
+                  <td className="px-6 py-4">
+                    <SentimentBadge sentiment={row.sentiment} />
+                  </td>
+                  <td className="px-4 py-4 font-editorial-sans font-semibold">{row.rating}</td>
+                  <td className="px-4 py-4">{row.feedback}</td>
+                  <td className="px-6 py-4 text-right font-editorial-mono text-xs">{row.createdAt}</td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>
@@ -1556,24 +1263,15 @@ function PublishingStatus() {
     <section className={`${DASHBOARD_CARD} p-6`}>
       <p className="font-editorial-mono text-xs font-bold uppercase">Publishing & directory status</p>
       <div className="mt-6 grid gap-5 md:grid-cols-2 xl:grid-cols-4">
-        {publishingTargets.map(([name, status, version, action, icon], index) => (
+        {publishingDestinationRows.map(([name, status, detail, icon], index) => (
           <article key={name} className={`space-y-4 ${index > 0 ? "xl:border-l xl:border-[var(--ink)]/25 xl:pl-6" : ""}`}>
             <TargetIcon name={icon} />
             <div className="font-editorial-sans text-base">{name}</div>
             <div className="flex items-center gap-2 text-sm">
-              <span
-                aria-hidden
-                className={`h-2.5 w-2.5 rounded-full ${
-                  status === "Published" ? "bg-emerald-700" : "bg-[var(--gray)]"
-                }`}
-              />
+              <span aria-hidden className="h-2.5 w-2.5 rounded-full bg-[var(--gray)]" />
               {status}
             </div>
-            <div className="font-editorial-mono text-sm">{version}</div>
-            <button type="button" className="inline-flex items-center gap-2 border border-[var(--ink)] px-3 py-2 text-sm hover:bg-[var(--white)]">
-              {action}
-              <ExternalIcon />
-            </button>
+            <div className="font-editorial-mono text-sm leading-5">{detail}</div>
           </article>
         ))}
       </div>
@@ -1581,7 +1279,16 @@ function PublishingStatus() {
   );
 }
 
-function VersionSnapshot() {
+function VersionSnapshot({ skill }: { skill: Skill }) {
+  const rows = [
+    skill.publishedVersionId
+      ? ["Published version", "Published", "A frozen version is available for public installs"]
+      : null,
+    skill.currentDraftVersionId
+      ? ["Current draft", "Draft", "Editable files are saved in the draft version"]
+      : null,
+  ].filter(Boolean) as Array<[string, string, string]>;
+
   return (
     <section className={`${DASHBOARD_CARD} overflow-hidden`}>
       <div className="p-6 pb-3">
@@ -1591,33 +1298,35 @@ function VersionSnapshot() {
         <table className="w-full min-w-[44rem] border-collapse text-left text-sm">
           <thead className="font-editorial-mono text-xs uppercase">
             <tr className="border-b border-[var(--ink)]/25">
-              <th className="px-6 py-4 font-bold">Version</th>
+              <th className="px-6 py-4 font-bold">Record</th>
               <th className="px-4 py-4 font-bold">Status</th>
-              <th className="px-4 py-4 font-bold">Published</th>
               <th className="px-4 py-4 font-bold">Notes</th>
             </tr>
           </thead>
           <tbody>
-            {versionRows.map(([version, status, date, notes]) => (
-              <tr key={version} className="border-b border-[var(--ink)]/20 last:border-b-0">
-                <td className="px-6 py-4 font-editorial-mono text-xs">{version}</td>
-                <td className="px-4 py-4">
-                  <span className="inline-flex items-center gap-2">
-                    <span aria-hidden className="h-2.5 w-2.5 rounded-full bg-emerald-700" />
-                    {status}
-                  </span>
+            {rows.length === 0 ? (
+              <tr>
+                <td colSpan={3} className="px-6 py-8 text-center text-sm text-[var(--ink)]/65">
+                  No published versions yet.
                 </td>
-                <td className="px-4 py-4">{date}</td>
-                <td className="px-4 py-4 font-editorial-mono text-xs leading-5">{notes}</td>
               </tr>
-            ))}
+            ) : (
+              rows.map(([record, status, notes]) => (
+                <tr key={record} className="border-b border-[var(--ink)]/20 last:border-b-0">
+                  <td className="px-6 py-4 font-editorial-mono text-xs">{record}</td>
+                  <td className="px-4 py-4">
+                    <span className="inline-flex items-center gap-2">
+                      <span aria-hidden className="h-2.5 w-2.5 rounded-full bg-emerald-700" />
+                      {status}
+                    </span>
+                  </td>
+                  <td className="px-4 py-4 font-editorial-mono text-xs leading-5">{notes}</td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>
-      <button type="button" className="flex w-full items-center justify-between border-t border-[var(--ink)] px-6 py-4 text-left text-sm">
-        View all versions
-        <span aria-hidden className="text-2xl">›</span>
-      </button>
     </section>
   );
 }
@@ -1863,8 +1572,8 @@ function SkillEditorWorkspace({
   const [dirtyFileIds, setDirtyFileIds] = useState<Set<string>>(() => new Set());
   const [frontmatter, setFrontmatter] = useState({
     name: skill.name,
-    summary: skill.description || "Helps agents answer customer support questions clearly and safely.",
-    version: "v2.4.0",
+    summary: skill.description || "Describe what this skill helps an agent do.",
+    version: "0.1.0",
     status: "Draft",
   });
   const [isFilesOpen, setIsFilesOpen] = useState(true);
@@ -1887,6 +1596,11 @@ function SkillEditorWorkspace({
   const selectedMarkdown = selectedFileIsEditable ? selectedFile?.contentText ?? "" : "";
   const canPersistFiles = Boolean(user && !isUsingLocalPreviewDb);
   const hasBlockingUnsavedChanges = canPersistFiles && dirtyFileIds.size > 0;
+  const editorValidationRows = [
+    ["SKILL.md present", files.some((file) => file.path.toLowerCase() === "skill.md") ? "Yes" : "Missing"],
+    ["Editable files", String(markdownFiles.length)],
+    ["Uploaded assets", String(assetFiles.length)],
+  ] satisfies Array<[string, string]>;
 
   useEffect(() => {
     if (publishStep !== "waiting") {
@@ -1905,7 +1619,7 @@ function SkillEditorWorkspace({
     setFrontmatter((state) => ({
       ...state,
       name: skill.name,
-      summary: skill.description || "Helps agents answer customer support questions clearly and safely.",
+      summary: skill.description || "Describe what this skill helps an agent do.",
     }));
     setDirtyFileIds(new Set());
 
@@ -2264,15 +1978,9 @@ function SkillEditorWorkspace({
 
                 <div className="mt-7 border-t border-[var(--ink)] pt-6">
                   <p className="font-editorial-mono text-xs font-bold uppercase">Version history</p>
-                  <div className="mt-4 space-y-4">
-                    {editorVersionHistoryRows.map(([version, status, dot]) => (
-                      <div key={version} className="grid grid-cols-[1fr_1fr_auto] items-center gap-4 text-sm">
-                        <span>{version}</span>
-                        <span className="italic">{status}</span>
-                        <span aria-hidden className={`h-2 w-2 rounded-full ${dot}`} />
-                      </div>
-                    ))}
-                  </div>
+                  <p className="mt-4 text-sm leading-6 text-[var(--ink)]/70">
+                    Version history appears after the first publish.
+                  </p>
                 </div>
               </div>
             </div>
@@ -2332,91 +2040,53 @@ function SkillEditorWorkspace({
   );
 }
 
-function AnalyticsChart({
+function AnalyticsSummaryCard({
   title,
   value,
-  delta,
-  data,
-  dataKey,
-  valueSuffix = "",
+  detail,
 }: {
   title: string;
   value: string;
-  delta: string;
-  data: Array<Record<string, string | number>>;
-  dataKey: string;
-  valueSuffix?: string;
+  detail: string;
 }) {
   return (
     <article className={`${DASHBOARD_CARD} p-5`}>
-      <div className="flex items-start gap-2">
-        <h2 className="font-editorial-sans text-2xl font-semibold">{title}</h2>
-        <span className="mt-1 flex h-5 w-5 items-center justify-center rounded-full border border-[var(--ink)] font-editorial-mono text-xs">i</span>
-      </div>
-      <div className="mt-3 flex items-center gap-5">
-        <span className="font-editorial-sans text-3xl font-semibold">{value}</span>
-        <span className="font-editorial-sans text-sm">
-          <span className="font-bold text-emerald-700">▲</span> {delta}
-        </span>
-      </div>
-      <div className="mt-6 overflow-x-auto" aria-label={`${title} chart`} role="img">
-        <LineChart
-          width={560}
-          height={255}
-          data={data}
-          margin={{ top: 12, right: 16, bottom: 4, left: 0 }}
-          className="min-w-[34rem] text-[var(--ink)]"
-        >
-          <CartesianGrid vertical={false} stroke="currentColor" strokeDasharray="4 4" strokeOpacity={0.22} />
-          <XAxis
-            dataKey="time"
-            tickLine={false}
-            axisLine={{ stroke: "currentColor" }}
-            tick={{ fill: "currentColor", fontSize: 12 }}
-          />
-          <YAxis
-            tickLine={false}
-            axisLine={false}
-            tick={{ fill: "currentColor", fontSize: 12 }}
-            tickFormatter={(nextValue) => `${nextValue}${valueSuffix}`}
-          />
-          <Tooltip
-            cursor={{ stroke: "currentColor", strokeWidth: 1 }}
-            formatter={(nextValue) => [`${nextValue}${valueSuffix}`, title]}
-            contentStyle={{
-              background: "var(--white)",
-              border: "1px solid var(--ink)",
-              borderRadius: 0,
-              color: "var(--ink)",
-              fontFamily: "var(--font-editorial-mono)",
-              fontSize: "12px",
-            }}
-          />
-          <Line
-            type="monotone"
-            dataKey={dataKey}
-            stroke="currentColor"
-            strokeWidth={2.4}
-            dot={{ r: 2.8, fill: "var(--paper)", stroke: "currentColor", strokeWidth: 2 }}
-            activeDot={{ r: 5 }}
-            isAnimationActive={false}
-          />
-        </LineChart>
-      </div>
+      <h2 className="font-editorial-sans text-2xl font-semibold">{title}</h2>
+      <div className="mt-3 font-editorial-sans text-4xl font-semibold">{value}</div>
+      <p className="mt-4 text-sm leading-6 text-[var(--ink)]/70">{detail}</p>
     </article>
   );
 }
 
-function SkillAnalyticsWorkspace() {
+function analyticsRowsFromEntries(entries: Feedback[]) {
+  return [...entries]
+    .sort((a, b) => toMillis(b.createdAt) - toMillis(a.createdAt))
+    .map((entry) => {
+      const sentiment: RecentFeedbackRow["sentiment"] =
+        entry.rating === "negative" ? "negative" : entry.rating === "neutral" ? "neutral" : "positive";
+
+      return {
+        time: formatTimestamp(entry.createdAt),
+        sentiment,
+        source: "Feedback API",
+        feedback: entry.feedback,
+      };
+    });
+}
+
+function SkillAnalyticsWorkspace({ entries }: { entries: Feedback[] }) {
   const [query, setQuery] = useState("");
-  const [version, setVersion] = useState("v2.3.0");
   const [range, setRange] = useState("24h");
   const [sentiments, setSentiments] = useState<Array<RecentFeedbackRow["sentiment"]>>([
     "positive",
     "neutral",
     "negative",
   ]);
-  const visibleRows = analyticsFeedbackRows.filter(([, sentiment, source, feedback]) => {
+  const rows = analyticsRowsFromEntries(entries);
+  const counts = ratingSummary(entries);
+  const ratedTotal = counts.positive + counts.neutral + counts.negative;
+  const positiveRate = ratedTotal > 0 ? `${Math.round((counts.positive / ratedTotal) * 100)}%` : "0%";
+  const visibleRows = rows.filter(({ sentiment, source, feedback }) => {
     const matchesSentiment = sentiments.includes(sentiment);
     const needle = query.trim().toLowerCase();
     if (!needle) {
@@ -2428,16 +2098,7 @@ function SkillAnalyticsWorkspace() {
   return (
     <div className="min-h-screen bg-[var(--paper)] text-[var(--ink)]">
       <section className="space-y-6 p-5 sm:p-7">
-        <div className="grid gap-4 xl:grid-cols-[12rem_minmax(16rem,1fr)_10rem_minmax(20rem,auto)]">
-          <DashboardSelect
-            ariaLabel="Published version"
-            value={version}
-            options={[
-              { value: "v2.3.0", label: "Published v2.3.0" },
-              { value: "v2.2.0", label: "Published v2.2.0" },
-            ]}
-            onChange={setVersion}
-          />
+        <div className="grid gap-4 xl:grid-cols-[minmax(16rem,1fr)_10rem_minmax(20rem,auto)]">
           <label className="flex items-center gap-3 border border-[var(--ink)] bg-[var(--paper)] px-4">
             <SearchIcon />
             <input
@@ -2484,20 +2145,15 @@ function SkillAnalyticsWorkspace() {
         </div>
 
         <section className="grid gap-6 xl:grid-cols-2">
-          <AnalyticsChart
-            title="Active users"
-            value="1,842"
-            delta="18.6% vs prior 24h"
-            data={analyticsUsersData}
-            dataKey="users"
+          <AnalyticsSummaryCard
+            title="Feedback received"
+            value={ratedTotal.toLocaleString()}
+            detail="Counted from feedback submissions for this skill."
           />
-          <AnalyticsChart
-            title="Success rate"
-            value="92%"
-            delta="3.4 pp vs prior 24h"
-            data={analyticsSuccessData}
-            dataKey="successRate"
-            valueSuffix="%"
+          <AnalyticsSummaryCard
+            title="Positive rate"
+            value={positiveRate}
+            detail="Share of submitted ratings marked positive."
           />
         </section>
 
@@ -2528,41 +2184,41 @@ function SkillAnalyticsWorkspace() {
                 </tr>
               </thead>
               <tbody>
-                {visibleRows.map(([time, sentiment, source, feedback]) => (
-                  <tr key={`${time}-${source}`} className="border-b border-[var(--ink)]/45">
-                    <td className="px-5 py-4">{time}</td>
-                    <td className="px-5 py-4">
-                      <span className="inline-flex items-center gap-3">
-                        <span
-                          aria-hidden
-                          className={`h-2.5 w-2.5 rounded-full ${
-                            sentiment === "positive"
-                              ? "bg-emerald-700"
-                              : sentiment === "negative"
-                                ? "bg-red-600"
-                                : "bg-[var(--gray)]"
-                          }`}
-                        />
-                        {sentimentLabel(sentiment)}
-                      </span>
+                {visibleRows.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="px-5 py-8 text-center text-sm text-[var(--ink)]/65">
+                      No feedback yet.
                     </td>
-                    <td className="px-5 py-4">{source}</td>
-                    <td className="px-5 py-4">{feedback}</td>
                   </tr>
-                ))}
+                ) : (
+                  visibleRows.map(({ time, sentiment, source, feedback }) => (
+                    <tr key={`${time}-${source}-${feedback}`} className="border-b border-[var(--ink)]/45">
+                      <td className="px-5 py-4">{time}</td>
+                      <td className="px-5 py-4">
+                        <span className="inline-flex items-center gap-3">
+                          <span
+                            aria-hidden
+                            className={`h-2.5 w-2.5 rounded-full ${
+                              sentiment === "positive"
+                                ? "bg-emerald-700"
+                                : sentiment === "negative"
+                                  ? "bg-red-600"
+                                  : "bg-[var(--gray)]"
+                            }`}
+                          />
+                          {sentimentLabel(sentiment)}
+                        </span>
+                      </td>
+                      <td className="px-5 py-4">{source}</td>
+                      <td className="px-5 py-4">{feedback}</td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
           <div className="flex flex-col gap-4 px-5 py-4 text-sm sm:flex-row sm:items-center sm:justify-between">
-            <p>Showing 1-8 of 243</p>
-            <div className="flex items-center gap-5">
-              <button type="button" className="border border-[var(--ink)] px-3 py-2">1</button>
-              <button type="button">2</button>
-              <button type="button">3</button>
-              <span>...</span>
-              <button type="button">31</button>
-              <button type="button" className="text-2xl leading-none">›</button>
-            </div>
+            <p>Showing {visibleRows.length} of {rows.length}</p>
           </div>
         </section>
       </section>
@@ -2632,7 +2288,7 @@ function AccountTopBar({
   onSignOut: () => void;
 }) {
   const accountName = displayAccountName(user);
-  const accountEmail = user.email || "jane@acme.dev";
+  const accountEmail = displayUserEmail(user);
 
   return (
     <div className="relative flex min-h-16 items-center justify-end gap-5 border-b border-[var(--ink)] bg-[var(--paper)] px-5">
@@ -2700,6 +2356,11 @@ function AccountTopBar({
 
 export function SkillSettingsWorkspace({ skill }: { skill: Skill }) {
   const slug = slugifySkillName(skill.name);
+  const isGitHubImported = skill.sourceMode === "github_import" && Boolean(skill.originalRepoFullName);
+  const sourceRepo = isGitHubImported ? skill.originalRepoFullName : "Skillfully managed repository";
+  const publishBehavior = isGitHubImported
+    ? "Create pull request on publish"
+    : "Publish through the Skillfully-owned skills repository";
 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-6 px-5 py-8 sm:px-8 lg:px-11 lg:py-12">
@@ -2721,30 +2382,45 @@ export function SkillSettingsWorkspace({ skill }: { skill: Skill }) {
 
       <SettingsSection title="02. Source">
         <div className="grid gap-3 border-b border-[var(--ink)]/35 p-5 sm:grid-cols-2">
-          <button type="button" className="flex items-center gap-3 border border-[var(--ink)]/45 px-4 py-4 text-left text-sm">
-            <span aria-hidden className="h-5 w-5 rounded-full border border-[var(--ink)]" />
+          <button
+            type="button"
+            className={`flex items-center gap-3 border px-4 py-4 text-left text-sm ${
+              isGitHubImported ? "border-[var(--ink)]/45" : "border-[var(--ink)] bg-[var(--white)]"
+            }`}
+          >
+            <span aria-hidden className="flex h-5 w-5 items-center justify-center rounded-full border-2 border-[var(--ink)]">
+              {!isGitHubImported ? <span className="h-2 w-2 rounded-full bg-[var(--ink)]" /> : null}
+            </span>
             Managed in Skillfully
           </button>
-          <button type="button" className="flex items-center gap-3 border border-[var(--ink)] bg-[var(--white)] px-4 py-4 text-left text-sm">
+          <button
+            type="button"
+            className={`flex items-center gap-3 border px-4 py-4 text-left text-sm ${
+              isGitHubImported ? "border-[var(--ink)] bg-[var(--white)]" : "border-[var(--ink)]/45"
+            }`}
+          >
             <span aria-hidden className="flex h-5 w-5 items-center justify-center rounded-full border-2 border-[var(--ink)]">
-              <span className="h-2 w-2 rounded-full bg-[var(--ink)]" />
+              {isGitHubImported ? <span className="h-2 w-2 rounded-full bg-[var(--ink)]" /> : null}
             </span>
             GitHub tracked
           </button>
         </div>
-        <SettingsRow label="Repository" value={`erensunerr/${slug}`} />
-        <SettingsRow label="Default branch" value="main" />
-        <SettingsRow label="Publish behavior" value="Create pull request on publish" />
+        <SettingsRow label="Repository" value={sourceRepo} />
+        <SettingsRow label="Skill path" value={`skills/${slug}`} />
+        <SettingsRow label="Default branch" value="Configured by publishing target" />
+        <SettingsRow label="Publish behavior" value={publishBehavior} />
         <SettingsRow
           label="Connection status"
-          value={<span className="inline-flex items-center gap-3"><span aria-hidden className="h-2 w-2 rounded-full bg-[var(--ink)]" />Connected</span>}
+          value={<span className="inline-flex items-center gap-3"><span aria-hidden className="h-2 w-2 rounded-full bg-[var(--ink)]" />{isGitHubImported ? "Connected" : "Managed by Skillfully"}</span>}
         />
-        <div className="space-y-4 p-5">
-          <button type="button" className={DASHBOARD_BUTTON_LIGHT}>Disconnect GitHub</button>
-          <p className="text-sm leading-6 text-[var(--ink)]/65">
-            Switching to "Managed in Skillfully" keeps Skillfully as the canonical source without GitHub tracking.
-          </p>
-        </div>
+        {isGitHubImported ? (
+          <div className="space-y-4 p-5">
+            <button type="button" className={DASHBOARD_BUTTON_LIGHT}>Disconnect GitHub</button>
+            <p className="text-sm leading-6 text-[var(--ink)]/65">
+              Switching to "Managed in Skillfully" keeps Skillfully as the canonical source without GitHub tracking.
+            </p>
+          </div>
+        ) : null}
       </SettingsSection>
 
       <SettingsSection title="03. Publishing">
@@ -2788,13 +2464,13 @@ export function SkillSettingsWorkspace({ skill }: { skill: Skill }) {
         <SettingsRow label="Invocation tracking" action={<TogglePill />} />
         <SettingsRow label="Feedback collection" action={<TogglePill />} />
         <SettingsRow
-          label="Install endpoint"
-          value={<span className="font-editorial-mono">/api/install</span>}
-          action={<button type="button" aria-label="Copy install endpoint" className="border border-[var(--ink)] p-3"><CopyIcon /></button>}
+          label="Manifest endpoint"
+          value={<span className="font-editorial-mono">/api/public/skills/{skill.skillId}/manifest</span>}
+          action={<button type="button" aria-label="Copy manifest endpoint" className="border border-[var(--ink)] p-3"><CopyIcon /></button>}
         />
         <SettingsRow
           label="Feedback endpoint"
-          value={<span className="font-editorial-mono">/api/feedback</span>}
+          value={<span className="font-editorial-mono">/feedback/{skill.skillId}</span>}
           action={<button type="button" aria-label="Copy feedback endpoint" className="border border-[var(--ink)] p-3"><CopyIcon /></button>}
         />
         <p className="px-5 pb-5 text-sm text-[var(--ink)]/65">
@@ -2834,7 +2510,7 @@ export function AccountSettingsWorkspace({
   onSignOut: () => void;
 }) {
   const accountName = displayAccountName(user);
-  const accountEmail = user.email || "jane@acme.dev";
+  const accountEmail = displayUserEmail(user);
 
   return (
     <div className="min-h-screen bg-[var(--paper)] text-[var(--ink)]">
@@ -2904,8 +2580,8 @@ export function AccountSettingsWorkspace({
                 </span>
               }
             />
-            <SettingsRow label="Default landing page" value="Overview" action={<span aria-hidden className="text-xl">⌄</span>} />
-            <SettingsRow label="Time zone" value="(UTC-8) Pacific Time (US & Canada)" action={<span aria-hidden className="text-xl">⌄</span>} />
+            <SettingsRow label="Default landing page" value="Dashboard" action={<span aria-hidden className="text-xl">⌄</span>} />
+            <SettingsRow label="Time zone" value="Browser default" action={<span aria-hidden className="text-xl">⌄</span>} />
             <SettingsRow
               label="Email notifications"
               value="Important updates about your skills"
@@ -2920,8 +2596,8 @@ export function AccountSettingsWorkspace({
             <p className="mt-3 text-sm leading-6">Keep your account secure.</p>
           </div>
           <div className={DASHBOARD_CARD}>
-            <SettingsRow label="Password" action={<button type="button" className={DASHBOARD_BUTTON_LIGHT}>Change Password</button>} />
-            <SettingsRow label="Active sessions" value="3 active sessions" action={<button type="button" className={DASHBOARD_BUTTON_LIGHT}>View Sessions</button>} />
+            <SettingsRow label="Sign-in method" value="Email magic code" />
+            <SettingsRow label="Active sessions" value="Current session" action={<button type="button" className={DASHBOARD_BUTTON_LIGHT}>View Sessions</button>} />
           </div>
         </section>
 
@@ -2980,15 +2656,21 @@ export function SkillDetail({
   const counts = ratingSummary(entries);
   const totalRated = counts.positive + counts.neutral + counts.negative;
   const successRate =
-    totalRated > 0 ? `${Math.round((counts.positive / totalRated) * 1000) / 10}%` : "94.8%";
-  const activeUsers = totalRated > 0 ? Math.max(totalRated * 37, 128).toLocaleString() : "2,304";
+    totalRated > 0 ? `${Math.round((counts.positive / totalRated) * 1000) / 10}%` : "0%";
+  const feedbackReceived = totalRated.toLocaleString();
+  const statusLabel = skill.status === "published" || skill.publishedVersionId ? "Published" : "Draft";
+  const versionLabel = skill.publishedVersionId
+    ? "Published version"
+    : skill.currentDraftVersionId
+      ? "Draft version"
+      : "Not versioned";
 
   if (activeTab === "editor") {
     return <SkillEditorWorkspace skill={skill} user={user} />;
   }
 
   if (activeTab === "analytics") {
-    return <SkillAnalyticsWorkspace />;
+    return <SkillAnalyticsWorkspace entries={entries} />;
   }
 
   if (activeTab === "settings") {
@@ -3012,14 +2694,14 @@ export function SkillDetail({
               {skill.name}
             </h1>
             <span className="border border-[var(--ink)] bg-[var(--paper)] px-4 py-3 font-editorial-mono text-sm font-bold">
-              v2.3.0
+              {versionLabel}
             </span>
             <span className="border border-emerald-800 bg-emerald-50 px-4 py-3 font-editorial-sans text-sm text-emerald-800">
-              Published
+              {statusLabel}
             </span>
           </div>
           <p className="mt-6 max-w-2xl text-lg leading-8">
-            {skill.description || "A helpful AI assistant for customer support tasks."}
+            {skill.description || "No description yet."}
           </p>
           {feedbackTemplateError ? (
             <p className="mt-4 border border-red-600 bg-red-50 p-3 font-editorial-mono text-xs font-bold uppercase text-red-700">
@@ -3063,8 +2745,8 @@ export function SkillDetail({
       </header>
 
       <section className="grid md:grid-cols-2">
-        <MetricCard label="Success rate" value={successRate} delta="4.2%" chart="success" />
-        <MetricCard label="Active users" value={activeUsers} delta="8.6%" chart="users" />
+        <MetricCard label="Success rate" value={successRate} detail="Based on submitted feedback ratings." />
+        <MetricCard label="Feedback received" value={feedbackReceived} detail="Total feedback entries collected for this skill." />
       </section>
 
       <UsageChart />
@@ -3075,7 +2757,7 @@ export function SkillDetail({
 
       <RecentFeedbackTable entries={entries} />
       <PublishingStatus />
-      <VersionSnapshot />
+      <VersionSnapshot skill={skill} />
     </div>
   );
 }

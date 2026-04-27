@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Select, { type SingleValue, type StylesConfig } from "react-select";
 import { db, isUsingLocalPreviewDb } from "@/lib/db";
+import { buildSkillfullyManagedBlock } from "@/lib/skills/managed-block";
 import {
   captureClientEvent,
   captureClientException,
@@ -1371,6 +1372,7 @@ function buildPublicInstallPrompt(skill: Skill) {
     `Install the public Skillfully skill "${skill.name}".`,
     "",
     `Skill URL: https://www.skillfully.sh/skills/${skill.skillId}`,
+    `Manifest URL: https://www.skillfully.sh/api/public/skills/${skill.skillId}/manifest`,
     "",
     "Use the latest published version as your operating instructions.",
     "Follow its workflow, response style, validation checks, and escalation guidance.",
@@ -1587,6 +1589,10 @@ function SkillEditorWorkspace({
   const [isUploadingFile, setIsUploadingFile] = useState(false);
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
   const publicInstallPrompt = useMemo(() => buildPublicInstallPrompt(skill), [skill.name, skill.skillId]);
+  const skillfullyManagedBlock = useMemo(
+    () => buildSkillfullyManagedBlock({ skillId: skill.skillId }),
+    [skill.skillId],
+  );
   const markdownFiles = files.filter(isEditableSkillFile);
   const assetFiles = files.filter((file) => !isEditableSkillFile(file));
   const selectedFile =
@@ -1594,6 +1600,7 @@ function SkillEditorWorkspace({
   const selectedFileIsEditable = selectedFile ? isEditableSkillFile(selectedFile) : false;
   const selectedFileIsDirty = selectedFile ? dirtyFileIds.has(selectedFile.id) : false;
   const selectedMarkdown = selectedFileIsEditable ? selectedFile?.contentText ?? "" : "";
+  const selectedFileGetsManagedBlock = selectedFile?.path.split("/").pop()?.toLowerCase() === "skill.md";
   const canPersistFiles = Boolean(user && !isUsingLocalPreviewDb);
   const hasBlockingUnsavedChanges = canPersistFiles && dirtyFileIds.size > 0;
   const editorValidationRows = [
@@ -1899,6 +1906,19 @@ function SkillEditorWorkspace({
                 </div>
               )}
             </div>
+            {selectedFileGetsManagedBlock ? (
+              <div className="border-t border-[var(--ink)] bg-[var(--paper)] p-4">
+                <div className="flex items-center justify-between gap-4">
+                  <p className="font-editorial-mono text-xs font-bold uppercase">Skillfully-owned instructions</p>
+                  <span className="border border-[var(--ink)] px-2 py-1 font-editorial-mono text-[0.62rem] font-bold uppercase">
+                    Locked
+                  </span>
+                </div>
+                <pre className="mt-3 max-h-44 overflow-auto whitespace-pre-wrap border border-[var(--ink)] bg-[var(--white)] p-3 font-editorial-mono text-[0.68rem] leading-5">
+                  {skillfullyManagedBlock}
+                </pre>
+              </div>
+            ) : null}
           </div>
         </section>
 

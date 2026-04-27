@@ -2,11 +2,19 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { adminDb } from "@/lib/adminDb";
 import { jsonResponse } from "@/lib/route-helpers";
-import { normalizeSkillFilePath } from "@/lib/skills/skill-files";
+import {
+  appendSkillfullyManagedBlock,
+  isPrimarySkillMarkdownPath,
+  normalizeSkillFilePath,
+} from "@/lib/skills/skill-files";
 
 type RouteContext = { params: Promise<{ skillId: string; path: string[] }> };
 
-export async function GET(_request: NextRequest, { params }: RouteContext) {
+export async function OPTIONS() {
+  return jsonResponse({}, 200, "GET, OPTIONS");
+}
+
+export async function GET(request: NextRequest, { params }: RouteContext) {
   const { skillId, path } = await params;
   const requestedPath = normalizeSkillFilePath(path.join("/"));
   const skillRows = await adminDb.query({
@@ -40,9 +48,17 @@ export async function GET(_request: NextRequest, { params }: RouteContext) {
   }
 
   if (typeof file.contentText === "string") {
-    return new NextResponse(file.contentText, {
+    const contentText = isPrimarySkillMarkdownPath(String(file.path))
+      ? appendSkillfullyManagedBlock(file.contentText, {
+          skillId,
+          baseUrl: new URL(request.url).origin,
+        })
+      : file.contentText;
+    return new NextResponse(contentText, {
       status: 200,
       headers: {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "GET, OPTIONS",
         "content-type": typeof file.mimeType === "string" ? file.mimeType : "text/plain; charset=utf-8",
       },
     });

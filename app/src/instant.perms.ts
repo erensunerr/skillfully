@@ -43,6 +43,14 @@ const rules = {
       delete: "false",
     },
   },
+  agentDeviceCodes: {
+    allow: {
+      view: "false",
+      create: "false",
+      update: "false",
+      delete: "false",
+    },
+  },
   apiUsers: {
     allow: {
       view: "false",

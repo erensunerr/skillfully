@@ -64,7 +64,7 @@ test("createSkillDraft creates a draft version, default file, and publishing tar
   assert.equal(created.skill.slug, "customer-support");
   assert.equal(created.version.status, "draft");
   assert.equal(created.file.path, "SKILL.md");
-  assert.match(created.file.contentText, /https:\/\/www\.skillfully\.sh\/feedback\/sk_demo/);
+  assert.doesNotMatch(created.file.contentText ?? "", /Skillfully feedback and updates/);
   assert.equal(Object.keys(store.rows.publishingTargets).length, 4);
   assert.equal(
     Object.values(store.rows.publishingTargets).find((target) => target.targetKind === "github")?.repoFullName,
@@ -158,6 +158,10 @@ test("markDraftPublished freezes the published version and opens a new editable 
   assert.equal(skill.publishedVersionId, created.version.id);
   assert.equal(skill.currentDraftVersionId, draftVersions[0].id);
   assert.equal(skill.visibility, "public");
+  assert.match(
+    JSON.stringify(publishedVersions[0].manifestJson),
+    /api\/public\/skills\/sk_demo\/manifest/,
+  );
 
   const draftFiles = Object.values(store.rows.skillFiles).filter(
     (file) => file.versionId === draftVersions[0].id,

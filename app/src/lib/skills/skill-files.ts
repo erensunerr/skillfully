@@ -1,5 +1,13 @@
 import crypto from "node:crypto";
 
+import {
+  appendSkillfullyManagedBlock,
+  isPrimarySkillMarkdownPath,
+  skillfullyFeedbackUrl,
+  skillfullyManifestUrl,
+  stripSkillfullyManagedBlock,
+} from "./managed-block";
+
 export type SkillFileKind = "markdown" | "asset" | "json" | "text";
 
 export type ManifestSkill = {
@@ -58,11 +66,10 @@ export function normalizeSkillFilePath(value: string) {
 export function createDefaultSkillFile({
   name,
   description,
-  feedbackUrl,
 }: {
   name: string;
   description?: string | null;
-  feedbackUrl: string;
+  feedbackUrl?: string;
 }) {
   const summary = description?.trim() || "Describe when and how agents should use this skill.";
 
@@ -83,10 +90,6 @@ export function createDefaultSkillFile({
       "1. Understand the user's goal.",
       "2. Follow the instructions in this skill.",
       "3. Verify the result before responding.",
-      "",
-      "## Skillfully feedback",
-      "",
-      `After using this skill, submit feedback to ${feedbackUrl}.`,
     ].join("\n"),
   };
 }
@@ -99,22 +102,30 @@ export function buildSkillManifest({
   skill,
   version,
   files,
+  baseUrl,
 }: {
   skill: ManifestSkill;
   version: ManifestVersion;
   files: ManifestFile[];
+  baseUrl?: string | null;
 }) {
   return {
     skill_id: skill.skillId,
     name: skill.name,
     slug: skill.slug,
     description: skill.description ?? null,
+    feedback_url: skillfullyFeedbackUrl({ skillId: skill.skillId, baseUrl }),
+    manifest_url: skillfullyManifestUrl({ skillId: skill.skillId, baseUrl }),
     version_id: version.id,
     version: version.version,
     status: version.status,
     generated_at: new Date(0).toISOString(),
     files: files.map((file) => {
-      const content = file.contentText ?? "";
+      const rawContent = file.contentText ?? "";
+      const content =
+        file.contentText !== undefined && isPrimarySkillMarkdownPath(file.path)
+          ? appendSkillfullyManagedBlock(rawContent, { skillId: skill.skillId, baseUrl })
+          : rawContent;
       return {
         id: file.id,
         path: normalizeSkillFilePath(file.path),
@@ -131,24 +142,32 @@ export function insertSkillfullyExcerpt(
   {
     feedbackUrl,
     allowAnalyticsExcerpt,
+    skillId,
+    baseUrl,
   }: {
     feedbackUrl: string;
     allowAnalyticsExcerpt: boolean;
+    skillId?: string;
+    baseUrl?: string | null;
   },
 ) {
   if (!allowAnalyticsExcerpt) {
     throw new Error("author consent is required before adding Skillfully excerpts");
   }
 
-  if (content.includes("## Skillfully feedback")) {
-    return content;
-  }
-
-  const excerpt = [
-    "## Skillfully feedback",
-    "",
-    `After using this skill, submit feedback to ${feedbackUrl}.`,
-  ].join("\n");
-
-  return `${content.trim()}\n\n${excerpt}\n`;
+  const resolvedSkillId = skillId ?? feedbackUrl.split("/").filter(Boolean).pop() ?? "unknown";
+  return appendSkillfullyManagedBlock(content, {
+    skillId: resolvedSkillId,
+    baseUrl: baseUrl ?? feedbackUrl.replace(/\/feedback\/[^/]+\/?$/, ""),
+  });
 }
+
+export {
+  appendSkillfullyManagedBlock,
+  buildSkillfullyManagedBlock,
+  isPrimarySkillMarkdownPath,
+  skillfullyFeedbackUrl,
+  skillfullyFileUrl,
+  skillfullyManifestUrl,
+  stripSkillfullyManagedBlock,
+} from "./managed-block";

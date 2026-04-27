@@ -10,7 +10,7 @@ export async function OPTIONS() {
   return jsonResponse({}, 200, "GET, OPTIONS");
 }
 
-export async function GET(_request: NextRequest, { params }: RouteContext) {
+export async function GET(request: NextRequest, { params }: RouteContext) {
   const { skillId } = await params;
   const data = await adminDb.query({
     skills: {
@@ -68,6 +68,7 @@ export async function GET(_request: NextRequest, { params }: RouteContext) {
       contentText: typeof file.contentText === "string" ? file.contentText : null,
       storageUrl: typeof file.storageUrl === "string" ? file.storageUrl : null,
     })),
+    baseUrl: new URL(request.url).origin,
   });
 
   return jsonResponse(manifest, 200, "GET, OPTIONS");

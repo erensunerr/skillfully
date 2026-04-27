@@ -2,11 +2,14 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  appendSkillfullyManagedBlock,
   buildSkillManifest,
+  buildSkillfullyManagedBlock,
   createDefaultSkillFile,
   insertSkillfullyExcerpt,
   normalizeSkillFilePath,
   skillSlug,
+  stripSkillfullyManagedBlock,
 } from "./skill-files";
 
 test("skillSlug creates stable filesystem-safe slugs", () => {
@@ -23,17 +26,16 @@ test("normalizeSkillFilePath keeps skill files inside the skill folder", () => {
   assert.throws(() => normalizeSkillFilePath(".env"), /invalid skill file path/);
 });
 
-test("createDefaultSkillFile preserves the skill name and feedback endpoint", () => {
+test("createDefaultSkillFile preserves editable author content without the managed block", () => {
   const file = createDefaultSkillFile({
     name: "billing-support",
     description: "Helps agents answer billing questions.",
-    feedbackUrl: "https://www.skillfully.sh/feedback/sk_demo",
   });
 
   assert.equal(file.path, "SKILL.md");
   assert.match(file.contentText, /^# billing-support/m);
   assert.match(file.contentText, /Helps agents answer billing questions\./);
-  assert.match(file.contentText, /https:\/\/www\.skillfully\.sh\/feedback\/sk_demo/);
+  assert.doesNotMatch(file.contentText, /Skillfully feedback and updates/);
 });
 
 test("buildSkillManifest includes text files, assets, version metadata, and hashes", () => {
@@ -69,11 +71,42 @@ test("buildSkillManifest includes text files, assets, version metadata, and hash
 
   assert.equal(manifest.skill_id, "sk_demo");
   assert.equal(manifest.slug, "demo-skill");
+  assert.equal(manifest.feedback_url, "https://www.skillfully.sh/feedback/sk_demo");
+  assert.equal(manifest.manifest_url, "https://www.skillfully.sh/api/public/skills/sk_demo/manifest");
   assert.equal(manifest.version, "1.0.0");
   assert.equal(manifest.files.length, 2);
   assert.equal(manifest.files[0].path, "SKILL.md");
   assert.equal(manifest.files[0].sha256.length, 64);
+  assert.notEqual(
+    manifest.files[0].sha256,
+    "5716b00ee8cc37b66f180c5e1f6ab22605b483d718c99ce686dc3c20b2261b20",
+  );
   assert.equal(manifest.files[1].url, "https://storage.example/logo.png");
+});
+
+test("managed block appends feedback and update instructions without changing editable content", () => {
+  const original = "# Existing Skill\n\n## Workflow\n\nDo the work.";
+  const updated = appendSkillfullyManagedBlock(original, {
+    skillId: "sk_demo",
+    baseUrl: "https://www.skillfully.sh",
+  });
+
+  assert.match(updated, /<!-- skillfully:managed:start -->/);
+  assert.match(updated, /Skillfully feedback and updates/);
+  assert.match(updated, /https:\/\/www\.skillfully\.sh\/feedback\/sk_demo/);
+  assert.match(updated, /https:\/\/www\.skillfully\.sh\/api\/public\/skills\/sk_demo\/manifest/);
+  assert.equal(stripSkillfullyManagedBlock(updated), original);
+});
+
+test("buildSkillfullyManagedBlock includes update and feedback endpoints", () => {
+  const block = buildSkillfullyManagedBlock({
+    skillId: "sk_demo",
+    baseUrl: "https://www.skillfully.sh",
+  });
+
+  assert.match(block, /POST https:\/\/www\.skillfully\.sh\/feedback\/sk_demo/);
+  assert.match(block, /version_id/);
+  assert.match(block, /sha256/);
 });
 
 test("insertSkillfullyExcerpt requires consent for imported skills", () => {
@@ -93,6 +126,6 @@ test("insertSkillfullyExcerpt requires consent for imported skills", () => {
     allowAnalyticsExcerpt: true,
   });
 
-  assert.match(updated, /## Skillfully feedback/);
+  assert.match(updated, /## Skillfully feedback and updates/);
   assert.match(updated, /https:\/\/www\.skillfully\.sh\/feedback\/sk_demo/);
 });

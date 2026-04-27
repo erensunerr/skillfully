@@ -2,8 +2,10 @@ import crypto from "node:crypto";
 
 import { adminDb } from "@/lib/adminDb";
 import {
+  appendSkillfullyManagedBlock,
   buildSkillManifest,
   createDefaultSkillFile,
+  isPrimarySkillMarkdownPath,
   normalizeSkillFilePath,
   skillSlug,
 } from "./skill-files";
@@ -298,6 +300,69 @@ export async function getSkillForOwner({
   return skill ? rowWithId(skill) as SkillRow : null;
 }
 
+export async function listSkillsForOwner({
+  store = defaultSkillStore,
+  ownerId,
+}: {
+  store?: SkillStore;
+  ownerId: string;
+}) {
+  const rows = await store.query({
+    skills: {
+      $: {
+        where: {
+          ownerId,
+        },
+      },
+    },
+  });
+
+  return (rows.skills ?? [])
+    .map((row) => rowWithId(row) as SkillRow)
+    .sort((a, b) => Number(b.createdAt) - Number(a.createdAt));
+}
+
+export async function updateSkillMetadata({
+  store = defaultSkillStore,
+  now = () => Date.now(),
+  ownerId,
+  skillId,
+  name,
+  description,
+  visibility,
+}: {
+  store?: SkillStore;
+  now?: () => number;
+  ownerId: string;
+  skillId: string;
+  name?: string | null;
+  description?: string | null;
+  visibility?: string | null;
+}) {
+  const skill = await getSkillForOwner({ store, ownerId, skillId });
+  if (!skill) {
+    throw new Error("skill not found");
+  }
+
+  const cleanName = name === undefined || name === null ? skill.name : name.trim();
+  if (!cleanName) {
+    throw new Error("skill name is required");
+  }
+
+  const updates = {
+    name: cleanName,
+    slug: cleanName === skill.name ? skill.slug : skillSlug(cleanName),
+    description: description === undefined ? skill.description : description?.trim() || undefined,
+    visibility: visibility === undefined || visibility === null ? skill.visibility : String(visibility),
+    updatedAt: now(),
+  };
+  await store.transact([store.update("skills", skill.id, updates)]);
+  return {
+    ...skill,
+    ...updates,
+  };
+}
+
 export async function getDraftVersion({
   store = defaultSkillStore,
   ownerId,
@@ -371,6 +436,56 @@ export async function listPublishingTargets({
   });
 
   return (rows.publishingTargets ?? []).map((row) => rowWithId(row) as PublishingTargetRow);
+}
+
+export async function listPublishRuns({
+  store = defaultSkillStore,
+  ownerId,
+  skillId,
+}: {
+  store?: SkillStore;
+  ownerId: string;
+  skillId: string;
+}) {
+  const rows = await store.query({
+    publishRuns: {
+      $: {
+        where: {
+          ownerId,
+          skillId,
+        },
+      },
+    },
+  });
+
+  return (rows.publishRuns ?? [])
+    .map((row) => rowWithId(row))
+    .sort((a, b) => Number(b.startedAt) - Number(a.startedAt));
+}
+
+export async function listDirectorySubmissions({
+  store = defaultSkillStore,
+  ownerId,
+  skillId,
+}: {
+  store?: SkillStore;
+  ownerId: string;
+  skillId: string;
+}) {
+  const rows = await store.query({
+    directorySubmissions: {
+      $: {
+        where: {
+          ownerId,
+          skillId,
+        },
+      },
+    },
+  });
+
+  return (rows.directorySubmissions ?? [])
+    .map((row) => rowWithId(row))
+    .sort((a, b) => Number(b.createdAt) - Number(a.createdAt));
 }
 
 export async function updateSkillFileText({
@@ -514,7 +629,10 @@ export async function buildPublishContextForSkill({
     files: files.map((file) => ({
       path: file.path,
       kind: file.kind,
-      contentText: file.contentText,
+      contentText:
+        file.contentText !== undefined && isPrimarySkillMarkdownPath(file.path)
+          ? appendSkillfullyManagedBlock(file.contentText ?? "", { skillId })
+          : file.contentText,
       storageUrl: file.storageUrl,
     })),
     defaultGitHubRepo: defaultGitHubRepo(),

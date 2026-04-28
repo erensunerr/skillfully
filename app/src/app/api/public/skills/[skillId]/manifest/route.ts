@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 
 import { adminDb } from "@/lib/adminDb";
 import { jsonResponse } from "@/lib/route-helpers";
+import { recordSkillUsageEventSafely } from "@/lib/skill-usage-events";
 import { buildSkillManifest } from "@/lib/skills/skill-files";
 
 type RouteContext = { params: Promise<{ skillId: string }> };
@@ -69,6 +70,15 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
       storageUrl: typeof file.storageUrl === "string" ? file.storageUrl : null,
     })),
     baseUrl: new URL(request.url).origin,
+  });
+
+  await recordSkillUsageEventSafely({
+    ownerId: String(skill.ownerId),
+    skillId,
+    versionId: String(skill.publishedVersionId),
+    eventKind: "manifest_checked",
+    source: "public_manifest",
+    request,
   });
 
   return jsonResponse(manifest, 200, "GET, OPTIONS");

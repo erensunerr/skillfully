@@ -23,6 +23,7 @@ import { OnboardingModal } from "./onboarding-modal";
 
 type Skill = InstaQLEntity<AppSchema, "skills">;
 type Feedback = InstaQLEntity<AppSchema, "feedback">;
+type SkillUsageEvent = InstaQLEntity<AppSchema, "skillUsageEvents">;
 type AppUser = InstantUser;
 type Screen = "list" | "create" | "detail";
 type DashboardTab = "overview" | "editor" | "analytics" | "settings" | "account";
@@ -62,6 +63,7 @@ type RecentFeedbackRow = {
   feedback: string;
   createdAt: string;
 };
+type UsageEventKind = "public_page_view" | "manifest_checked" | "file_loaded" | "feedback_received" | string;
 
 type PublishModalStep = "confirm" | "published" | "waiting" | "confirmed";
 type SkillEditorFile = {
@@ -169,6 +171,55 @@ function ratingSummary(feedback: Feedback[]) {
     negative: feedback.filter((entry) => entry.rating === "negative").length,
     neutral: feedback.filter((entry) => entry.rating === "neutral").length,
   };
+}
+
+function usageSummary(events: SkillUsageEvent[]) {
+  return events.reduce<Record<UsageEventKind, number>>((acc, event) => {
+    const kind = String(event.eventKind || "unknown");
+    acc[kind] = (acc[kind] ?? 0) + 1;
+    return acc;
+  }, {});
+}
+
+function usageEventLabel(kind: UsageEventKind) {
+  if (kind === "public_page_view") return "Public page views";
+  if (kind === "manifest_checked") return "Update checks";
+  if (kind === "file_loaded") return "File loads";
+  if (kind === "feedback_received") return "Feedback events";
+  return kind
+    .split(/[_\s-]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function pluralCount(count: number, singular: string, plural = `${singular}s`) {
+  return `${count.toLocaleString()} ${count === 1 ? singular : plural}`;
+}
+
+function usageEventsByDay(events: SkillUsageEvent[], days = 7) {
+  const now = new Date();
+  const buckets = Array.from({ length: days }, (_, index) => {
+    const date = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+    date.setUTCDate(date.getUTCDate() - (days - 1 - index));
+    const key = date.toISOString().slice(0, 10);
+    return {
+      key,
+      label: date.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" }),
+      count: 0,
+    };
+  });
+  const bucketMap = new Map(buckets.map((bucket) => [bucket.key, bucket]));
+
+  events.forEach((event) => {
+    const key = typeof event.dayKey === "string" ? event.dayKey : new Date(toMillis(event.createdAt)).toISOString().slice(0, 10);
+    const bucket = bucketMap.get(key);
+    if (bucket) {
+      bucket.count += 1;
+    }
+  });
+
+  return buckets;
 }
 
 function renderFeedbackTemplate(template: string, skillId: string) {
@@ -1082,26 +1133,65 @@ function MetricCard({
   );
 }
 
-function UsageChart() {
+function UsageChart({ events }: { events: SkillUsageEvent[] }) {
+  const buckets = usageEventsByDay(events);
+  const maxCount = Math.max(1, ...buckets.map((bucket) => bucket.count));
+  const counts = usageSummary(events);
+  const total = events.length;
+
   return (
     <section className={`${DASHBOARD_CARD} p-6 sm:p-8`}>
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p className="font-editorial-mono text-xs font-bold uppercase">Usage over time</p>
           <p className="mt-4 max-w-xl text-sm leading-6 text-[var(--ink)]/70">
-            Runtime usage events are not connected yet.
+            Recorded from public page views, manifest update checks, file loads, and feedback submissions.
           </p>
+        </div>
+        <div className="border border-[var(--ink)] bg-[var(--white)] px-4 py-3 text-right">
+          <p className="font-editorial-mono text-[0.62rem] font-bold uppercase">Total events</p>
+          <p className="font-editorial-sans text-3xl font-semibold">{total.toLocaleString()}</p>
         </div>
       </div>
 
-      <div className="mt-8 flex min-h-64 items-center justify-center border border-dashed border-[var(--ink)]/40 bg-[var(--white)] p-8 text-center">
-        <div>
-          <p className="font-editorial-sans text-xl font-semibold">No usage data yet</p>
-          <p className="mt-2 max-w-md text-sm leading-6 text-[var(--ink)]/65">
-            This chart will populate after Skillfully records install or invocation events for this skill.
-          </p>
+      {total === 0 ? (
+        <div className="mt-8 flex min-h-64 items-center justify-center border border-dashed border-[var(--ink)]/40 bg-[var(--white)] p-8 text-center">
+          <div>
+            <p className="font-editorial-sans text-xl font-semibold">No usage data yet</p>
+            <p className="mt-2 max-w-md text-sm leading-6 text-[var(--ink)]/65">
+              This chart will populate after Skillfully records public skill page views, update checks, file loads, or feedback events.
+            </p>
+          </div>
         </div>
-      </div>
+      ) : (
+        <div className="mt-8 grid gap-6 lg:grid-cols-[1fr_16rem]">
+          <div className="flex min-h-64 items-end gap-3 border border-[var(--ink)] bg-[var(--white)] p-5">
+            {buckets.map((bucket) => (
+              <div key={bucket.key} className="flex min-w-0 flex-1 flex-col items-center gap-3">
+                <div className="flex h-44 w-full items-end border-x border-[var(--ink)]/15 px-1">
+                  <div
+                    className="w-full bg-[var(--ink)]"
+                    style={{ height: `${Math.max(6, (bucket.count / maxCount) * 100)}%` }}
+                    aria-label={`${bucket.label}: ${bucket.count} usage events`}
+                  />
+                </div>
+                <span className="font-editorial-mono text-[0.62rem] uppercase">{bucket.label}</span>
+              </div>
+            ))}
+          </div>
+          <div className="border border-[var(--ink)] bg-[var(--white)] p-5">
+            <p className="font-editorial-mono text-xs font-bold uppercase">Event mix</p>
+            <div className="mt-5 space-y-4 text-sm">
+              {(["public_page_view", "manifest_checked", "file_loaded", "feedback_received"] as const).map((kind) => (
+                <div key={kind} className="flex items-center justify-between gap-4">
+                  <span>{usageEventLabel(kind)}</span>
+                  <span className="font-editorial-mono">{(counts[kind] ?? 0).toLocaleString()}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 }
@@ -2094,7 +2184,25 @@ function analyticsRowsFromEntries(entries: Feedback[]) {
     });
 }
 
-function SkillAnalyticsWorkspace({ entries }: { entries: Feedback[] }) {
+function analyticsRowsFromUsageEvents(events: SkillUsageEvent[]) {
+  return [...events]
+    .sort((a, b) => toMillis(b.createdAt) - toMillis(a.createdAt))
+    .slice(0, 12)
+    .map((event) => ({
+      time: formatTimestamp(event.createdAt),
+      event: usageEventLabel(String(event.eventKind || "unknown")),
+      source: typeof event.source === "string" ? event.source : "Skillfully",
+      detail: typeof event.path === "string" ? event.path : typeof event.versionId === "string" ? event.versionId : "-",
+    }));
+}
+
+function SkillAnalyticsWorkspace({
+  entries,
+  usageEvents,
+}: {
+  entries: Feedback[];
+  usageEvents: SkillUsageEvent[];
+}) {
   const [query, setQuery] = useState("");
   const [range, setRange] = useState("24h");
   const [sentiments, setSentiments] = useState<Array<RecentFeedbackRow["sentiment"]>>([
@@ -2104,6 +2212,8 @@ function SkillAnalyticsWorkspace({ entries }: { entries: Feedback[] }) {
   ]);
   const rows = analyticsRowsFromEntries(entries);
   const counts = ratingSummary(entries);
+  const usageCounts = usageSummary(usageEvents);
+  const usageRows = analyticsRowsFromUsageEvents(usageEvents);
   const ratedTotal = counts.positive + counts.neutral + counts.negative;
   const positiveRate = ratedTotal > 0 ? `${Math.round((counts.positive / ratedTotal) * 100)}%` : "0%";
   const visibleRows = rows.filter(({ sentiment, source, feedback }) => {
@@ -2175,6 +2285,55 @@ function SkillAnalyticsWorkspace({ entries }: { entries: Feedback[] }) {
             value={positiveRate}
             detail="Share of submitted ratings marked positive."
           />
+          <AnalyticsSummaryCard
+            title="Usage events"
+            value={usageEvents.length.toLocaleString()}
+            detail="Public page views, update checks, file loads, and feedback events."
+          />
+          <AnalyticsSummaryCard
+            title="Update checks"
+            value={(usageCounts.manifest_checked ?? 0).toLocaleString()}
+            detail="Manifest reads from agents checking for the latest published version."
+          />
+        </section>
+
+        <section className={`${DASHBOARD_CARD} overflow-hidden`}>
+          <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
+            <h2 className="font-editorial-sans text-2xl font-semibold">Runtime events</h2>
+            <p className="font-editorial-mono text-xs font-bold uppercase">
+              {(usageCounts.file_loaded ?? 0).toLocaleString()} file loads
+            </p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[48rem] border-collapse text-left text-sm">
+              <thead className="font-editorial-mono text-xs uppercase">
+                <tr className="border-b border-[var(--ink)]">
+                  <th className="px-5 py-4 font-bold">Time (UTC) ↓</th>
+                  <th className="px-5 py-4 font-bold">Event</th>
+                  <th className="px-5 py-4 font-bold">Source</th>
+                  <th className="px-5 py-4 font-bold">Detail</th>
+                </tr>
+              </thead>
+              <tbody>
+                {usageRows.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="px-5 py-8 text-center text-sm text-[var(--ink)]/65">
+                      No runtime events yet.
+                    </td>
+                  </tr>
+                ) : (
+                  usageRows.map(({ time, event, source, detail }) => (
+                    <tr key={`${time}-${event}-${source}-${detail}`} className="border-b border-[var(--ink)]/45">
+                      <td className="px-5 py-4">{time}</td>
+                      <td className="px-5 py-4">{event}</td>
+                      <td className="px-5 py-4">{source}</td>
+                      <td className="px-5 py-4 font-editorial-mono text-xs">{detail}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
         </section>
 
         <section className={`${DASHBOARD_CARD} overflow-hidden`}>
@@ -2651,6 +2810,7 @@ export function AccountSettingsWorkspace({
 export function SkillDetail({
   skill,
   entries,
+  usageEvents = [],
   user,
   onBack,
   activeTab = "overview",
@@ -2661,6 +2821,7 @@ export function SkillDetail({
 }: {
   skill: Skill;
   entries: Feedback[];
+  usageEvents?: SkillUsageEvent[];
   user?: AppUser | null;
   onBack: () => void;
   activeTab?: DashboardTab;
@@ -2674,6 +2835,10 @@ export function SkillDetail({
     ? renderFeedbackTemplate(feedbackTemplate, skill.skillId)
     : null;
   const counts = ratingSummary(entries);
+  const usageCounts = usageSummary(usageEvents);
+  const totalUsageEvents = usageEvents.length;
+  const updateChecks = usageCounts.manifest_checked ?? 0;
+  const fileLoads = usageCounts.file_loaded ?? 0;
   const totalRated = counts.positive + counts.neutral + counts.negative;
   const successRate =
     totalRated > 0 ? `${Math.round((counts.positive / totalRated) * 1000) / 10}%` : "0%";
@@ -2690,7 +2855,7 @@ export function SkillDetail({
   }
 
   if (activeTab === "analytics") {
-    return <SkillAnalyticsWorkspace entries={entries} />;
+    return <SkillAnalyticsWorkspace entries={entries} usageEvents={usageEvents} />;
   }
 
   if (activeTab === "settings") {
@@ -2764,12 +2929,17 @@ export function SkillDetail({
         </div>
       </header>
 
-      <section className="grid md:grid-cols-2">
+      <section className="grid md:grid-cols-3">
         <MetricCard label="Success rate" value={successRate} detail="Based on submitted feedback ratings." />
         <MetricCard label="Feedback received" value={feedbackReceived} detail="Total feedback entries collected for this skill." />
+        <MetricCard
+          label="Usage events"
+          value={totalUsageEvents.toLocaleString()}
+          detail={`${pluralCount(updateChecks, "update check")} / ${pluralCount(fileLoads, "file load")}.`}
+        />
       </section>
 
-      <UsageChart />
+      <UsageChart events={usageEvents} />
 
       <section className="grid">
         <SentimentPanel entries={entries} />
@@ -2842,6 +3012,16 @@ export default function Dashboard({
           },
         },
       },
+      skillUsageEvents: {
+        $: {
+          where: {
+            ownerId: user.id,
+          },
+          order: {
+            createdAt: "desc",
+          },
+        },
+      },
     } as const;
   }, [user?.id]);
 
@@ -2849,6 +3029,7 @@ export default function Dashboard({
 
   const skills = (data?.skills ?? []) as Skill[];
   const feedback = (data?.feedback ?? []) as Feedback[];
+  const usageEvents = (data?.skillUsageEvents ?? []) as SkillUsageEvent[];
 
   const viewState = resolveDashboardViewState({
     screen,
@@ -2867,6 +3048,13 @@ export default function Dashboard({
         ? feedback.filter((entry) => entry.skillId === selectedSkill.skillId)
         : [],
     [selectedSkill, feedback],
+  );
+  const selectedUsageEvents = useMemo(
+    () =>
+      selectedSkill
+        ? usageEvents.filter((entry) => entry.skillId === selectedSkill.skillId)
+        : [],
+    [selectedSkill, usageEvents],
   );
 
   const shouldShowOnboardingModal =
@@ -3282,6 +3470,7 @@ export default function Dashboard({
             <SkillDetail
               skill={selectedSkill}
               entries={selectedFeedback}
+              usageEvents={selectedUsageEvents}
               user={user}
               activeTab={activeTab}
               feedbackTemplate={feedbackTemplate}

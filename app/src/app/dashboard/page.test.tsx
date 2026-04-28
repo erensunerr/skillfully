@@ -35,6 +35,46 @@ function fakeEntries() {
   ] as never;
 }
 
+function fakeUsageEvents() {
+  const now = Date.now();
+  const today = new Date(now).toISOString().slice(0, 10);
+  return [
+    {
+      id: "usage-1",
+      ownerId: "user-1",
+      skillId: "sk_test123",
+      eventKind: "manifest_checked",
+      versionId: "version-1",
+      source: "public_manifest",
+      subjectHash: "subject-1",
+      dayKey: today,
+      createdAt: now,
+    },
+    {
+      id: "usage-2",
+      ownerId: "user-1",
+      skillId: "sk_test123",
+      eventKind: "file_loaded",
+      versionId: "version-1",
+      path: "SKILL.md",
+      source: "public_file",
+      subjectHash: "subject-1",
+      dayKey: today,
+      createdAt: now - 1000,
+    },
+    {
+      id: "usage-3",
+      ownerId: "user-1",
+      skillId: "sk_test123",
+      eventKind: "public_page_view",
+      versionId: "version-1",
+      source: "public_skill_page",
+      dayKey: today,
+      createdAt: now - 2000,
+    },
+  ] as never;
+}
+
 test("dashboard does not render seeded demo data for an empty skill", async () => {
   Object.assign(globalThis, { React });
   const { SkillDetail, AccountSettingsWorkspace } = await import("./page");
@@ -125,6 +165,7 @@ test("dashboard skill detail renders the operational overview UI", async () => {
     <SkillDetail
       skill={fakeSkill()}
       entries={fakeEntries()}
+      usageEvents={fakeUsageEvents()}
       feedbackTemplate="Post feedback to {{feedbackUrl}}"
       feedbackTemplateError={null}
       onBack={() => undefined}
@@ -138,8 +179,15 @@ test("dashboard skill detail renders the operational overview UI", async () => {
   assert.match(html, /Copy installation prompt/);
   assert.match(html, /Success rate/i);
   assert.match(html, /Feedback received/i);
+  assert.match(html, /Usage events/i);
+  assert.match(html, /1 update check \/ 1 file load/i);
   assert.match(html, /Usage over time/i);
-  assert.match(html, /No usage data yet/i);
+  assert.match(html, /Total events/i);
+  assert.match(html, /Event mix/i);
+  assert.match(html, /Public page views/i);
+  assert.match(html, /Update checks/i);
+  assert.match(html, /File loads/i);
+  assert.doesNotMatch(html, /No usage data yet/i);
   assert.doesNotMatch(html, /Skill health/i);
   assert.doesNotMatch(html, /Needs attention/i);
   assert.match(html, /Feedback sentiment/i);
@@ -201,6 +249,7 @@ test("dashboard skill detail renders the analytics tab UI", async () => {
       activeTab="analytics"
       skill={fakeSkill()}
       entries={fakeEntries()}
+      usageEvents={fakeUsageEvents()}
       feedbackTemplate="Post feedback to {{feedbackUrl}}"
       feedbackTemplateError={null}
       onBack={() => undefined}
@@ -214,7 +263,17 @@ test("dashboard skill detail renders the analytics tab UI", async () => {
   assert.match(html, /Negative/);
   assert.match(html, /Feedback received/);
   assert.match(html, /Positive rate/);
+  assert.match(html, /Usage events/);
+  assert.match(html, /Update checks/);
   assert.match(html, /50%/);
+  assert.match(html, /Runtime events/);
+  assert.match(html, /1 file loads/);
+  assert.match(html, /Public page views/);
+  assert.match(html, /public_skill_page/);
+  assert.match(html, /Update checks/);
+  assert.match(html, /public_manifest/);
+  assert.match(html, /File loads/);
+  assert.match(html, /SKILL\.md/);
   assert.match(html, /Agent \/ Source/);
   assert.match(html, /Feedback API/);
   assert.match(html, /The checklist caught a missing migration/);

@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 
 import { adminDb } from "@/lib/adminDb";
+import { recordSkillUsageEventSafely } from "@/lib/skill-usage-events";
 import { buildSkillManifest } from "@/lib/skills/skill-files";
 
 async function publicBaseUrl() {
@@ -83,6 +84,13 @@ export default async function PublicSkillPage({
       storageUrl: typeof file.storageUrl === "string" ? file.storageUrl : null,
     })),
     baseUrl,
+  });
+  await recordSkillUsageEventSafely({
+    ownerId: String(skill.ownerId),
+    skillId,
+    versionId: String(skill.publishedVersionId),
+    eventKind: "public_page_view",
+    source: "public_skill_page",
   });
 
   return (

@@ -34,14 +34,31 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
           },
         },
       },
-    } as never) as { feedback?: Array<Record<string, unknown>> };
+      skillUsageEvents: {
+        $: {
+          where: {
+            ownerId: author.ownerId,
+            skillId,
+          },
+        },
+      },
+    } as never) as { feedback?: Array<Record<string, unknown>>; skillUsageEvents?: Array<Record<string, unknown>> };
     const feedback = (rows.feedback ?? []).sort((a, b) => Number(b.createdAt) - Number(a.createdAt));
+    const usageEvents = (rows.skillUsageEvents ?? []).sort((a, b) => Number(b.createdAt) - Number(a.createdAt));
     const counts = {
       positive: feedback.filter((entry) => entry.rating === "positive").length,
       neutral: feedback.filter((entry) => entry.rating === "neutral").length,
       negative: feedback.filter((entry) => entry.rating === "negative").length,
     };
     const total = counts.positive + counts.neutral + counts.negative;
+    const usageCounts = usageEvents.reduce<Record<string, number>>((acc, entry) => {
+      const eventKind = String(entry.eventKind || "unknown");
+      acc[eventKind] = (acc[eventKind] ?? 0) + 1;
+      return acc;
+    }, {});
+    const uniqueSubjects = new Set(
+      usageEvents.map((entry) => entry.subjectHash).filter((value): value is string => typeof value === "string"),
+    );
     const publishRuns = await listPublishRuns({ ownerId: author.ownerId, skillId });
     const directorySubmissions = await listDirectorySubmissions({ ownerId: author.ownerId, skillId });
 
@@ -56,6 +73,20 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
             id: String(entry.id),
             rating: String(entry.rating),
             feedback: String(entry.feedback),
+            created_at: Number(entry.createdAt),
+          })),
+        },
+        usage: {
+          total: usageEvents.length,
+          counts: usageCounts,
+          unique_subjects: uniqueSubjects.size,
+          recent: usageEvents.slice(0, 25).map((entry) => ({
+            id: String(entry.id),
+            event_kind: String(entry.eventKind),
+            version_id: entry.versionId ?? null,
+            path: entry.path ?? null,
+            source: entry.source ?? null,
+            day_key: String(entry.dayKey),
             created_at: Number(entry.createdAt),
           })),
         },

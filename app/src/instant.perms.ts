@@ -107,6 +107,14 @@ const rules = {
       delete: "false",
     },
   },
+  skillUsageEvents: {
+    allow: {
+      view: "data.ownerId == auth.id",
+      create: "false",
+      update: "false",
+      delete: "false",
+    },
+  },
   githubInstallations: {
     allow: {
       view: "data.ownerId == auth.id",

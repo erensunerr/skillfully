@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { adminDb } from "@/lib/adminDb";
 import { jsonResponse } from "@/lib/route-helpers";
+import { recordSkillUsageEventSafely } from "@/lib/skill-usage-events";
 import {
   appendSkillfullyManagedBlock,
   isPrimarySkillMarkdownPath,
@@ -46,6 +47,16 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
   if (!file) {
     return jsonResponse({ error: "file not found" }, 404, "GET, OPTIONS");
   }
+
+  await recordSkillUsageEventSafely({
+    ownerId: String(skill.ownerId),
+    skillId,
+    versionId: String(skill.publishedVersionId),
+    eventKind: "file_loaded",
+    path: requestedPath,
+    source: "public_file",
+    request,
+  });
 
   if (typeof file.contentText === "string") {
     const contentText = isPrimarySkillMarkdownPath(String(file.path))

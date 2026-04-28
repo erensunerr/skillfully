@@ -132,6 +132,18 @@ const _schema = i.schema({
       createdAt: i.number().indexed(),
       updatedAt: i.number().indexed(),
     }),
+    skillUsageEvents: i.entity({
+      ownerId: i.string().indexed(),
+      skillId: i.string().indexed(),
+      eventKind: i.string().indexed(),
+      versionId: i.string().indexed().optional(),
+      path: i.string().indexed().optional(),
+      source: i.string().indexed().optional(),
+      subjectHash: i.string().indexed().optional(),
+      dayKey: i.string().indexed(),
+      metadataJson: i.json().optional(),
+      createdAt: i.number().indexed(),
+    }),
     githubInstallations: i.entity({
       ownerId: i.string().indexed().optional(),
       installationId: i.string().unique().indexed(),

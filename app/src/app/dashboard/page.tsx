@@ -647,6 +647,7 @@ function AuthForm({
   onVerifySubmit,
   onEmailChange,
   onCodeChange,
+  onCodePaste,
   onChangeMode,
   disabled,
   message,
@@ -658,6 +659,7 @@ function AuthForm({
   onVerifySubmit: () => void;
   onEmailChange: (value: string) => void;
   onCodeChange: (value: string) => void;
+  onCodePaste: () => void;
   onChangeMode: () => void;
   disabled: boolean;
   message: string;
@@ -710,6 +712,7 @@ function AuthForm({
                   className={`${DASHBOARD_INPUT} text-center tracking-[0.3em]`}
                   value={form.code}
                   onChange={(event) => onCodeChange(event.currentTarget.value)}
+                  onPaste={onCodePaste}
                   required
                   inputMode="numeric"
                   autoComplete="one-time-code"
@@ -2970,6 +2973,7 @@ export default function Dashboard({
   const [authPhase, setAuthPhase] = useState<AuthPhase>("request");
   const [authForm, setAuthForm] = useState<AuthForm>({ email: "", code: "" });
   const [pendingEmail, setPendingEmail] = useState("");
+  const [hasTrackedCodeEntry, setHasTrackedCodeEntry] = useState(false);
 
   const [skillForm, setSkillForm] = useState<SkillForm>({
     name: "",
@@ -3056,6 +3060,18 @@ export default function Dashboard({
         : [],
     [selectedSkill, usageEvents],
   );
+
+  useEffect(() => {
+    if (!user || activeTab !== "analytics") {
+      return;
+    }
+
+    captureClientEvent("analytics_viewed", {
+      surface: "dashboard",
+      skill_id: selectedSkill?.skillId ?? null,
+      skill_name: selectedSkill?.name ?? null,
+    });
+  }, [activeTab, selectedSkill?.skillId, selectedSkill?.name, user?.id]);
 
   const shouldShowOnboardingModal =
     screen === "list" &&
@@ -3164,12 +3180,13 @@ export default function Dashboard({
             return;
           }
 
-          captureClientEvent("auth_email_submitted", { email: normalized });
+          captureClientEvent("auth_email_submitted", { email: normalized, auth_flow: "dashboard" });
           setIsSubmitting(true);
           try {
             await db.auth.sendMagicCode({ email: normalized });
             setPendingEmail(normalized);
             setAuthForm((state) => ({ ...state, email: normalized, code: "" }));
+            setHasTrackedCodeEntry(false);
             setAuthPhase("verify");
           } catch (error) {
             captureClientException(error);
@@ -3195,6 +3212,11 @@ export default function Dashboard({
             return;
           }
 
+          captureClientEvent("auth_code_submitted", {
+            email: normalized,
+            auth_flow: "dashboard",
+            code_length: code.length,
+          });
           setIsSubmitting(true);
           try {
             const response = await db.auth.signInWithMagicCode({
@@ -3204,7 +3226,7 @@ export default function Dashboard({
 
             if (response.user) {
               identifyClientUser(response.user.id, { email: normalized });
-              captureClientEvent("auth_code_verified", { email: normalized });
+              captureClientEvent("auth_code_verified", { email: normalized, auth_flow: "dashboard" });
               return;
             }
 
@@ -3222,12 +3244,23 @@ export default function Dashboard({
         }}
         onCodeChange={(value) => {
           setErrorMessage("");
+          if (!hasTrackedCodeEntry && value.trim()) {
+            captureClientEvent("auth_code_entered", {
+              auth_flow: "dashboard",
+              code_length: value.trim().length,
+            });
+            setHasTrackedCodeEntry(true);
+          }
           setAuthForm((state) => ({ ...state, code: value }));
+        }}
+        onCodePaste={() => {
+          captureClientEvent("auth_code_pasted", { auth_flow: "dashboard" });
         }}
         onChangeMode={() => {
           setErrorMessage("");
           setAuthPhase("request");
           setAuthForm((state) => ({ ...state, code: "" }));
+          setHasTrackedCodeEntry(false);
         }}
       />
     );
@@ -3248,6 +3281,7 @@ export default function Dashboard({
     setSkillForm({ name: "", description: "" });
     setAuthForm({ email: "", code: "" });
     setAuthPhase("request");
+    setHasTrackedCodeEntry(false);
     setSelectedSkillId(null);
     setActiveTab("overview");
     setIsSkillSelectorOpen(false);
@@ -3366,11 +3400,6 @@ export default function Dashboard({
         createdSkillId = response.skill.skillId;
         createdEntityId = response.skill.id;
       }
-
-      captureClientEvent("skill_created", {
-        skill_name: cleanName,
-        has_description: Boolean(cleanDescription),
-      });
 
       setSkillForm({ name: "", description: "" });
       setModalSkillForm({ name: "", description: "" });

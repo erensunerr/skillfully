@@ -42,6 +42,25 @@ Event writes use a safe wrapper so analytics failure does not break install, upd
 - Analytics tab now shows runtime usage summary cards and a recent runtime event table.
 - Author-agent analytics API now returns a `usage` block with totals, event-kind counts, unique subject count, and recent events.
 
+## PostHog Funnel Events
+
+The product funnel is tracked with explicit PostHog events:
+
+- `landing_page_viewed`: anonymous visitor reached the landing page.
+- `landing_auth_cta_clicked`: visitor clicked a landing `sign_in` or `sign_up` CTA. Properties include `intent` and `surface`.
+- `auth_email_submitted`: dashboard auth form received a valid email.
+- `auth_code_entered`: verification code field became non-empty.
+- `auth_code_pasted`: verification code field received a paste event.
+- `auth_code_submitted`: user submitted a verification code.
+- `auth_code_verified`: magic-code auth succeeded and the user was identified.
+- `skill_created`: dashboard or author-agent API created a skill. Properties include `is_first_skill` and `author_type`.
+- `first_skill_created`: dashboard or author-agent API created the first skill for an account.
+- `skills_imported`: dashboard import API imported skills from GitHub.
+- `first_skill_imported`: GitHub import created the first skill for an account.
+- `skill_published`: dashboard or author-agent publish route successfully published or prepared at least one target.
+- `feedback_received`: a skill received accepted feedback.
+- `analytics_viewed`: signed-in dashboard user viewed a skill analytics surface. Daily and weekly analytics usage can be measured as unique users over PostHog time windows.
+
 ## Verification
 
 - `npm test` passed with dashboard coverage for populated usage charts and runtime event tables.

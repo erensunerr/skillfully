@@ -3,6 +3,7 @@ import { NextRequest } from "next/server";
 
 import { ApiError } from "@/lib/agent-api";
 import { requireAgentAuthor, serializeAgentSkill } from "@/lib/agent-author-api";
+import { captureServerEvent } from "@/lib/posthog-server";
 import { getErrorPayload, jsonResponse } from "@/lib/route-helpers";
 import {
   createSkillDraft,
@@ -61,16 +62,42 @@ export async function POST(request: NextRequest) {
     }
 
     const baseUrl = new URL(request.url).origin;
+    const existingSkillCount = (await listSkillsForOwner({ ownerId: author.ownerId })).length;
+    const sourceMode = body.source_mode ? String(body.source_mode) : "managed";
     const created = await createSkillDraft({
       ownerId: author.ownerId,
       name: String(body.name ?? ""),
       description: body.description === undefined ? undefined : String(body.description),
       baseUrl,
       skillIdGenerator: randomSkillId,
-      sourceMode: body.source_mode ? String(body.source_mode) : "managed",
+      sourceMode,
       originalRepoFullName: body.original_repo_full_name ? String(body.original_repo_full_name) : undefined,
       originalSkillPath: body.original_skill_path ? String(body.original_skill_path) : undefined,
     });
+    await captureServerEvent({
+      distinctId: author.ownerId,
+      event: "skill_created",
+      properties: {
+        skill_id: created.skill.skillId,
+        skill_name: created.skill.name,
+        has_description: Boolean(created.skill.description),
+        is_first_skill: existingSkillCount === 0,
+        source_mode: sourceMode,
+        author_type: "agent",
+      },
+    });
+    if (existingSkillCount === 0) {
+      await captureServerEvent({
+        distinctId: author.ownerId,
+        event: "first_skill_created",
+        properties: {
+          skill_id: created.skill.skillId,
+          skill_name: created.skill.name,
+          source_mode: sourceMode,
+          author_type: "agent",
+        },
+      });
+    }
     const files = await listSkillFiles({
       ownerId: author.ownerId,
       skillId: created.skill.skillId,

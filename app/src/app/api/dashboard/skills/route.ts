@@ -2,8 +2,9 @@ import crypto from "node:crypto";
 import { NextRequest } from "next/server";
 
 import { getDashboardUser } from "@/lib/dashboard-auth";
+import { captureServerEvent } from "@/lib/posthog-server";
 import { jsonResponse } from "@/lib/route-helpers";
-import { createSkillDraft } from "@/lib/skills/repository";
+import { createSkillDraft, listSkillsForOwner } from "@/lib/skills/repository";
 
 const SKILL_ID_CHARS = "abcdefghijkmnopqrstuvwxyz23456789";
 
@@ -39,16 +40,42 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    const existingSkillCount = (await listSkillsForOwner({ ownerId: user.id })).length;
+    const sourceMode = body.source_mode ? String(body.source_mode) : "managed";
     const created = await createSkillDraft({
       ownerId: user.id,
       name: String(body.name ?? ""),
       description: body.description === undefined ? undefined : String(body.description),
       baseUrl: new URL(request.url).origin,
       skillIdGenerator: randomSkillId,
-      sourceMode: body.source_mode ? String(body.source_mode) : "managed",
+      sourceMode,
       originalRepoFullName: body.original_repo_full_name ? String(body.original_repo_full_name) : undefined,
       originalSkillPath: body.original_skill_path ? String(body.original_skill_path) : undefined,
     });
+    await captureServerEvent({
+      distinctId: user.id,
+      event: "skill_created",
+      properties: {
+        skill_id: created.skill.skillId,
+        skill_name: created.skill.name,
+        has_description: Boolean(created.skill.description),
+        is_first_skill: existingSkillCount === 0,
+        source_mode: sourceMode,
+        author_type: "human",
+      },
+    });
+    if (existingSkillCount === 0) {
+      await captureServerEvent({
+        distinctId: user.id,
+        event: "first_skill_created",
+        properties: {
+          skill_id: created.skill.skillId,
+          skill_name: created.skill.name,
+          source_mode: sourceMode,
+          author_type: "human",
+        },
+      });
+    }
 
     return jsonResponse(
       {

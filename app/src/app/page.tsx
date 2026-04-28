@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { CtaDotSpotlight } from "./cta-dot-spotlight";
 import { SchematicGraphic } from "./hero-schematic";
+import { LandingAuthLink, LandingPageView } from "./landing-analytics";
 
 const marqueeCopy =
   "NOW ONBOARDING DESIGN PARTNERS BUILDING AGENT SKILLS FOR CLAUDE, CURSOR, GOOSE, AND LOCAL AGENTS.";
@@ -163,12 +164,13 @@ function DashboardPreview() {
     <div className="mx-auto w-full max-w-[56rem] border border-[var(--ink)] bg-[var(--paper)] shadow-[8px_8px_0_rgba(8,8,8,0.12)]">
       <div className="flex items-center justify-between border-b border-[var(--ink)] px-4 py-3">
         <BrandMark />
-        <Link
-          href="/dashboard"
+        <LandingAuthLink
+          intent="sign_up"
+          surface="dashboard_preview_new_skill"
           className="editorial-button editorial-button-dark px-3 py-2 text-[0.62rem]"
         >
           New skill
-        </Link>
+        </LandingAuthLink>
       </div>
 
       <div className="grid min-h-[24rem] md:grid-cols-[8.5rem_1fr]">
@@ -451,15 +453,16 @@ function Header() {
       </nav>
 
       <div className="flex items-center justify-end gap-4 font-editorial-mono text-[0.72rem]">
-        <Link href="/dashboard" className="hidden py-2 hover:underline sm:inline">
+        <LandingAuthLink intent="sign_in" surface="header" className="hidden py-2 hover:underline sm:inline">
           Sign in
-        </Link>
-        <Link
-          href="/dashboard"
+        </LandingAuthLink>
+        <LandingAuthLink
+          intent="sign_up"
+          surface="header"
           className="editorial-button editorial-button-dark min-w-20 px-5 py-3 text-[0.72rem]"
         >
           Sign up
-        </Link>
+        </LandingAuthLink>
       </div>
     </header>
   );
@@ -468,6 +471,7 @@ function Header() {
 export default function LandingPage() {
   return (
     <main className="min-h-screen bg-[var(--paper)] text-[var(--ink)]">
+      <LandingPageView />
       <div aria-hidden className="marketing-noise" />
 
       <div className="relative mx-auto max-w-[1440px] overflow-hidden border-x border-[var(--ink)] bg-[var(--paper)]">
@@ -496,12 +500,13 @@ export default function LandingPage() {
             </p>
 
             <div className="mt-9 flex flex-col gap-3 sm:flex-row">
-              <Link
-                href="/dashboard"
+              <LandingAuthLink
+                intent="sign_up"
+                surface="hero"
                 className="editorial-button editorial-button-dark min-h-12 px-8 py-4 text-[0.72rem]"
               >
                 Sign up
-              </Link>
+              </LandingAuthLink>
               <Link
                 href="/guide"
                 className="editorial-button min-h-12 bg-[var(--paper)] px-8 py-4 text-[0.72rem] hover:bg-[var(--white)]"
@@ -645,12 +650,13 @@ export default function LandingPage() {
               Create your first Skillfully workspace and start improving your skills from
               real usage and real feedback.
             </p>
-            <Link
-              href="/dashboard"
+            <LandingAuthLink
+              intent="sign_up"
+              surface="footer_cta"
               className="editorial-button editorial-button-light mt-9 min-h-12 px-10 py-4 text-[0.72rem]"
             >
               Sign up
-            </Link>
+            </LandingAuthLink>
             <p className="mt-9 font-editorial-mono text-[0.68rem] uppercase">
               Now onboarding early skill authors and design partners.
             </p>
@@ -665,7 +671,9 @@ export default function LandingPage() {
           <nav className="flex flex-wrap gap-6">
             <Link href="/guide">Skills Guide</Link>
             <Link href="/blog">Blog</Link>
-            <Link href="/dashboard">Sign in</Link>
+            <LandingAuthLink intent="sign_in" surface="footer">
+              Sign in
+            </LandingAuthLink>
             <Link href="/dashboard">Privacy</Link>
             <Link href="/dashboard">Terms</Link>
           </nav>

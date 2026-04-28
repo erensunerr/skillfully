@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import { NextRequest } from "next/server";
 
 import { getDashboardUser } from "@/lib/dashboard-auth";
+import { captureServerEvent } from "@/lib/posthog-server";
 import { createGitHubAppInstallationToken } from "@/lib/publishing/adapters/github-app";
 import { jsonResponse } from "@/lib/route-helpers";
 import { skillSlug } from "@/lib/skills/skill-files";
@@ -9,6 +10,7 @@ import {
   createSkillDraft,
   defaultSkillStore,
   listPublishingTargets,
+  listSkillsForOwner,
   updateSkillFileText,
 } from "@/lib/skills/repository";
 
@@ -100,6 +102,7 @@ export async function POST(request: NextRequest) {
       token,
       `/repos/${owner}/${repo}/git/trees/${encodeURIComponent(branch)}?recursive=1`,
     );
+    const existingSkillCount = (await listSkillsForOwner({ ownerId: user.id })).length;
     const skillPaths = tree.tree
       .filter((entry) => entry.type === "blob" && entry.path.split("/").pop()?.toLowerCase() === "skill.md")
       .map((entry) => entry.path);
@@ -149,6 +152,28 @@ export async function POST(request: NextRequest) {
         name,
         path: folder,
         consent_status: "pending",
+      });
+    }
+
+    await captureServerEvent({
+      distinctId: user.id,
+      event: "skills_imported",
+      properties: {
+        repo_full_name: repoFullName,
+        installation_id: installationId,
+        base_branch: branch,
+        imported_count: imported.length,
+        is_first_skill_import: existingSkillCount === 0 && imported.length > 0,
+      },
+    });
+    if (existingSkillCount === 0 && imported.length > 0) {
+      await captureServerEvent({
+        distinctId: user.id,
+        event: "first_skill_imported",
+        properties: {
+          repo_full_name: repoFullName,
+          imported_count: imported.length,
+        },
       });
     }
 

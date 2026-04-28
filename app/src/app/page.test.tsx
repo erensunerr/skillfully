@@ -17,6 +17,11 @@ test("landing page renders the refreshed editorial messaging", async () => {
   assert.match(html, /Common questions/);
   assert.match(html, /Stop guessing how your agent skills perform/);
   assert.match(html, /\/dashboard/);
+  assert.match(html, /data-auth-intent="sign_in"/);
+  assert.match(html, /data-auth-intent="sign_up"/);
+  assert.match(html, /data-auth-surface="header"/);
+  assert.match(html, /data-auth-surface="hero"/);
+  assert.match(html, /data-auth-surface="footer_cta"/);
   assert.match(html, /\/guide/);
   assert.match(html, /\/blog/);
   assert.match(html, /data-magnetic-cursor-area="hero-illustration"/);

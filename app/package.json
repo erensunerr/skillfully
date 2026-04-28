@@ -7,17 +7,20 @@
     "build": "next build",
     "prebuild": "node -e \"require('node:fs').rmSync('.next', { recursive: true, force: true })\"",
     "start": "next start",
-    "lint": "next lint",
-    "test": "node --import tsx --test"
+    "lint": "tsc --noEmit --pretty false",
+    "test": "node --import tsx --test \"src/**/*.test.ts\" \"src/**/*.test.tsx\""
   },
   "dependencies": {
     "@instantdb/admin": "latest",
     "@instantdb/react": "latest",
-    "next": "15.4.10",
+    "@mdxeditor/editor": "^3.55.0",
+    "next": "^16.2.4",
     "posthog-js": "^1.368.0",
     "posthog-node": "^5.29.2",
     "react": "19.1.0",
-    "react-dom": "19.1.0"
+    "react-dom": "19.1.0",
+    "react-select": "^5.10.2",
+    "recharts": "^3.8.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

@@ -1,6 +1,6 @@
 ---
 name: skillfully
-description: Use Skillfully APIs from an AI runtime to authenticate, create a tracked skill, and retrieve feedback.
+description: Use Skillfully APIs from an AI runtime to authenticate as a skill author agent, edit skills, publish them, and retrieve feedback.
 ---
 
 # Skillfully API skill
@@ -13,36 +13,34 @@ Set this once:
 BASE_URL="https://www.skillfully.sh"
 ```
 
-## 1) Login via API code
+## 1) Start author-agent device auth
 
-Call `POST /login` to start login.
-
-```bash
-curl -X POST "$BASE_URL/login" \
-  -H "content-type: application/json" \
-  -d '{"email":"agent@example.com"}'
-```
-
-The response indicates a code was sent. `email` must be reachable by Skillfully's email delivery webhook.
-
-## 2) Verify code and get bearer token
-
-Call `POST /login_confirm` with the code from email.
+Call `POST /api/agent/auth/device`. Show the returned `user_code` or `verification_uri_complete` to the human skill author.
 
 ```bash
-curl -X POST "$BASE_URL/login_confirm" \
+curl -X POST "$BASE_URL/api/agent/auth/device" \
   -H "content-type: application/json" \
-  -d '{"email":"agent@example.com","code":"123456"}'
+  -d '{"agent_name":"Codex author agent"}'
 ```
 
-Response shape:
+Poll slowly using the returned `interval`.
+
+```bash
+curl -X POST "$BASE_URL/api/agent/auth/device/token" \
+  -H "content-type: application/json" \
+  -d '{"device_code":"<device_code>"}'
+```
+
+While the human has not approved the code, the response is `authorization_pending`.
+After approval, the response includes an author token:
 
 ```json
 {
   "token_type": "Bearer",
-  "access_token": "<jwt-like-token>",
+  "access_token": "<author-token>",
   "token_prefix": "a1b2c3d4",
-  "user_id": "api_user_123",
+  "owner_id": "instant-user-id",
+  "scope": "skills:write",
   "token_expires_at": 1745000000000
 }
 ```
@@ -53,34 +51,56 @@ Use `access_token` for every authenticated endpoint with:
 Authorization: Bearer <access_token>
 ```
 
-## 3) Create a tracked skill and receive the suggested snippet
+## 2) Create a full draft skill
 
-Call `POST /skills` with name and optional description.
+Call `POST /api/agent/skills` with name and optional description. This creates the real Skillfully draft, default `SKILL.md`, version, and publishing targets.
 
 ```bash
-curl -X POST "$BASE_URL/skills" \
+curl -X POST "$BASE_URL/api/agent/skills" \
   -H "authorization: Bearer <access_token>" \
   -H "content-type: application/json" \
-  -d '{"name":"Code Reviewer","description":"Collect feedback after each run"}'
+  -d '{"name":"Code Reviewer","description":"Reviews code changes before merge"}'
 ```
 
-Response shape:
+## 3) Edit skill files
 
-```json
-{
-  "id": "<record-id>",
-  "skill_id": "sk_xxxxxx",
-  "name": "Code Reviewer",
-  "description": "Collect feedback after each run",
-  "feedback_url": "https://www.skillfully.sh/feedback/sk_xxxxxx",
-  "snippet": "# Skillfully feedback (required)\n...\nhttps://www.skillfully.sh/feedback/sk_xxxxxx",
-  "created_at": 1745000000000
-}
+List draft files:
+
+```bash
+curl "$BASE_URL/api/agent/skills/sk_xxxxxx/files" \
+  -H "authorization: Bearer <access_token>"
 ```
 
-Paste `snippet` into the agent skill you maintain (typically `SKILL.md`).
+Update a draft file:
 
-## 4) Retrieve feedback for one skill
+```bash
+curl -X PATCH "$BASE_URL/api/agent/skills/sk_xxxxxx/files/<file_id>" \
+  -H "authorization: Bearer <access_token>" \
+  -H "content-type: application/json" \
+  -d '{"path":"SKILL.md","content_text":"# Code Reviewer\n\n## Workflow\n\n1. Inspect the diff."}'
+```
+
+Skillfully owns the feedback/update block. Do not write that block into editable content; Skillfully appends it to published `SKILL.md` files.
+
+## 4) Publish
+
+```bash
+curl -X POST "$BASE_URL/api/agent/skills/sk_xxxxxx/publish" \
+  -H "authorization: Bearer <access_token>"
+```
+
+Publishing writes to GitHub when configured and prepares manual directory packets for supported directories.
+
+## 5) Retrieve analytics and feedback
+
+Use the agent analytics endpoint for summary data:
+
+```bash
+curl "$BASE_URL/api/agent/skills/sk_xxxxxx/analytics" \
+  -H "authorization: Bearer <access_token>"
+```
+
+The legacy feedback endpoint still returns raw feedback rows:
 
 Call `GET /feedback/<skill_id>` with optional query filters:
 

@@ -52,7 +52,7 @@ class InMemoryApiStore {
     const rows = Object.entries(this.rows[entity]).map(([id, record]) => ({
       id,
       ...record,
-    }));
+    }) as EntityRow);
     if (!where) {
       return rows;
     }

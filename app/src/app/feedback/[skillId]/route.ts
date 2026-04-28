@@ -2,9 +2,10 @@ import { NextRequest } from "next/server";
 import crypto from "node:crypto";
 
 import { adminDb } from "@/lib/adminDb";
-import { getPostHogClient } from "@/lib/posthog-server";
+import { captureServerEvent } from "@/lib/posthog-server";
 import { ApiError, getBearerToken, listFeedbackForSkill } from "@/lib/agent-api";
 import { getErrorPayload, getIpHash, jsonResponse } from "@/lib/route-helpers";
+import { recordSkillUsageEventSafely } from "@/lib/skill-usage-events";
 
 type RouteContext = { params: Promise<{ skillId: string }> };
 
@@ -100,8 +101,16 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
     }),
   ]);
 
-  const posthog = getPostHogClient();
-  posthog.capture({
+  await recordSkillUsageEventSafely({
+    ownerId: String(skill.ownerId),
+    skillId,
+    eventKind: "feedback_received",
+    source: "feedback_api",
+    request,
+    metadataJson: { rating },
+  });
+
+  await captureServerEvent({
     distinctId: skill.ownerId,
     event: "feedback_received",
     properties: {
@@ -110,7 +119,6 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
       rating,
     },
   });
-  await posthog.shutdown();
 
   return jsonResponse({}, 201);
 }

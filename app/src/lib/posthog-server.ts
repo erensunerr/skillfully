@@ -15,3 +15,26 @@ export function getPostHogClient() {
   }
   return posthogClient;
 }
+
+export async function captureServerEvent({
+  distinctId,
+  event,
+  properties,
+}: {
+  distinctId: string;
+  event: string;
+  properties?: Record<string, unknown>;
+}) {
+  if (!process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN) {
+    return;
+  }
+
+  try {
+    const posthog = getPostHogClient();
+    posthog.capture({ distinctId, event, properties });
+    await posthog.shutdown();
+    posthogClient = null;
+  } catch {
+    // Analytics must never block product flows.
+  }
+}

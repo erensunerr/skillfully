@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Instrument_Serif, JetBrains_Mono, Space_Grotesk } from "next/font/google";
+import "@mdxeditor/editor/style.css";
 import "./globals.css";
 
 const editorialSans = Space_Grotesk({

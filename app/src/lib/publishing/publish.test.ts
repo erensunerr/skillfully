@@ -84,7 +84,8 @@ test("manual directory adapters produce submission packets instead of pretending
 
   assert.equal(result.status, "manual_ready");
   assert.equal(result.targetKind, "lobehub");
-  assert.equal(result.packet.files[0].path, "SKILL.md");
+  const packet = result.packet as { files: Array<{ path: string }> };
+  assert.equal(packet.files[0].path, "SKILL.md");
 });
 
 test("publishSkillVersion records each adapter result and returns failed GitHub configuration clearly", async () => {

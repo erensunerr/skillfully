@@ -11,6 +11,23 @@ import {
 
 type RouteContext = { params: Promise<{ skillId: string; path: string[] }> };
 
+async function currentStorageUrl(file: Record<string, unknown>) {
+  if (typeof file.storageFileId !== "string") {
+    return typeof file.storageUrl === "string" ? file.storageUrl : null;
+  }
+
+  const fileRows = await adminDb.query({
+    $files: {
+      $: {
+        where: {
+          id: file.storageFileId,
+        },
+      },
+    },
+  } as never) as { $files?: Array<{ url?: string }> };
+  return fileRows.$files?.[0]?.url || (typeof file.storageUrl === "string" ? file.storageUrl : null);
+}
+
 export async function OPTIONS() {
   return jsonResponse({}, 200, "GET, OPTIONS");
 }
@@ -75,8 +92,9 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
     });
   }
 
-  if (typeof file.storageUrl === "string") {
-    return NextResponse.redirect(file.storageUrl);
+  const storageUrl = await currentStorageUrl(file);
+  if (storageUrl) {
+    return NextResponse.redirect(storageUrl);
   }
 
   return jsonResponse({ error: "file has no readable content" }, 404, "GET, OPTIONS");

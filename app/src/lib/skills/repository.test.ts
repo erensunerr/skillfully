@@ -1,9 +1,20 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { createSkillDraft, createSkillFile, listSkillFiles, markDraftPublished, updateSkillFileText } from "./repository";
+import {
+  createSkillDraft,
+  createSkillFile,
+  deleteSkillFile,
+  listSkillFiles,
+  markDraftPublished,
+  updateSkillFileText,
+} from "./repository";
 
 type Row = Record<string, unknown>;
+type Op =
+  | { kind: "create"; entity: string; id: string; values: Row }
+  | { kind: "update"; entity: string; id: string; values: Row }
+  | { kind: "delete"; entity: string; id: string };
 
 class InMemorySkillStore {
   rows: Record<string, Record<string, Row>> = {
@@ -23,9 +34,17 @@ class InMemorySkillStore {
     return { kind: "update" as const, entity, id, values };
   }
 
-  async transact(ops: Array<ReturnType<InMemorySkillStore["create"]> | ReturnType<InMemorySkillStore["update"]>>) {
+  delete(entity: string, id: string) {
+    return { kind: "delete" as const, entity, id };
+  }
+
+  async transact(ops: Op[]) {
     for (const op of ops) {
       this.rows[op.entity] ??= {};
+      if (op.kind === "delete") {
+        delete this.rows[op.entity][op.id];
+        continue;
+      }
       this.rows[op.entity][op.id] = {
         ...(this.rows[op.entity][op.id] ?? {}),
         ...op.values,
@@ -38,7 +57,7 @@ class InMemorySkillStore {
     for (const [entity, options] of Object.entries(query)) {
       const where = options.$?.where ?? {};
       result[entity] = Object.entries(this.rows[entity] ?? {})
-        .map(([id, values]) => ({ id, ...values }))
+        .map(([id, values]) => ({ id, ...values }) as Row)
         .filter((row) => Object.entries(where).every(([key, value]) => row[key] === value));
     }
     return result;
@@ -107,6 +126,21 @@ test("listSkillFiles and updateSkillFileText enforce ownership and normalized pa
   assert.equal(updated.sha256.length, 64);
   await assert.rejects(
     () =>
+      createSkillFile({
+        store,
+        now: () => 1700000000200,
+        idGenerator: () => `id_${++counter}`,
+        ownerId: "user-1",
+        skillId: "sk_demo",
+        versionId: created.version.id,
+        path: "docs/updated.md",
+        kind: "markdown",
+        contentText: "# Duplicate",
+      }),
+    /skill file path already exists/,
+  );
+  await assert.rejects(
+    () =>
       updateSkillFileText({
         store,
         now: () => 1700000000100,
@@ -115,6 +149,42 @@ test("listSkillFiles and updateSkillFileText enforce ownership and normalized pa
         contentText: "# Not yours",
       }),
     /skill file not found/,
+  );
+});
+
+test("deleteSkillFile deletes non-primary files and protects SKILL.md", async () => {
+  const store = new InMemorySkillStore();
+  let counter = 0;
+  const created = await createSkillDraft({
+    store,
+    now: () => 1700000000000,
+    idGenerator: () => `id_${++counter}`,
+    skillIdGenerator: () => "sk_demo",
+    ownerId: "user-1",
+    name: "Demo",
+    description: "",
+    baseUrl: "https://www.skillfully.sh",
+  });
+  const asset = await createSkillFile({
+    store,
+    now: () => 1700000000100,
+    idGenerator: () => `id_${++counter}`,
+    ownerId: "user-1",
+    skillId: "sk_demo",
+    versionId: created.version.id,
+    path: "assets/logo.png",
+    kind: "asset",
+    storageFileId: "file-1",
+    storageUrl: "https://example.com/logo.png",
+  });
+
+  const deleted = await deleteSkillFile({ store, ownerId: "user-1", fileId: asset.id });
+
+  assert.equal(deleted.path, "assets/logo.png");
+  assert.equal(store.rows.skillFiles[asset.id], undefined);
+  await assert.rejects(
+    () => deleteSkillFile({ store, ownerId: "user-1", fileId: created.file.id }),
+    /primary skill file cannot be deleted/,
   );
 });
 
@@ -193,7 +263,9 @@ test("markDraftPublished freezes the published version and opens a new editable 
     versionId: created.version.id,
   });
 
-  const versions = Object.entries(store.rows.skillVersions).map(([id, row]) => ({ id, ...row }));
+  const versions = Object.entries(store.rows.skillVersions).map(
+    ([id, row]) => ({ id, ...row }) as Row & { id: string; status?: string; manifestJson?: unknown },
+  );
   const publishedVersions = versions.filter((version) => version.status === "published");
   const draftVersions = versions.filter((version) => version.status === "draft");
   assert.equal(publishedVersions.length, 1);

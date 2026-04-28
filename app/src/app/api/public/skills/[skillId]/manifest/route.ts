@@ -7,6 +7,23 @@ import { buildSkillManifest } from "@/lib/skills/skill-files";
 
 type RouteContext = { params: Promise<{ skillId: string }> };
 
+async function currentStorageUrl(file: Record<string, unknown>) {
+  if (typeof file.storageFileId !== "string") {
+    return typeof file.storageUrl === "string" ? file.storageUrl : null;
+  }
+
+  const fileRows = await adminDb.query({
+    $files: {
+      $: {
+        where: {
+          id: file.storageFileId,
+        },
+      },
+    },
+  } as never) as { $files?: Array<{ url?: string }> };
+  return fileRows.$files?.[0]?.url || (typeof file.storageUrl === "string" ? file.storageUrl : null);
+}
+
 export async function OPTIONS() {
   return jsonResponse({}, 200, "GET, OPTIONS");
 }
@@ -50,6 +67,14 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
     return jsonResponse({ error: "published version not found" }, 404, "GET, OPTIONS");
   }
 
+  const manifestFiles = await Promise.all((versionRows.skillFiles ?? []).map(async (file) => ({
+    id: String(file.id),
+    path: String(file.path),
+    kind: String(file.kind),
+    contentText: typeof file.contentText === "string" ? file.contentText : null,
+    storageUrl: await currentStorageUrl(file),
+  })));
+
   const manifest = buildSkillManifest({
     skill: {
       skillId: String(skill.skillId),
@@ -62,13 +87,7 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
       version: String(version.version),
       status: String(version.status),
     },
-    files: (versionRows.skillFiles ?? []).map((file) => ({
-      id: String(file.id),
-      path: String(file.path),
-      kind: String(file.kind),
-      contentText: typeof file.contentText === "string" ? file.contentText : null,
-      storageUrl: typeof file.storageUrl === "string" ? file.storageUrl : null,
-    })),
+    files: manifestFiles,
     baseUrl: new URL(request.url).origin,
   });
 

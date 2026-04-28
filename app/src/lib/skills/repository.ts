@@ -30,6 +30,7 @@ export type SkillStore = {
   query(query: QueryInput): Promise<Record<string, Row[]>>;
   create(entity: EntityName, id: string, values: Row): unknown;
   update(entity: EntityName, id: string, values: Row): unknown;
+  delete(entity: EntityName, id: string): unknown;
   transact(ops: unknown[]): Promise<void>;
 };
 
@@ -103,6 +104,7 @@ function makeAdminStore(): SkillStore {
   const tx = adminDb.tx as unknown as Record<EntityName, Record<string, {
     create: (values: Row) => unknown;
     update: (values: Row) => unknown;
+    delete: () => unknown;
   }>>;
 
   return {
@@ -114,6 +116,9 @@ function makeAdminStore(): SkillStore {
     },
     update(entity, id, values) {
       return tx[entity][id].update(values);
+    },
+    delete(entity, id) {
+      return tx[entity][id].delete();
     },
     async transact(ops) {
       await adminDb.transact(ops as never);
@@ -509,16 +514,34 @@ export async function updateSkillFileText({
       $: {
         where: {
           ownerId,
+          id: fileId,
         },
       },
     },
   });
-  const existing = (rows.skillFiles ?? []).find((row) => row.id === fileId);
+  const existing = rows.skillFiles?.[0];
   if (!existing) {
     throw new Error("skill file not found");
   }
 
   const updatedPath = path ? normalizeSkillFilePath(path) : String(existing.path);
+  const collisionRows = await store.query({
+    skillFiles: {
+      $: {
+        where: {
+          ownerId,
+          skillId: String(existing.skillId),
+          versionId: String(existing.versionId),
+          path: updatedPath,
+        },
+      },
+    },
+  });
+  const pathCollision = (collisionRows.skillFiles ?? []).find((row) => row.id !== fileId);
+  if (pathCollision) {
+    throw new Error("skill file path already exists");
+  }
+
   const currentTime = now();
   const updatedContentText = isPrimarySkillMarkdownPath(updatedPath)
     ? stripSkillfullyManagedBlock(contentText)
@@ -535,6 +558,37 @@ export async function updateSkillFileText({
     ...(rowWithId(existing) as SkillFileRow),
     ...values,
   };
+}
+
+export async function deleteSkillFile({
+  store = defaultSkillStore,
+  ownerId,
+  fileId,
+}: {
+  store?: SkillStore;
+  ownerId: string;
+  fileId: string;
+}) {
+  const rows = await store.query({
+    skillFiles: {
+      $: {
+        where: {
+          ownerId,
+          id: fileId,
+        },
+      },
+    },
+  });
+  const existing = rows.skillFiles?.[0];
+  if (!existing) {
+    throw new Error("skill file not found");
+  }
+  const file = rowWithId(existing) as SkillFileRow;
+  if (isPrimarySkillMarkdownPath(file.path)) {
+    throw new Error("primary skill file cannot be deleted");
+  }
+  await store.transact([store.delete("skillFiles", fileId)]);
+  return file;
 }
 
 export async function createSkillFile({
@@ -574,6 +628,22 @@ export async function createSkillFile({
   }
 
   const normalizedPath = normalizeSkillFilePath(path);
+  const collisionRows = await store.query({
+    skillFiles: {
+      $: {
+        where: {
+          ownerId,
+          skillId,
+          versionId,
+          path: normalizedPath,
+        },
+      },
+    },
+  });
+  if ((collisionRows.skillFiles ?? []).length > 0) {
+    throw new Error("skill file path already exists");
+  }
+
   const currentTime = now();
   const text =
     contentText === undefined || contentText === null

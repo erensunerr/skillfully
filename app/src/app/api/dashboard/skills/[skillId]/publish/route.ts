@@ -41,7 +41,7 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
       },
     });
 
-    const published = result.results.some((entry) => entry.status !== "failed");
+    const published = result.results.some((entry) => entry.status === "published" || entry.status === "submitted");
     if (published) {
       await markDraftPublished({ ownerId: user.id, skillId, versionId: context.version.id });
       await captureServerEvent({
@@ -60,6 +60,18 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
           failed_targets: result.results
             .filter((entry) => entry.status === "failed")
             .map((entry) => entry.targetKind),
+        },
+      });
+    } else {
+      await captureServerEvent({
+        distinctId: user.id,
+        event: "skill_publish_failed",
+        properties: {
+          skill_id: skillId,
+          skill_name: context.skill.name,
+          version_id: context.version.id,
+          author_type: "human",
+          result_statuses: result.results.map((entry) => `${entry.targetKind}:${entry.status}`),
         },
       });
     }

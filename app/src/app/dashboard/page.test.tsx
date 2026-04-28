@@ -11,7 +11,7 @@ function fakeSkill(name = "code-review", id = "skill-1") {
     description: "Reviews code changes for correctness and missing tests.",
     skillId: "sk_test123",
     createdAt: Date.now(),
-  } as never;
+  };
 }
 
 function fakeEntries() {
@@ -229,14 +229,14 @@ test("dashboard skill detail renders the editor tab UI", async () => {
   assert.match(html, /MDXEditor/i);
   assert.match(html, /When to use/);
   assert.match(html, /Workflow/);
-  assert.match(html, /Save changes/);
-  assert.match(html, /Editor changes save to Skillfully/i);
+  assert.match(html, /Autosaves to Skillfully/i);
   assert.match(html, /SKILL\.md present/);
   assert.match(html, /Version history/);
   assert.match(html, /Version history appears after the first publish/);
   assert.doesNotMatch(html, /Publishing destinations/);
   assert.match(html, /Change publishing options/i);
   assert.match(html, /Publish version/);
+  assert.doesNotMatch(html, /Save changes/);
   assert.doesNotMatch(html, /Install skill prompt/);
 });
 

@@ -93,13 +93,14 @@ export function buildGitHubWritePlan({
   files: PublishFile[];
 }): GitHubWritePlan {
   const timestamp = Date.now().toString(36);
+  const branchSuffix = crypto.randomBytes(3).toString("hex");
   const normalizedRoot = normalizeSkillRoot(skillRoot);
   const normalizedVersion = safeBranchSegment(version);
 
   return {
     repoFullName,
     baseBranch,
-    branchName: `skillfully/${safeBranchSegment(skillSlug)}/${normalizedVersion}-${timestamp}`,
+    branchName: `skillfully/${safeBranchSegment(skillSlug)}/${normalizedVersion}-${timestamp}-${branchSuffix}`,
     files: files.map((file) => ({
       ...file,
       path: `${normalizedRoot}/${normalizeSkillFilePath(file.path)}`,
@@ -216,6 +217,39 @@ export async function createGitHubAppInstallationToken({
     throw new Error("GitHub installation token response did not include a token");
   }
   return payload.token;
+}
+
+export async function getGitHubAppInstallation({
+  fetcher,
+  appId,
+  privateKey,
+  installationId,
+}: {
+  fetcher: GitHubFetch;
+  appId: string;
+  privateKey: string;
+  installationId: string;
+}) {
+  const jwt = createGitHubAppJwt({ appId, privateKey });
+  const response = await fetcher(`https://api.github.com/app/installations/${installationId}`, {
+    headers: {
+      accept: "application/vnd.github+json",
+      authorization: `Bearer ${jwt}`,
+      "x-github-api-version": "2022-11-28",
+    },
+  } as never);
+
+  if (!response.ok) {
+    const detail = await response.text();
+    throw new Error(`Unable to inspect GitHub installation ${response.status}: ${detail}`);
+  }
+
+  return (await response.json()) as {
+    id: number;
+    account?: { login?: string; type?: string };
+    repository_selection?: string;
+    permissions?: Record<string, unknown>;
+  };
 }
 
 function encodeGitHubPath(value: string) {

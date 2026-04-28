@@ -7,7 +7,7 @@ import { jsonResponse } from "@/lib/route-helpers";
 function verifySignature(rawBody: string, signature: string | null) {
   const secret = process.env.GITHUB_APP_WEBHOOK_SECRET;
   if (!secret) {
-    return process.env.NODE_ENV !== "production";
+    return false;
   }
   if (!signature?.startsWith("sha256=")) {
     return false;
@@ -37,8 +37,9 @@ async function upsertInstallation(payload: Record<string, any>) {
         },
       },
     },
-  } as never) as { githubInstallations?: Array<{ id: string }> };
-  const id = rows.githubInstallations?.[0]?.id || crypto.randomUUID();
+  } as never) as { githubInstallations?: Array<{ id: string; ownerId?: string }> };
+  const existing = rows.githubInstallations?.[0];
+  const id = existing?.id || crypto.randomUUID();
   const createValues = {
     installationId,
     accountLogin: String(installation.account.login),

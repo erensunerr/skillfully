@@ -6,6 +6,7 @@ import { getIpHash } from "@/lib/route-helpers";
 
 export type SkillUsageEventKind =
   | "public_page_view"
+  | "skill_installed"
   | "manifest_checked"
   | "file_loaded"
   | "feedback_received";

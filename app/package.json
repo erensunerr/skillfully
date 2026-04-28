@@ -7,7 +7,7 @@
     "build": "next build",
     "prebuild": "node -e \"require('node:fs').rmSync('.next', { recursive: true, force: true })\"",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "tsc --noEmit --pretty false",
     "test": "node --import tsx --test \"src/**/*.test.ts\" \"src/**/*.test.tsx\""
   },
   "dependencies": {

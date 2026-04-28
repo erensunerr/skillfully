@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Select, { type SingleValue, type StylesConfig } from "react-select";
 import { db, isUsingLocalPreviewDb } from "@/lib/db";
-import { buildSkillfullyManagedBlock } from "@/lib/skills/managed-block";
 import {
   captureClientEvent,
   captureClientException,
@@ -63,7 +62,13 @@ type RecentFeedbackRow = {
   feedback: string;
   createdAt: string;
 };
-type UsageEventKind = "public_page_view" | "manifest_checked" | "file_loaded" | "feedback_received" | string;
+type UsageEventKind =
+  | "public_page_view"
+  | "skill_installed"
+  | "manifest_checked"
+  | "file_loaded"
+  | "feedback_received"
+  | string;
 
 type PublishModalStep = "confirm" | "published" | "waiting" | "confirmed";
 type SkillEditorFile = {
@@ -183,6 +188,7 @@ function usageSummary(events: SkillUsageEvent[]) {
 
 function usageEventLabel(kind: UsageEventKind) {
   if (kind === "public_page_view") return "Public page views";
+  if (kind === "skill_installed") return "Installs";
   if (kind === "manifest_checked") return "Update checks";
   if (kind === "file_loaded") return "File loads";
   if (kind === "feedback_received") return "Feedback events";
@@ -834,7 +840,7 @@ export function SkillSelector({
     skillOptions.find((option) => option.id === selectedId) ?? skillOptions[0] ?? null;
 
   return (
-    <div className="relative min-w-0">
+    <div className="relative z-50 min-w-0">
       <button
         type="button"
         aria-haspopup="listbox"
@@ -849,7 +855,7 @@ export function SkillSelector({
       {isOpen ? (
         <div
           role="listbox"
-          className="absolute left-0 top-[calc(100%+0.45rem)] z-30 w-[min(18rem,calc(100vw-2.5rem))] border border-[var(--ink)] bg-[var(--white)] p-2 shadow-[6px_6px_0_var(--ink)]"
+          className="absolute left-0 top-[calc(100%+0.45rem)] z-[100] w-[min(18rem,calc(100vw-2.5rem))] border border-[var(--ink)] bg-[var(--white)] p-2 shadow-[6px_6px_0_var(--ink)]"
         >
           <div className="space-y-1">
             {skillOptions.length === 0 ? (
@@ -1001,7 +1007,7 @@ function DashboardSidebar({
   ] satisfies Array<[DashboardTab, string]>;
 
   return (
-    <aside className="flex min-h-0 w-full max-w-full min-w-0 flex-col overflow-hidden border-b border-[var(--ink)] bg-[var(--paper)] text-[var(--ink)] lg:sticky lg:top-0 lg:h-screen lg:w-60 lg:border-b-0 lg:border-r">
+    <aside className="relative z-40 flex min-h-0 w-full max-w-full min-w-0 flex-col overflow-visible border-b border-[var(--ink)] bg-[var(--paper)] text-[var(--ink)] lg:sticky lg:top-0 lg:h-screen lg:w-60 lg:border-b-0 lg:border-r">
       <div className="border-b border-[var(--ink)] px-5 py-4 lg:py-6">
         <BrandMark />
       </div>
@@ -1185,7 +1191,7 @@ function UsageChart({ events }: { events: SkillUsageEvent[] }) {
           <div className="border border-[var(--ink)] bg-[var(--white)] p-5">
             <p className="font-editorial-mono text-xs font-bold uppercase">Event mix</p>
             <div className="mt-5 space-y-4 text-sm">
-              {(["public_page_view", "manifest_checked", "file_loaded", "feedback_received"] as const).map((kind) => (
+              {(["public_page_view", "skill_installed", "manifest_checked", "file_loaded", "feedback_received"] as const).map((kind) => (
                 <div key={kind} className="flex items-center justify-between gap-4">
                   <span>{usageEventLabel(kind)}</span>
                   <span className="font-editorial-mono">{(counts[kind] ?? 0).toLocaleString()}</span>
@@ -1461,14 +1467,25 @@ function FileGlyph({ locked = false }: { locked?: boolean }) {
 }
 
 function buildPublicInstallPrompt(skill: Skill) {
+  const repoFullName =
+    typeof skill.originalRepoFullName === "string" && skill.originalRepoFullName
+      ? skill.originalRepoFullName
+      : "erensunerr/skillfully-skills";
+  const skillRoot =
+    typeof skill.originalSkillPath === "string" && skill.originalSkillPath
+      ? skill.originalSkillPath
+      : `skills/${skill.slug || skill.name}`;
   return [
-    `Install the public Skillfully skill "${skill.name}".`,
+    `Install the ${skill.name} skill from GitHub (${repoFullName}).`,
+    `Skill path: ${skillRoot}`,
     "",
-    `Skill URL: https://www.skillfully.sh/skills/${skill.skillId}`,
+    "When the install is done, call:",
+    `POST https://www.skillfully.sh/api/public/skills/${skill.skillId}/install`,
+    "",
+    "Before each use, check for the latest version:",
     `Manifest URL: https://www.skillfully.sh/api/public/skills/${skill.skillId}/manifest`,
     "",
-    "Use the latest published version as your operating instructions.",
-    "Follow its workflow, response style, validation checks, and escalation guidance.",
+    "Then load the published files from the manifest and use the latest SKILL.md as your operating instructions.",
   ].join("\n");
 }
 
@@ -1676,26 +1693,32 @@ function SkillEditorWorkspace({
   const [publishStep, setPublishStep] = useState<PublishModalStep | null>(null);
   const [installPromptCopied, setInstallPromptCopied] = useState(false);
   const [publishError, setPublishError] = useState("");
-  const [fileStatus, setFileStatus] = useState("Editor changes save to Skillfully.");
+  const [fileStatus, setFileStatus] = useState("Autosaves to Skillfully.");
   const [isFileLoading, setIsFileLoading] = useState(false);
   const [isFileSaving, setIsFileSaving] = useState(false);
   const [isUploadingFile, setIsUploadingFile] = useState(false);
+  const [deletingFileIds, setDeletingFileIds] = useState<Set<string>>(() => new Set());
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
-  const publicInstallPrompt = useMemo(() => buildPublicInstallPrompt(skill), [skill.name, skill.skillId]);
-  const skillfullyManagedBlock = useMemo(
-    () => buildSkillfullyManagedBlock({ skillId: skill.skillId }),
-    [skill.skillId],
+  const publicInstallPrompt = useMemo(
+    () => buildPublicInstallPrompt(skill),
+    [
+      skill.name,
+      skill.originalRepoFullName,
+      skill.originalSkillPath,
+      skill.skillId,
+      skill.slug,
+    ],
   );
   const markdownFiles = files.filter(isEditableSkillFile);
   const assetFiles = files.filter((file) => !isEditableSkillFile(file));
   const selectedFile =
     files.find((file) => file.id === selectedFileId) ?? markdownFiles[0] ?? files[0] ?? null;
   const selectedFileIsEditable = selectedFile ? isEditableSkillFile(selectedFile) : false;
-  const selectedFileIsDirty = selectedFile ? dirtyFileIds.has(selectedFile.id) : false;
   const selectedMarkdown = selectedFileIsEditable ? selectedFile?.contentText ?? "" : "";
   const selectedFileGetsManagedBlock = selectedFile?.path.split("/").pop()?.toLowerCase() === "skill.md";
   const canPersistFiles = Boolean(user && !isUsingLocalPreviewDb);
-  const hasBlockingUnsavedChanges = canPersistFiles && dirtyFileIds.size > 0;
+  const hasPendingAutosave = canPersistFiles && dirtyFileIds.size > 0;
+  const editorStatusLabel = skill.status === "published" || skill.publishedVersionId ? "Published" : "Draft";
   const editorValidationRows = [
     ["SKILL.md present", files.some((file) => file.path.toLowerCase() === "skill.md") ? "Yes" : "Missing"],
     ["Editable files", String(markdownFiles.length)],
@@ -1722,6 +1745,7 @@ function SkillEditorWorkspace({
       summary: skill.description || "Describe what this skill helps an agent do.",
     }));
     setDirtyFileIds(new Set());
+    setDeletingFileIds(new Set());
 
     if (!user || isUsingLocalPreviewDb) {
       setFiles(fallbackFiles);
@@ -1744,7 +1768,7 @@ function SkillEditorWorkspace({
           }
           return loadedFiles.find(isEditableSkillFile)?.id ?? loadedFiles[0]?.id ?? "";
         });
-        setFileStatus("Editor changes save to Skillfully.");
+        setFileStatus("All changes saved.");
       })
       .catch((error) => {
         if (!active) return;
@@ -1782,46 +1806,64 @@ function SkillEditorWorkspace({
     setFileStatus("Unsaved changes.");
   }
 
-  async function saveSelectedFile() {
-    if (!selectedFile || !selectedFileIsEditable) {
-      return;
+  async function saveDirtyFiles(fileIds = dirtyFileIds) {
+    const dirtyFiles = files.filter((file) => fileIds.has(file.id) && isEditableSkillFile(file));
+    if (dirtyFiles.length === 0) {
+      return true;
     }
-
     if (!user || isUsingLocalPreviewDb) {
       setFileStatus("Local preview changes are kept in memory.");
-      return;
+      setDirtyFileIds(new Set());
+      return true;
     }
 
     setIsFileSaving(true);
     setFileStatus("Saving changes...");
     try {
-      const payload = await dashboardJson<{ file: SkillEditorFile }>(
-        user,
-        `/api/dashboard/skills/${skill.skillId}/files/${selectedFile.id}`,
-        {
-          method: "PATCH",
-          body: JSON.stringify({
-            path: selectedFile.path,
-            content_text: selectedFile.contentText ?? "",
-          }),
-        },
-      );
+      const savedFiles = await Promise.all(dirtyFiles.map((file) =>
+        dashboardJson<{ file: SkillEditorFile }>(
+          user,
+          `/api/dashboard/skills/${skill.skillId}/files/${file.id}`,
+          {
+            method: "PATCH",
+            body: JSON.stringify({
+              path: file.path,
+              content_text: file.contentText ?? "",
+            }),
+          },
+        ),
+      ));
       setFiles((currentFiles) => sortSkillFiles(
-        currentFiles.map((file) => (file.id === payload.file.id ? payload.file : file)),
+        currentFiles.map((file) => savedFiles.find((payload) => payload.file.id === file.id)?.file ?? file),
       ));
       setDirtyFileIds((current) => {
         const next = new Set(current);
-        next.delete(payload.file.id);
+        dirtyFiles.forEach((file) => next.delete(file.id));
         return next;
       });
-      setFileStatus("Saved in Skillfully.");
+      setFileStatus("All changes saved.");
+      return true;
     } catch (error) {
       captureClientException(error);
       setFileStatus(`Save failed: ${extractErrorMessage(error)}`);
+      return false;
     } finally {
       setIsFileSaving(false);
     }
   }
+
+  useEffect(() => {
+    if (dirtyFileIds.size === 0 || isFileLoading || isFileSaving) {
+      return;
+    }
+
+    const fileIdsToSave = new Set(dirtyFileIds);
+    const timer = window.setTimeout(() => {
+      void saveDirtyFiles(fileIdsToSave);
+    }, 850);
+
+    return () => window.clearTimeout(timer);
+  }, [dirtyFileIds, files, isFileLoading, isFileSaving, user?.id, user?.refresh_token]);
 
   async function uploadSkillFile(file: File | null | undefined) {
     if (!file) {
@@ -1863,6 +1905,34 @@ function SkillEditorWorkspace({
     }
   }
 
+  async function deleteAssetFile(file: SkillEditorFile) {
+    if (!user || isUsingLocalPreviewDb) {
+      setFileStatus("Deleting assets requires connected Skillfully storage.");
+      return;
+    }
+
+    setDeletingFileIds((current) => new Set(current).add(file.id));
+    setFileStatus(`Deleting ${file.path}...`);
+    try {
+      await dashboardJson<{ file: SkillEditorFile }>(
+        user,
+        `/api/dashboard/skills/${skill.skillId}/files/${file.id}`,
+        { method: "DELETE" },
+      );
+      setFiles((currentFiles) => currentFiles.filter((currentFile) => currentFile.id !== file.id));
+      setFileStatus(`Deleted ${file.path}.`);
+    } catch (error) {
+      captureClientException(error);
+      setFileStatus(`Delete failed: ${extractErrorMessage(error)}`);
+    } finally {
+      setDeletingFileIds((current) => {
+        const next = new Set(current);
+        next.delete(file.id);
+        return next;
+      });
+    }
+  }
+
   async function copyPublicInstallPrompt() {
     await navigator.clipboard.writeText(publicInstallPrompt);
     setInstallPromptCopied(true);
@@ -1888,8 +1958,10 @@ function SkillEditorWorkspace({
           failures.map((entry) => `${entry.targetKind}: ${entry.error || "failed"}`).join(" | "),
         );
       }
-      if (result.results.some((entry) => entry.status !== "failed")) {
+      if (result.results.some((entry) => entry.status === "published" || entry.status === "submitted")) {
         setPublishStep("published");
+      } else if (failures.length === 0) {
+        setPublishError("No publish target completed. Connect GitHub before publishing.");
       }
     } catch (error) {
       captureClientException(error);
@@ -1958,15 +2030,19 @@ function SkillEditorWorkspace({
                 </div>
 
                 <div className="mt-6 border-t border-[var(--ink)] pt-6">
-                  <p className="font-editorial-mono text-xs font-bold uppercase">Assets (read-only)</p>
+                  <p className="font-editorial-mono text-xs font-bold uppercase">Assets</p>
                   <div className="mt-4 space-y-2">
                     {assetFiles.map((asset) => (
                       <div key={asset.id} className="flex items-center justify-between px-3 py-3 text-sm">
-                        <span className="flex min-w-0 items-center gap-3 truncate">
-                          <FileGlyph locked />
-                          {asset.path}
-                        </span>
-                        <FileGlyph locked />
+                        <span className="min-w-0 truncate">{asset.path}</span>
+                        <button
+                          type="button"
+                          className="border border-[var(--ink)] px-2 py-1 font-editorial-mono text-[0.62rem] uppercase disabled:opacity-50"
+                          disabled={deletingFileIds.has(asset.id)}
+                          onClick={() => void deleteAssetFile(asset)}
+                        >
+                          {deletingFileIds.has(asset.id) ? "Deleting" : "Delete"}
+                        </button>
                       </div>
                     ))}
                     {assetFiles.length === 0 ? (
@@ -2000,16 +2076,16 @@ function SkillEditorWorkspace({
               )}
             </div>
             {selectedFileGetsManagedBlock ? (
-              <div className="border-t border-[var(--ink)] bg-[var(--paper)] p-4">
-                <div className="flex items-center justify-between gap-4">
-                  <p className="font-editorial-mono text-xs font-bold uppercase">Skillfully-owned instructions</p>
-                  <span className="border border-[var(--ink)] px-2 py-1 font-editorial-mono text-[0.62rem] font-bold uppercase">
-                    Locked
-                  </span>
+              <div className="border-t border-[var(--ink)] bg-[var(--white)] px-8 py-4">
+                <div className="inline-flex max-w-full items-center gap-3 border border-[var(--ink)] bg-[var(--paper)] px-4 py-3">
+                  <span aria-hidden className="font-editorial-sans text-lg leading-none">›</span>
+                  <div className="min-w-0">
+                    <p className="font-editorial-sans text-sm font-semibold">Skillfully feedback and update instructions</p>
+                    <p className="mt-1 truncate font-editorial-mono text-[0.62rem] uppercase text-[var(--ink)]/60">
+                      Locked system block added on publish
+                    </p>
+                  </div>
                 </div>
-                <pre className="mt-3 max-h-44 overflow-auto whitespace-pre-wrap border border-[var(--ink)] bg-[var(--white)] p-3 font-editorial-mono text-[0.68rem] leading-5">
-                  {skillfullyManagedBlock}
-                </pre>
               </div>
             ) : null}
           </div>
@@ -2060,16 +2136,8 @@ function SkillEditorWorkspace({
                   </label>
                   <label className="block text-sm">
                     <span className="block font-editorial-sans">Status</span>
-                    <div className="mt-2">
-                      <DashboardSelect
-                        ariaLabel="Frontmatter status"
-                        value={frontmatter.status}
-                        options={[
-                          { value: "Draft", label: "Draft" },
-                          { value: "Published", label: "Published" },
-                        ]}
-                        onChange={(nextStatus) => setFrontmatter((state) => ({ ...state, status: nextStatus }))}
-                      />
+                    <div className="mt-2 border border-[var(--ink)] bg-[var(--paper)] px-3 py-3 font-editorial-mono text-sm">
+                      {editorStatusLabel}
                     </div>
                   </label>
                 </div>
@@ -2105,34 +2173,29 @@ function SkillEditorWorkspace({
 
       <section className="flex min-h-24 flex-col gap-3 border-b border-[var(--ink)] p-4 sm:flex-row sm:items-center sm:justify-end">
         <p className="mr-auto border border-[var(--ink)] bg-[var(--white)] p-3 font-editorial-mono text-xs font-bold uppercase">
-          {fileStatus}
+          {hasPendingAutosave || isFileSaving ? "Saving automatically..." : fileStatus}
         </p>
         {publishError ? (
           <p className="border border-red-600 bg-red-50 p-3 font-editorial-mono text-xs font-bold uppercase text-red-700">
             {publishError}
           </p>
         ) : null}
-        <button
-          type="button"
-          className={`${DASHBOARD_BUTTON_LIGHT} disabled:cursor-not-allowed disabled:opacity-50`}
-          disabled={!selectedFileIsEditable || isFileSaving || (!selectedFileIsDirty && canPersistFiles)}
-          onClick={() => void saveSelectedFile()}
-        >
-          {isFileSaving ? "Saving..." : "Save changes"}
-        </button>
         <Link href={skillRoute(skill, "settings")} className={`${DASHBOARD_BUTTON_LIGHT} text-center`}>
           Change publishing options
         </Link>
         <button
           type="button"
           className="border border-[var(--ink)] bg-[var(--ink)] px-6 py-4 font-editorial-sans text-lg font-semibold text-[var(--paper)] disabled:cursor-not-allowed disabled:opacity-50"
-          disabled={hasBlockingUnsavedChanges || isFileLoading || isFileSaving || isUploadingFile}
-          onClick={() => {
+          disabled={isFileLoading || isFileSaving || isUploadingFile}
+          onClick={async () => {
+            if (!(await saveDirtyFiles())) {
+              return;
+            }
             setInstallPromptCopied(false);
             setPublishStep("confirm");
           }}
         >
-          {hasBlockingUnsavedChanges ? "Save before publish" : "Publish version"}
+          {isFileSaving ? "Saving..." : "Publish version"}
         </button>
       </section>
 

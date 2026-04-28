@@ -294,6 +294,19 @@ button:disabled,
   outline: none;
 }
 
+.skillfully-mdx-editor [role="toolbar"] {
+  border-bottom: 1px solid var(--ink);
+  background: var(--paper);
+  padding: 0.45rem 0.65rem;
+}
+
+.skillfully-mdx-editor [role="toolbar"] button,
+.skillfully-mdx-editor [role="toolbar"] select {
+  border-radius: 0;
+  color: var(--ink);
+  font-family: var(--font-space-grotesk), "Space Grotesk", sans-serif;
+}
+
 .skillfully-mdx-content h1,
 .skillfully-mdx-content h2 {
   font-family: var(--font-space-grotesk), "Space Grotesk", sans-serif;

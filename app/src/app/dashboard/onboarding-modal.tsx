@@ -1,10 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import Link from "next/link";
 import { captureClientEvent } from "@/lib/client-analytics";
-
-type OnboardingImportState = "idle" | "connecting" | "unavailable";
 
 const BRUTAL_BUTTON =
   "border-4 border-black bg-black px-4 py-2 text-sm font-black uppercase text-white transition-all hover:bg-yellow-300 hover:text-black";
@@ -48,14 +46,6 @@ export function OnboardingModal({
   onClose: () => void;
   onCreateSkill: () => void;
 }) {
-  const [importState, setImportState] = useState<OnboardingImportState>("idle");
-  const isConnecting = importState === "connecting";
-  const githubInstallUrl =
-    process.env.NEXT_PUBLIC_GITHUB_APP_INSTALL_URL ||
-    (process.env.NEXT_PUBLIC_GITHUB_APP_SLUG
-      ? `https://github.com/apps/${process.env.NEXT_PUBLIC_GITHUB_APP_SLUG}/installations/new`
-      : "");
-
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
@@ -66,18 +56,6 @@ export function OnboardingModal({
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [onClose]);
-
-  useEffect(() => {
-    if (importState !== "connecting") {
-      return undefined;
-    }
-
-    const timeoutId = window.setTimeout(() => {
-      setImportState("unavailable");
-    }, 700);
-
-    return () => window.clearTimeout(timeoutId);
-  }, [importState]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/35 px-3 py-6 backdrop-blur-[1px]">
@@ -120,31 +98,14 @@ export function OnboardingModal({
               </div>
               <button
                 type="button"
-                className={`${BRUTAL_BUTTON} mt-5 w-full disabled:opacity-70`}
-                disabled={isConnecting}
+                className={`${BRUTAL_BUTTON} mt-5 w-full`}
                 onClick={() => {
                   captureClientEvent("onboarding_github_connect_clicked");
-                  if (githubInstallUrl) {
-                    window.location.href = githubInstallUrl;
-                    return;
-                  }
-                  setImportState("connecting");
+                  window.location.href = "/api/github/install";
                 }}
               >
-                {isConnecting ? "Connecting..." : "Connect GitHub"}
+                Connect GitHub
               </button>
-              <p
-                aria-live="polite"
-                className={`mt-3 min-h-10 border-2 px-3 py-2 font-mono text-xs leading-5 ${
-                  importState === "unavailable"
-                    ? "border-black bg-white"
-                    : "border-transparent"
-                }`}
-              >
-                {importState === "unavailable"
-                  ? "GitHub App installation is not configured yet. Create a skill manually for now."
-                  : ""}
-              </p>
             </article>
 
             <article className="border-t-2 border-black pt-6 md:border-t-0 md:pl-10 md:pt-0">

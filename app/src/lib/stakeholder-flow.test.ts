@@ -65,7 +65,7 @@ class StakeholderStore {
     for (const [entity, options] of Object.entries(query)) {
       const where = options.$?.where ?? {};
       result[entity] = Object.entries(this.rows[entity] ?? {})
-        .map(([id, values]) => ({ id, ...values }))
+        .map(([id, values]) => ({ id, ...values }) as Row)
         .filter((row) => Object.entries(where).every(([key, value]) => row[key] === value));
     }
     return result;

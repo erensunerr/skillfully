@@ -32,10 +32,12 @@ Resolve the security, data integrity, and editor usability issues found in the P
 ## Editor UX
 
 - Removed the manual `Save changes` button and added debounced autosave for markdown edits.
+- Removed the visible autosave status text and file-list dirty/active dot so autosave is quiet.
 - Publish flushes pending dirty files before opening the publish confirmation.
 - Status is now derived from draft/published state and is not editable from the editor panel.
 - Asset rows no longer show lock icons and include a delete action.
-- The Skillfully-owned SKILL.md instructions are represented as a compact, non-editable editor pill instead of a large editable-looking block.
+- Removed the visible Skillfully-owned SKILL.md pill from the editor.
+- The markdown editor content area scrolls inside the editor panel.
 - The markdown editor now exposes toolbar controls for block type, bold/italic/underline, inline code, lists, and links.
 - The skill selector dropdown has a higher stacking context so it opens above the sidebar content.
 

@@ -1693,7 +1693,7 @@ function SkillEditorWorkspace({
   const [publishStep, setPublishStep] = useState<PublishModalStep | null>(null);
   const [installPromptCopied, setInstallPromptCopied] = useState(false);
   const [publishError, setPublishError] = useState("");
-  const [fileStatus, setFileStatus] = useState("Autosaves to Skillfully.");
+  const [, setFileStatus] = useState("Autosaves to Skillfully.");
   const [isFileLoading, setIsFileLoading] = useState(false);
   const [isFileSaving, setIsFileSaving] = useState(false);
   const [isUploadingFile, setIsUploadingFile] = useState(false);
@@ -1715,9 +1715,7 @@ function SkillEditorWorkspace({
     files.find((file) => file.id === selectedFileId) ?? markdownFiles[0] ?? files[0] ?? null;
   const selectedFileIsEditable = selectedFile ? isEditableSkillFile(selectedFile) : false;
   const selectedMarkdown = selectedFileIsEditable ? selectedFile?.contentText ?? "" : "";
-  const selectedFileGetsManagedBlock = selectedFile?.path.split("/").pop()?.toLowerCase() === "skill.md";
   const canPersistFiles = Boolean(user && !isUsingLocalPreviewDb);
-  const hasPendingAutosave = canPersistFiles && dirtyFileIds.size > 0;
   const editorStatusLabel = skill.status === "published" || skill.publishedVersionId ? "Published" : "Draft";
   const editorValidationRows = [
     ["SKILL.md present", files.some((file) => file.path.toLowerCase() === "skill.md") ? "Yes" : "Missing"],
@@ -2002,12 +2000,11 @@ function SkillEditorWorkspace({
                   <div className="mt-4 space-y-2">
                     {markdownFiles.map((file) => {
                       const isActive = selectedFile?.id === file.id;
-                      const isDirty = dirtyFileIds.has(file.id);
                       return (
                         <button
                           key={file.id}
                           type="button"
-                          className={`flex w-full items-center justify-between px-3 py-3 text-left text-sm ${
+                          className={`flex w-full items-center justify-start px-3 py-3 text-left text-sm ${
                             isActive ? "bg-[var(--white)] font-semibold" : "hover:bg-[var(--white)]"
                           }`}
                           onClick={() => setSelectedFileId(file.id)}
@@ -2015,10 +2012,6 @@ function SkillEditorWorkspace({
                           <span className="flex items-center gap-3">
                             <FileGlyph />
                             {file.path}
-                          </span>
-                          <span className="flex items-center gap-2">
-                            {isDirty ? <span className="font-editorial-mono text-[0.62rem] uppercase">Unsaved</span> : null}
-                            {isActive ? <span aria-hidden className="h-2 w-2 rounded-full bg-[var(--ink)]" /> : null}
                           </span>
                         </button>
                       );
@@ -2066,7 +2059,7 @@ function SkillEditorWorkspace({
               </span>
             </div>
             <div className="sr-only">When to use Workflow</div>
-            <div className="min-h-0 flex-1">
+            <div className="min-h-0 flex-1 overflow-hidden">
               {selectedFileIsEditable ? (
                 <MdxMarkdownEditor markdown={selectedMarkdown} onChange={updateSelectedMarkdown} />
               ) : (
@@ -2075,19 +2068,6 @@ function SkillEditorWorkspace({
                 </div>
               )}
             </div>
-            {selectedFileGetsManagedBlock ? (
-              <div className="border-t border-[var(--ink)] bg-[var(--white)] px-8 py-4">
-                <div className="inline-flex max-w-full items-center gap-3 border border-[var(--ink)] bg-[var(--paper)] px-4 py-3">
-                  <span aria-hidden className="font-editorial-sans text-lg leading-none">›</span>
-                  <div className="min-w-0">
-                    <p className="font-editorial-sans text-sm font-semibold">Skillfully feedback and update instructions</p>
-                    <p className="mt-1 truncate font-editorial-mono text-[0.62rem] uppercase text-[var(--ink)]/60">
-                      Locked system block added on publish
-                    </p>
-                  </div>
-                </div>
-              </div>
-            ) : null}
           </div>
         </section>
 
@@ -2172,9 +2152,6 @@ function SkillEditorWorkspace({
       </section>
 
       <section className="flex min-h-24 flex-col gap-3 border-b border-[var(--ink)] p-4 sm:flex-row sm:items-center sm:justify-end">
-        <p className="mr-auto border border-[var(--ink)] bg-[var(--white)] p-3 font-editorial-mono text-xs font-bold uppercase">
-          {hasPendingAutosave || isFileSaving ? "Saving automatically..." : fileStatus}
-        </p>
         {publishError ? (
           <p className="border border-red-600 bg-red-50 p-3 font-editorial-mono text-xs font-bold uppercase text-red-700">
             {publishError}
@@ -2189,6 +2166,7 @@ function SkillEditorWorkspace({
           disabled={isFileLoading || isFileSaving || isUploadingFile}
           onClick={async () => {
             if (!(await saveDirtyFiles())) {
+              setPublishError("Save failed. Try again before publishing.");
               return;
             }
             setInstallPromptCopied(false);

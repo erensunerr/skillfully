@@ -54,8 +54,7 @@ export function normalizeSkillFilePath(value: string) {
     normalized.startsWith("../") ||
     normalized.includes("/../") ||
     normalized.endsWith("/..") ||
-    normalized.split("/").some((part) => part === "." || part === "..") ||
-    normalized.startsWith(".")
+    normalized.split("/").some((part) => part === "." || part === "..")
   ) {
     throw new Error("invalid skill file path");
   }

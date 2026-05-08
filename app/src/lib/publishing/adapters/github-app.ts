@@ -70,7 +70,25 @@ export function resolveGitHubPublishTarget({
 }
 
 function normalizeSkillRoot(value: string) {
-  return normalizeSkillFilePath(value).replace(/\/+$/, "");
+  const normalized = value
+    .trim()
+    .replaceAll("\\", "/")
+    .replace(/^\/+/, "")
+    .replace(/\/+/g, "/")
+    .replace(/\/+$/, "");
+
+  if (
+    !normalized ||
+    normalized === "." ||
+    normalized.startsWith("../") ||
+    normalized.includes("/../") ||
+    normalized.endsWith("/..") ||
+    normalized.split("/").some((part) => part === "." || part === "..")
+  ) {
+    throw new Error("invalid GitHub skill root");
+  }
+
+  return normalized;
 }
 
 function safeBranchSegment(value: string) {
@@ -246,7 +264,7 @@ export async function getGitHubAppInstallation({
 
   return (await response.json()) as {
     id: number;
-    account?: { login?: string; type?: string };
+    account?: { id?: number; login?: string; type?: string };
     repository_selection?: string;
     permissions?: Record<string, unknown>;
   };

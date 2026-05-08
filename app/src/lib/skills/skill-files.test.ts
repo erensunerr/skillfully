@@ -22,8 +22,10 @@ test("normalizeSkillFilePath keeps skill files inside the skill folder", () => {
   assert.equal(normalizeSkillFilePath("SKILL.md"), "SKILL.md");
   assert.equal(normalizeSkillFilePath("/examples/basic.md"), "examples/basic.md");
   assert.equal(normalizeSkillFilePath("docs//faq.md"), "docs/faq.md");
+  assert.equal(normalizeSkillFilePath(".skillfully/config.json"), ".skillfully/config.json");
+  assert.equal(normalizeSkillFilePath(".env.example"), ".env.example");
   assert.throws(() => normalizeSkillFilePath("../secret.md"), /invalid skill file path/);
-  assert.throws(() => normalizeSkillFilePath(".env"), /invalid skill file path/);
+  assert.throws(() => normalizeSkillFilePath("./secret.md"), /invalid skill file path/);
 });
 
 test("createDefaultSkillFile preserves editable author content without the managed block", () => {

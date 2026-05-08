@@ -45,6 +45,7 @@ export type SkillRow = {
   visibility: string;
   sourceMode: string;
   originalRepoFullName?: string;
+  originalRepositoryId?: string;
   originalSkillPath?: string;
   currentDraftVersionId: string;
   publishedVersionId?: string;
@@ -90,6 +91,7 @@ export type PublishingTargetRow = {
   targetKind: string;
   status: string;
   repoFullName?: string;
+  repositoryId?: string;
   installationId?: string;
   skillRoot?: string;
   baseBranch?: string;
@@ -164,6 +166,7 @@ export async function createSkillDraft({
   baseUrl,
   sourceMode = "managed",
   originalRepoFullName,
+  originalRepositoryId,
   originalSkillPath,
 }: {
   store?: SkillStore;
@@ -176,6 +179,7 @@ export async function createSkillDraft({
   baseUrl: string;
   sourceMode?: string;
   originalRepoFullName?: string | null;
+  originalRepositoryId?: string | null;
   originalSkillPath?: string | null;
 }) {
   const cleanName = name.trim();
@@ -209,6 +213,7 @@ export async function createSkillDraft({
     visibility: "private",
     sourceMode,
     ...(originalRepoFullName ? { originalRepoFullName } : {}),
+    ...(originalRepositoryId ? { originalRepositoryId } : {}),
     ...(originalSkillPath ? { originalSkillPath } : {}),
     currentDraftVersionId: versionId,
     createdAt: currentTime,
@@ -248,6 +253,7 @@ export async function createSkillDraft({
       targetKind: "github",
       status: "enabled",
       repoFullName: sourceMode === "github_import" && originalRepoFullName ? originalRepoFullName : repo.repoFullName,
+      ...(sourceMode === "github_import" && originalRepositoryId ? { repositoryId: originalRepositoryId } : {}),
       installationId: sourceMode === "github_import" ? undefined : repo.installationId,
       skillRoot: sourceMode === "github_import" && originalSkillPath ? originalSkillPath : `skills/${slug}`,
       baseBranch: repo.baseBranch,

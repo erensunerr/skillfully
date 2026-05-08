@@ -1,21 +1,46 @@
 import crypto from "node:crypto";
 import { NextRequest } from "next/server";
 
+import { adminDb } from "@/lib/adminDb";
 import { getDashboardUser } from "@/lib/dashboard-auth";
+import {
+  MAX_GITHUB_IMPORT_FILE_BYTES,
+  MAX_GITHUB_IMPORT_SKILL_BYTES,
+  discoverGitHubSkillCandidates,
+  relativeSkillFilePath,
+  type ExistingGitHubImport,
+  type GitHubSkillCandidate,
+  type GitHubTreeEntry,
+} from "@/lib/github-import";
+import { importGitHubSkillCandidate, type GitHubSkillImportFile } from "@/lib/github-import-service";
 import { captureServerEvent } from "@/lib/posthog-server";
 import { createGitHubAppInstallationToken } from "@/lib/publishing/adapters/github-app";
 import { jsonResponse } from "@/lib/route-helpers";
-import { skillSlug } from "@/lib/skills/skill-files";
-import {
-  createSkillDraft,
-  defaultSkillStore,
-  listPublishingTargets,
-  listSkillsForOwner,
-  updateSkillFileText,
-} from "@/lib/skills/repository";
+import { defaultSkillStore, listSkillsForOwner } from "@/lib/skills/repository";
 
-type GitHubTree = {
-  tree: Array<{ path: string; type: string }>;
+type GitHubRepositoryResponse = {
+  id: number;
+  full_name: string;
+  default_branch?: string;
+};
+
+type GitHubRepositoriesResponse = {
+  repositories?: GitHubRepositoryResponse[];
+};
+
+type GitHubTreeResponse = {
+  tree?: GitHubTreeEntry[];
+  truncated?: boolean;
+};
+
+type ImportSessionRow = {
+  id: string;
+  ownerId: string;
+  sessionId: string;
+  installationId: string;
+  status?: string;
+  accountLogin?: string;
+  accountType?: string;
 };
 
 function randomSkillId() {
@@ -25,6 +50,18 @@ function randomSkillId() {
     out += chars[crypto.randomInt(0, chars.length)];
   }
   return out;
+}
+
+function encodeGitHubPath(value: string) {
+  return value.split("/").map((part) => encodeURIComponent(part)).join("/");
+}
+
+function splitRepoFullName(repoFullName: string) {
+  const [owner, repo] = repoFullName.split("/");
+  if (!owner || !repo) {
+    throw new Error(`invalid GitHub repo: ${repoFullName}`);
+  }
+  return { owner, repo };
 }
 
 async function githubJson<T>(token: string, path: string) {
@@ -41,52 +78,229 @@ async function githubJson<T>(token: string, path: string) {
   return (await response.json()) as T;
 }
 
-function parseSkillName(markdown: string, fallback: string) {
-  const frontmatterName = markdown.match(/^---[\s\S]*?\nname:\s*["']?([^"'\n]+)["']?[\s\S]*?\n---/m)?.[1];
-  if (frontmatterName?.trim()) {
-    return frontmatterName.trim();
+async function githubRawFile(token: string, repoFullName: string, path: string, ref: string) {
+  const { owner, repo } = splitRepoFullName(repoFullName);
+  const response = await fetch(
+    `https://api.github.com/repos/${owner}/${repo}/contents/${encodeGitHubPath(path)}?ref=${encodeURIComponent(ref)}`,
+    {
+      headers: {
+        accept: "application/vnd.github.raw",
+        authorization: `Bearer ${token}`,
+        "x-github-api-version": "2022-11-28",
+      },
+    },
+  );
+  if (!response.ok) {
+    throw new Error(`GitHub file request failed ${response.status}: ${await response.text()}`);
   }
-  const headingName = markdown.match(/^#\s+(.+)$/m)?.[1];
-  if (headingName?.trim()) {
-    return headingName.trim();
+  return Buffer.from(await response.arrayBuffer());
+}
+
+async function getImportSession(ownerId: string, sessionId: string) {
+  const rows = await defaultSkillStore.query({
+    skillImports: {
+      $: {
+        where: {
+          ownerId,
+          sessionId,
+        },
+      },
+    },
+  });
+  const session = rows.skillImports?.[0];
+  return session ? (session as ImportSessionRow) : null;
+}
+
+async function updateImportSession(session: ImportSessionRow, values: Record<string, unknown>) {
+  await defaultSkillStore.transact([
+    defaultSkillStore.update("skillImports", session.id, {
+      ...values,
+      updatedAt: Date.now(),
+    }),
+  ]);
+}
+
+async function listInstallationRepositories(token: string) {
+  const repositories: GitHubRepositoryResponse[] = [];
+  for (let page = 1; page <= 10; page += 1) {
+    const payload = await githubJson<GitHubRepositoriesResponse>(
+      token,
+      `/installation/repositories?per_page=100&page=${page}`,
+    );
+    const pageRepositories = payload.repositories ?? [];
+    repositories.push(...pageRepositories);
+    if (pageRepositories.length < 100) {
+      break;
+    }
   }
-  return fallback;
+  return repositories;
+}
+
+async function upsertGitHubRepository({
+  ownerId,
+  installationId,
+  repository,
+}: {
+  ownerId: string;
+  installationId: string;
+  repository: GitHubRepositoryResponse;
+}) {
+  const repositoryId = String(repository.id);
+  const rows = await defaultSkillStore.query({
+    githubRepositories: {
+      $: {
+        where: {
+          repositoryId,
+        },
+      },
+    },
+  });
+  const existing = rows.githubRepositories?.[0];
+  if (existing?.ownerId && existing.ownerId !== ownerId) {
+    return;
+  }
+
+  const values = {
+    ownerId,
+    installationId,
+    repositoryId,
+    repoFullName: repository.full_name,
+    defaultBranch: repository.default_branch || "main",
+    selected: true,
+    updatedAt: Date.now(),
+  };
+  await defaultSkillStore.transact([
+    existing
+      ? defaultSkillStore.update("githubRepositories", String(existing.id), values)
+      : defaultSkillStore.create("githubRepositories", crypto.randomUUID(), {
+          ...values,
+          createdAt: Date.now(),
+        }),
+  ]);
+}
+
+async function getExistingGitHubImports(ownerId: string): Promise<ExistingGitHubImport[]> {
+  const skills = await listSkillsForOwner({ ownerId });
+  return skills
+    .filter((skill) => skill.sourceMode === "github_import")
+    .map((skill) => ({
+      repositoryId: skill.originalRepositoryId,
+      skillRoot: skill.originalSkillPath,
+      skillId: skill.skillId,
+    }));
+}
+
+async function discoverCandidatesForSession({
+  ownerId,
+  token,
+  session,
+}: {
+  ownerId: string;
+  token: string;
+  session: ImportSessionRow;
+}) {
+  const repositories = await listInstallationRepositories(token);
+  const existingImports = await getExistingGitHubImports(ownerId);
+  const candidates: GitHubSkillCandidate[] = [];
+  const warnings: string[] = [];
+
+  for (const repository of repositories) {
+    await upsertGitHubRepository({ ownerId, installationId: session.installationId, repository });
+    const repoFullName = repository.full_name;
+    const defaultBranch = repository.default_branch || "main";
+    const { owner, repo } = splitRepoFullName(repoFullName);
+
+    let tree: GitHubTreeResponse;
+    try {
+      tree = await githubJson<GitHubTreeResponse>(
+        token,
+        `/repos/${owner}/${repo}/git/trees/${encodeURIComponent(defaultBranch)}?recursive=1`,
+      );
+    } catch (error) {
+      warnings.push(`${repoFullName}: ${error instanceof Error ? error.message : "could not read repository"}`);
+      continue;
+    }
+
+    if (tree.truncated) {
+      warnings.push(`${repoFullName}: repository tree is too large to check completely`);
+    }
+
+    const entries = tree.tree ?? [];
+    const skillEntries = entries.filter(
+      (entry) =>
+        entry.type === "blob" &&
+        entry.path.split("/").includes("skills") &&
+        entry.path.split("/").at(-1) === "SKILL.md",
+    );
+    const skillMarkdownByPath: Record<string, string> = {};
+    for (const entry of skillEntries) {
+      try {
+        skillMarkdownByPath[entry.path] = (await githubRawFile(token, repoFullName, entry.path, defaultBranch)).toString("utf8");
+      } catch (error) {
+        warnings.push(`${repoFullName}/${entry.path}: ${error instanceof Error ? error.message : "could not read SKILL.md"}`);
+      }
+    }
+
+    candidates.push(
+      ...discoverGitHubSkillCandidates({
+        repository: {
+          repositoryId: String(repository.id),
+          repoFullName,
+          defaultBranch,
+        },
+        tree: entries,
+        skillMarkdownByPath,
+        existingImports,
+      }),
+    );
+  }
+
+  await updateImportSession(session, {
+    status: "discovered",
+    discoveredCount: candidates.filter((candidate) => candidate.status === "valid").length,
+  });
+
+  return { candidates, warnings, repositories };
+}
+
+function importableFiles(candidate: GitHubSkillCandidate) {
+  const files: typeof candidate.files = [];
+  let totalSize = 0;
+  for (const file of candidate.files) {
+    if (file.size > MAX_GITHUB_IMPORT_FILE_BYTES) {
+      continue;
+    }
+    if (totalSize + file.size > MAX_GITHUB_IMPORT_SKILL_BYTES) {
+      continue;
+    }
+    files.push(file);
+    totalSize += file.size;
+  }
+  return files;
 }
 
 export async function OPTIONS() {
-  return jsonResponse({}, 200, "POST, OPTIONS");
+  return jsonResponse({}, 200, "GET, POST, OPTIONS");
 }
 
-export async function POST(request: NextRequest) {
+export async function GET(request: NextRequest) {
   const user = await getDashboardUser(request);
   if (!user) {
-    return jsonResponse({ error: "unauthorized" }, 401, "POST, OPTIONS");
+    return jsonResponse({ error: "unauthorized" }, 401, "GET, POST, OPTIONS");
   }
 
-  let body: {
-    repo_full_name?: unknown;
-    installation_id?: unknown;
-    base_branch?: unknown;
-  };
-  try {
-    body = await request.json();
-  } catch {
-    return jsonResponse({ error: "invalid json body" }, 400, "POST, OPTIONS");
+  const sessionId = request.nextUrl.searchParams.get("session_id") || "";
+  if (!sessionId) {
+    return jsonResponse({ error: "session_id is required" }, 400, "GET, POST, OPTIONS");
   }
 
-  const repoFullName = String(body.repo_full_name ?? "").trim();
-  const installationId = String(body.installation_id ?? "").trim();
-  if (!repoFullName || !installationId) {
-    return jsonResponse({ error: "repo_full_name and installation_id are required" }, 400, "POST, OPTIONS");
+  const session = await getImportSession(user.id, sessionId);
+  if (!session) {
+    return jsonResponse({ error: "GitHub import session not found" }, 404, "GET, POST, OPTIONS");
   }
 
   if (!process.env.GITHUB_APP_ID || !process.env.GITHUB_APP_PRIVATE_KEY) {
-    return jsonResponse({ error: "GitHub App credentials are not configured" }, 400, "POST, OPTIONS");
-  }
-
-  const [owner, repo] = repoFullName.split("/");
-  if (!owner || !repo) {
-    return jsonResponse({ error: "invalid repo_full_name" }, 400, "POST, OPTIONS");
+    return jsonResponse({ error: "GitHub App credentials are not configured" }, 400, "GET, POST, OPTIONS");
   }
 
   try {
@@ -94,75 +308,167 @@ export async function POST(request: NextRequest) {
       fetcher: fetch,
       appId: process.env.GITHUB_APP_ID,
       privateKey: process.env.GITHUB_APP_PRIVATE_KEY,
-      installationId,
+      installationId: session.installationId,
     });
-    const repoInfo = await githubJson<{ default_branch: string }>(token, `/repos/${owner}/${repo}`);
-    const branch = String(body.base_branch || repoInfo.default_branch || "main");
-    const tree = await githubJson<GitHubTree>(
+    const { candidates, warnings, repositories } = await discoverCandidatesForSession({
+      ownerId: user.id,
       token,
-      `/repos/${owner}/${repo}/git/trees/${encodeURIComponent(branch)}?recursive=1`,
-    );
-    const existingSkillCount = (await listSkillsForOwner({ ownerId: user.id })).length;
-    const skillPaths = tree.tree
-      .filter((entry) => entry.type === "blob" && entry.path.split("/").pop()?.toLowerCase() === "skill.md")
-      .map((entry) => entry.path);
-    const imported = [];
+      session,
+    });
 
-    for (const skillPath of skillPaths) {
-      const contentResponse = await githubJson<{ content?: string; encoding?: string }>(
-        token,
-        `/repos/${owner}/${repo}/contents/${skillPath.split("/").map(encodeURIComponent).join("/")}?ref=${encodeURIComponent(branch)}`,
-      );
-      const markdown = Buffer.from(contentResponse.content || "", contentResponse.encoding === "base64" ? "base64" : "utf8").toString("utf8");
-      const folder = skillPath.split("/").slice(0, -1).join("/") || skillSlug(parseSkillName(markdown, "imported-skill"));
-      const name = parseSkillName(markdown, folder.split("/").pop() || "imported-skill");
-      const created = await createSkillDraft({
-        ownerId: user.id,
-        name,
-        description: `Imported from ${repoFullName}`,
-        baseUrl: new URL(request.url).origin,
-        skillIdGenerator: randomSkillId,
-        sourceMode: "github_import",
-        originalRepoFullName: repoFullName,
-        originalSkillPath: folder,
-      });
-      await updateSkillFileText({
-        ownerId: user.id,
-        fileId: created.file.id,
-        contentText: markdown,
-        path: "SKILL.md",
-      });
-      const targets = await listPublishingTargets({ ownerId: user.id, skillId: created.skill.skillId });
-      const githubTarget = targets.find((target) => target.targetKind === "github");
-      if (githubTarget) {
-        await defaultSkillStore.transact([
-          defaultSkillStore.update("publishingTargets", githubTarget.id, {
-            repoFullName,
-            installationId,
-            skillRoot: folder,
-            baseBranch: branch,
-            autoMerge: false,
-            consentStatus: "pending",
-            updatedAt: Date.now(),
-          }),
-        ]);
-      }
-      imported.push({
-        skill_id: created.skill.skillId,
-        name,
-        path: folder,
-        consent_status: "pending",
-      });
+    return jsonResponse({
+      session: {
+        session_id: session.sessionId,
+        status: "discovered",
+        account_login: session.accountLogin ?? null,
+      },
+      repositories_checked: repositories.length,
+      candidates,
+      warnings,
+    }, 200, "GET, POST, OPTIONS");
+  } catch (error) {
+    await updateImportSession(session, {
+      status: "failed",
+      error: error instanceof Error ? error.message : "unknown GitHub import error",
+    });
+    return jsonResponse({ error: error instanceof Error ? error.message : "unknown GitHub import error" }, 400, "GET, POST, OPTIONS");
+  }
+}
+
+export async function POST(request: NextRequest) {
+  const user = await getDashboardUser(request);
+  if (!user) {
+    return jsonResponse({ error: "unauthorized" }, 401, "GET, POST, OPTIONS");
+  }
+
+  let body: { session_id?: unknown; candidate_ids?: unknown };
+  try {
+    body = await request.json();
+  } catch {
+    return jsonResponse({ error: "invalid json body" }, 400, "GET, POST, OPTIONS");
+  }
+
+  const sessionId = String(body.session_id ?? "").trim();
+  const selectedIds = Array.isArray(body.candidate_ids) ? body.candidate_ids.map(String) : [];
+  if (!sessionId) {
+    return jsonResponse({ error: "session_id is required" }, 400, "GET, POST, OPTIONS");
+  }
+  if (selectedIds.length === 0) {
+    return jsonResponse({ error: "select at least one skill to import" }, 400, "GET, POST, OPTIONS");
+  }
+
+  const session = await getImportSession(user.id, sessionId);
+  if (!session) {
+    return jsonResponse({ error: "GitHub import session not found" }, 404, "GET, POST, OPTIONS");
+  }
+
+  if (!process.env.GITHUB_APP_ID || !process.env.GITHUB_APP_PRIVATE_KEY) {
+    return jsonResponse({ error: "GitHub App credentials are not configured" }, 400, "GET, POST, OPTIONS");
+  }
+
+  try {
+    const token = await createGitHubAppInstallationToken({
+      fetcher: fetch,
+      appId: process.env.GITHUB_APP_ID,
+      privateKey: process.env.GITHUB_APP_PRIVATE_KEY,
+      installationId: session.installationId,
+    });
+    const { candidates } = await discoverCandidatesForSession({
+      ownerId: user.id,
+      token,
+      session,
+    });
+    const selectedCandidates = candidates.filter(
+      (candidate) => selectedIds.includes(candidate.id) && candidate.status === "valid",
+    );
+    if (selectedCandidates.length === 0) {
+      return jsonResponse({ error: "no selected skills can be imported" }, 400, "GET, POST, OPTIONS");
     }
+
+    const existingSkillCount = (await listSkillsForOwner({ ownerId: user.id })).length;
+    const imported = [];
+    const failures = [];
+
+    for (const candidate of selectedCandidates) {
+      try {
+        const filesToImport = importableFiles(candidate);
+        const files: GitHubSkillImportFile[] = [];
+        for (const file of filesToImport) {
+          files.push({
+            relativePath: file.relativePath,
+            content: await githubRawFile(token, candidate.repoFullName, file.path, candidate.branch),
+          });
+        }
+        const created = await importGitHubSkillCandidate({
+          ownerId: user.id,
+          baseUrl: new URL(request.url).origin,
+          installationId: session.installationId,
+          repository: {
+            repositoryId: candidate.repositoryId,
+            repoFullName: candidate.repoFullName,
+            defaultBranch: candidate.branch,
+          },
+          candidate: {
+            skillRoot: candidate.skillRoot,
+            skillName: candidate.skillName,
+            description: candidate.description,
+          },
+          files,
+          skillIdGenerator: randomSkillId,
+          store: defaultSkillStore,
+          uploadAssetFile: async (file) => {
+            const storagePath = `skills/${user.id}/${candidate.id}/${crypto.randomUUID()}/${file.relativePath}`;
+            const uploaded = await adminDb.storage.uploadFile(storagePath, file.content, {
+              contentType: file.mimeType || "application/octet-stream",
+            });
+            const fileRows = await adminDb.query({
+              $files: {
+                $: {
+                  where: {
+                    path: storagePath,
+                  },
+                },
+              },
+            } as never) as { $files?: Array<{ id: string; url?: string }> };
+            return {
+              storageFileId: uploaded.data.id,
+              storageUrl: fileRows.$files?.[0]?.url,
+              mimeType: file.mimeType,
+            };
+          },
+        });
+        imported.push({
+          skill_id: created.skill.skillId,
+          entity_id: created.skill.id,
+          name: created.skill.name,
+          repo_full_name: candidate.repoFullName,
+          repository_id: candidate.repositoryId,
+          skill_root: candidate.skillRoot,
+          skipped_files: candidate.files.length - filesToImport.length,
+        });
+      } catch (error) {
+        failures.push({
+          candidate_id: candidate.id,
+          name: candidate.skillName,
+          error: error instanceof Error ? error.message : "unknown import error",
+        });
+      }
+    }
+
+    await updateImportSession(session, {
+      status: imported.length > 0 ? "imported" : "failed",
+      importedCount: imported.length,
+      ...(failures.length > 0 ? { error: failures.map((failure) => failure.error).join(" | ") } : {}),
+      ...(imported.length > 0 ? { completedAt: Date.now() } : {}),
+    });
 
     await captureServerEvent({
       distinctId: user.id,
       event: "skills_imported",
       properties: {
-        repo_full_name: repoFullName,
-        installation_id: installationId,
-        base_branch: branch,
+        installation_id: session.installationId,
         imported_count: imported.length,
+        failure_count: failures.length,
         is_first_skill_import: existingSkillCount === 0 && imported.length > 0,
       },
     });
@@ -171,14 +477,25 @@ export async function POST(request: NextRequest) {
         distinctId: user.id,
         event: "first_skill_imported",
         properties: {
-          repo_full_name: repoFullName,
+          installation_id: session.installationId,
           imported_count: imported.length,
         },
       });
     }
 
-    return jsonResponse({ imported }, 201, "POST, OPTIONS");
+    const status = imported.length > 0 ? 201 : 400;
+    return jsonResponse({
+      imported,
+      failures,
+      ...(imported.length === 0
+        ? { error: failures.map((failure) => failure.error).join(" | ") || "No skills were imported." }
+        : {}),
+    }, status, "GET, POST, OPTIONS");
   } catch (error) {
-    return jsonResponse({ error: error instanceof Error ? error.message : "unknown import error" }, 400, "POST, OPTIONS");
+    await updateImportSession(session, {
+      status: "failed",
+      error: error instanceof Error ? error.message : "unknown GitHub import error",
+    });
+    return jsonResponse({ error: error instanceof Error ? error.message : "unknown GitHub import error" }, 400, "GET, POST, OPTIONS");
   }
 }

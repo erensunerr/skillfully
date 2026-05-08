@@ -304,7 +304,7 @@ test("dashboard skill detail renders the skill settings UI", async () => {
   assert.match(html, /Skill name/i);
   assert.match(html, /Slug/i);
   assert.match(html, /02\. Source/i);
-  assert.match(html, /GitHub tracked/i);
+  assert.match(html, /Managed in GitHub/i);
   assert.match(html, /Skillfully managed repository/i);
   assert.match(html, /skills\/code-review/i);
   assert.match(html, /03\. Publishing/i);
@@ -319,6 +319,32 @@ test("dashboard skill detail renders the skill settings UI", async () => {
   assert.doesNotMatch(html, /\/api\/install/i);
   assert.match(html, /05\. Danger zone/i);
   assert.match(html, /Delete skill/i);
+});
+
+test("dashboard settings show imported skills as managed in GitHub", async () => {
+  Object.assign(globalThis, { React });
+  const { SkillDetail } = await import("./page");
+
+  const html = renderToStaticMarkup(
+    <SkillDetail
+      activeTab="settings"
+      skill={{
+        ...fakeSkill(),
+        sourceMode: "github_import",
+        originalRepoFullName: "octocat/Hello-World",
+        originalSkillPath: ".agents/skills/code-review",
+      } as never}
+      entries={fakeEntries()}
+      feedbackTemplate="Post feedback to {{feedbackUrl}}"
+      feedbackTemplateError={null}
+      onBack={() => undefined}
+    />,
+  );
+
+  assert.match(html, /Managed in GitHub/i);
+  assert.match(html, /octocat\/Hello-World/i);
+  assert.match(html, /\.agents\/skills\/code-review/i);
+  assert.match(html, /Create pull request on publish/i);
 });
 
 test("dashboard renders the account settings UI", async () => {

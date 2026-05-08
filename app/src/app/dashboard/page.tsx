@@ -19,6 +19,11 @@ import {
   shouldShowOnboardingModalByDefault,
 } from "./view-state";
 import { OnboardingModal } from "./onboarding-modal";
+import {
+  GitHubImportModal,
+  type GitHubImportCandidateView,
+  type GitHubImportModalState,
+} from "./github-import-modal";
 
 type Skill = InstaQLEntity<AppSchema, "skills">;
 type Feedback = InstaQLEntity<AppSchema, "feedback">;
@@ -79,6 +84,18 @@ type SkillEditorFile = {
   contentText?: string | null;
   storageUrl?: string | null;
   updatedAt?: number | null;
+};
+type GitHubImportCandidatesResponse = {
+  candidates: GitHubImportCandidateView[];
+  warnings?: string[];
+};
+type GitHubImportSubmitResponse = {
+  imported: Array<{
+    skill_id: string;
+    entity_id?: string;
+    name: string;
+  }>;
+  failures?: Array<{ name?: string; error: string }>;
 };
 
 const DASHBOARD_CARD = "border border-[var(--ink)] bg-[var(--paper)] text-[var(--ink)]";
@@ -2581,6 +2598,7 @@ export function SkillSettingsWorkspace({ skill }: { skill: Skill }) {
   const slug = slugifySkillName(skill.name);
   const isGitHubImported = skill.sourceMode === "github_import" && Boolean(skill.originalRepoFullName);
   const sourceRepo = isGitHubImported ? skill.originalRepoFullName : "Skillfully managed repository";
+  const sourcePath = isGitHubImported && skill.originalSkillPath ? skill.originalSkillPath : `skills/${slug}`;
   const publishBehavior = isGitHubImported
     ? "Create pull request on publish"
     : "Publish through the Skillfully-owned skills repository";
@@ -2625,11 +2643,11 @@ export function SkillSettingsWorkspace({ skill }: { skill: Skill }) {
             <span aria-hidden className="flex h-5 w-5 items-center justify-center rounded-full border-2 border-[var(--ink)]">
               {isGitHubImported ? <span className="h-2 w-2 rounded-full bg-[var(--ink)]" /> : null}
             </span>
-            GitHub tracked
+            Managed in GitHub
           </button>
         </div>
         <SettingsRow label="Repository" value={sourceRepo} />
-        <SettingsRow label="Skill path" value={`skills/${slug}`} />
+        <SettingsRow label="Skill path" value={sourcePath} />
         <SettingsRow label="Default branch" value="Configured by publishing target" />
         <SettingsRow label="Publish behavior" value={publishBehavior} />
         <SettingsRow
@@ -3030,6 +3048,13 @@ export default function Dashboard({
   const [feedbackTemplate, setFeedbackTemplate] = useState<string | null>(null);
   const [feedbackTemplateError, setFeedbackTemplateError] = useState<string | null>(null);
   const [onboardingDismissed, setOnboardingDismissed] = useState(false);
+  const [githubImportSessionId, setGitHubImportSessionId] = useState<string | null>(null);
+  const [githubImportState, setGitHubImportState] = useState<GitHubImportModalState>("loading");
+  const [githubImportCandidates, setGitHubImportCandidates] = useState<GitHubImportCandidateView[]>([]);
+  const [githubImportWarnings, setGitHubImportWarnings] = useState<string[]>([]);
+  const [selectedGitHubImportIds, setSelectedGitHubImportIds] = useState<Set<string>>(new Set());
+  const [isGitHubImporting, setIsGitHubImporting] = useState(false);
+  const [githubImportError, setGitHubImportError] = useState("");
 
   const query = useMemo(() => {
     if (!user) {
@@ -3116,6 +3141,7 @@ export default function Dashboard({
 
   const shouldShowOnboardingModal =
     screen === "list" &&
+    !githubImportSessionId &&
     !onboardingDismissed &&
     shouldShowOnboardingModalByDefault({ skills });
 
@@ -3156,6 +3182,66 @@ export default function Dashboard({
     setScreen("detail");
     setOnboardingDismissed(true);
   }, [initialSkillId, initialTab, skills, user]);
+
+  useEffect(() => {
+    if (!user || typeof window === "undefined") {
+      return;
+    }
+
+    const params = new URLSearchParams(window.location.search);
+    const sessionId = params.get("github_import");
+    if (!sessionId) {
+      return;
+    }
+    if (window.sessionStorage.getItem(`skillfully.github_import.dismissed.${sessionId}`)) {
+      const url = new URL(window.location.href);
+      url.searchParams.delete("github_import");
+      window.history.replaceState(null, "", `${url.pathname}${url.search}`);
+      return;
+    }
+
+    setOnboardingDismissed(true);
+    setGitHubImportSessionId(sessionId);
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!user || !githubImportSessionId) {
+      return;
+    }
+
+    let active = true;
+    setGitHubImportState("loading");
+    setGitHubImportError("");
+    setGitHubImportCandidates([]);
+    setGitHubImportWarnings([]);
+    setSelectedGitHubImportIds(new Set());
+
+    dashboardJson<GitHubImportCandidatesResponse>(
+      user,
+      `/api/dashboard/github/import?session_id=${encodeURIComponent(githubImportSessionId)}`,
+      { method: "GET" },
+    )
+      .then((payload) => {
+        if (!active) {
+          return;
+        }
+        setGitHubImportCandidates(payload.candidates ?? []);
+        setGitHubImportWarnings(payload.warnings ?? []);
+        setGitHubImportState((payload.candidates ?? []).length > 0 ? "ready" : "empty");
+      })
+      .catch((error) => {
+        if (!active) {
+          return;
+        }
+        captureClientException(error);
+        setGitHubImportError(extractErrorMessage(error));
+        setGitHubImportState("error");
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [githubImportSessionId, user?.id]);
 
   useEffect(() => {
     let active = true;
@@ -3359,6 +3445,77 @@ export default function Dashboard({
     setIsAccountMenuOpen(false);
     setActiveTab("overview");
     setScreen("list");
+  }
+
+  function clearGitHubImportUrl() {
+    if (typeof window === "undefined") {
+      return;
+    }
+    const url = new URL(window.location.href);
+    url.searchParams.delete("github_import");
+    window.history.replaceState(null, "", `${url.pathname}${url.search}`);
+  }
+
+  function closeGitHubImportModal() {
+    if (githubImportSessionId && typeof window !== "undefined") {
+      window.sessionStorage.setItem(`skillfully.github_import.dismissed.${githubImportSessionId}`, "true");
+    }
+    setGitHubImportSessionId(null);
+    setGitHubImportCandidates([]);
+    setGitHubImportWarnings([]);
+    setSelectedGitHubImportIds(new Set());
+    setGitHubImportError("");
+    setIsGitHubImporting(false);
+    clearGitHubImportUrl();
+  }
+
+  function toggleGitHubImportCandidate(candidateId: string) {
+    setSelectedGitHubImportIds((current) => {
+      const next = new Set(current);
+      if (next.has(candidateId)) {
+        next.delete(candidateId);
+      } else {
+        next.add(candidateId);
+      }
+      return next;
+    });
+  }
+
+  async function importSelectedGitHubSkills() {
+    if (!user || !githubImportSessionId || selectedGitHubImportIds.size === 0) {
+      return;
+    }
+
+    setIsGitHubImporting(true);
+    setGitHubImportError("");
+    try {
+      const payload = await dashboardJson<GitHubImportSubmitResponse>(user, "/api/dashboard/github/import", {
+        method: "POST",
+        body: JSON.stringify({
+          session_id: githubImportSessionId,
+          candidate_ids: Array.from(selectedGitHubImportIds),
+        }),
+      });
+      const firstImported = payload.imported[0];
+      if (!firstImported) {
+        setGitHubImportError(payload.failures?.map((failure) => failure.error).join(" | ") || "No skills were imported.");
+        return;
+      }
+
+      if (typeof window !== "undefined") {
+        window.sessionStorage.setItem(`skillfully.github_import.dismissed.${githubImportSessionId}`, "true");
+      }
+      setGitHubImportSessionId(null);
+      setSelectedGitHubImportIds(new Set());
+      setOnboardingDismissed(true);
+      clearGitHubImportUrl();
+      router.push(`/dashboard/${firstImported.skill_id}/overview`);
+    } catch (error) {
+      captureClientException(error);
+      setGitHubImportError(extractErrorMessage(error));
+    } finally {
+      setIsGitHubImporting(false);
+    }
   }
 
   function openDashboardTab(tab: DashboardTab) {
@@ -3586,6 +3743,24 @@ export default function Dashboard({
             setErrorMessage("");
           }}
           onSubmit={createSkillFromModal}
+        />
+      ) : null}
+      {githubImportSessionId ? (
+        <GitHubImportModal
+          state={githubImportState}
+          candidates={githubImportCandidates}
+          selectedCandidateIds={selectedGitHubImportIds}
+          warnings={githubImportWarnings}
+          isImporting={isGitHubImporting}
+          importError={githubImportError}
+          onToggleCandidate={toggleGitHubImportCandidate}
+          onImport={() => void importSelectedGitHubSkills()}
+          onClose={closeGitHubImportModal}
+          onChangeRepositoryAccess={() => {
+            if (typeof window !== "undefined") {
+              window.location.href = "/api/github/install";
+            }
+          }}
         />
       ) : null}
     </main>

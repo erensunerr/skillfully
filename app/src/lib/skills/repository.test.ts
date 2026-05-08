@@ -91,6 +91,39 @@ test("createSkillDraft creates a draft version, default file, and publishing tar
   );
 });
 
+test("createSkillDraft stores durable GitHub metadata for imported skills", async () => {
+  const store = new InMemorySkillStore();
+  let counter = 0;
+
+  const created = await createSkillDraft({
+    store,
+    now: () => 1700000000000,
+    idGenerator: () => `id_${++counter}`,
+    skillIdGenerator: () => "sk_imported",
+    ownerId: "user-1",
+    name: "code-review",
+    description: "Reviews code changes.",
+    baseUrl: "https://www.skillfully.sh",
+    sourceMode: "github_import",
+    originalRepoFullName: "octocat/Hello-World",
+    originalRepositoryId: "1296269",
+    originalSkillPath: ".agents/skills/code-review",
+  });
+
+  assert.equal(created.skill.sourceMode, "github_import");
+  assert.equal(created.skill.originalRepositoryId, "1296269");
+  assert.equal(created.skill.originalSkillPath, ".agents/skills/code-review");
+
+  const githubTarget = Object.values(store.rows.publishingTargets).find(
+    (target) => target.targetKind === "github",
+  );
+  assert.equal(githubTarget?.repoFullName, "octocat/Hello-World");
+  assert.equal(githubTarget?.repositoryId, "1296269");
+  assert.equal(githubTarget?.skillRoot, ".agents/skills/code-review");
+  assert.equal(githubTarget?.autoMerge, false);
+  assert.equal(githubTarget?.consentStatus, "pending");
+});
+
 test("listSkillFiles and updateSkillFileText enforce ownership and normalized paths", async () => {
   const store = new InMemorySkillStore();
   let counter = 0;

@@ -109,6 +109,8 @@ const DASHBOARD_INPUT =
 
 const FEEDBACK_SNIPPET_URL = "/feedback-template.md";
 const validSkillRouteTabs: SkillRouteTab[] = ["overview", "editor", "analytics", "settings"];
+const DEFAULT_SKILL_DESCRIPTION = "Describe when and how agents should use this skill.";
+const MAX_SKILL_FRONTMATTER_NAME_LENGTH = 64;
 
 const publishingDestinationRows = [
   ["skills.sh", "Available after publish", "Public manifest and Skillfully listing", "terminal"],
@@ -119,27 +121,13 @@ const publishingDestinationRows = [
 ] satisfies Array<[string, string, string, string]>;
 
 function defaultEditorMarkdown(skill: Skill) {
-  const summary = skill.description || "Describe what this skill helps an agent do.";
+  const summary = skill.description?.trim() || DEFAULT_SKILL_DESCRIPTION;
   return [
-    `# ${skill.name}`,
+    "---",
+    `name: ${frontmatterSkillName(skill.name)}`,
+    `description: ${yamlQuotedString(summary)}`,
+    "---",
     "",
-    summary,
-    "",
-    "> Use this skill only when it matches the user's task.",
-    "",
-    "## When to use",
-    "",
-    "- The user asks for work that this skill is designed to handle",
-    "- The needed source files, tools, or context are available",
-    "- The expected output can be verified before finishing",
-    "",
-    "## Workflow",
-    "",
-    "1. Read the user's request and identify the concrete goal",
-    "2. Gather the relevant project context before editing",
-    "3. Make the smallest change that satisfies the task",
-    "4. Verify the result with an appropriate command or check",
-    "5. Report what changed and any remaining risk",
   ].join("\n");
 }
 
@@ -284,6 +272,14 @@ function slugifySkillName(name: string) {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "") || "skill";
+}
+
+function frontmatterSkillName(name: string) {
+  return slugifySkillName(name).slice(0, MAX_SKILL_FRONTMATTER_NAME_LENGTH).replace(/-+$/g, "") || "skill";
+}
+
+function yamlQuotedString(value: string) {
+  return JSON.stringify(value.replace(/\r\n/g, "\n").replace(/\r/g, "\n"));
 }
 
 function formatTimestamp(value: number | Date | null | undefined) {
@@ -1708,7 +1704,7 @@ function SkillEditorWorkspace({
   const [dirtyFileIds, setDirtyFileIds] = useState<Set<string>>(() => new Set());
   const [frontmatter, setFrontmatter] = useState({
     name: skill.name,
-    summary: skill.description || "Describe what this skill helps an agent do.",
+    summary: skill.description || DEFAULT_SKILL_DESCRIPTION,
     version: "0.1.0",
     status: "Draft",
   });
@@ -1764,7 +1760,7 @@ function SkillEditorWorkspace({
     setFrontmatter((state) => ({
       ...state,
       name: skill.name,
-      summary: skill.description || "Describe what this skill helps an agent do.",
+      summary: skill.description || DEFAULT_SKILL_DESCRIPTION,
     }));
     setDirtyFileIds(new Set());
     setDeletingFileIds(new Set());
@@ -2082,7 +2078,6 @@ function SkillEditorWorkspace({
                 {isFileLoading ? "Loading files..." : selectedFile?.path || "No file selected"}
               </span>
             </div>
-            <div className="sr-only">When to use Workflow</div>
             <div className="min-h-0 flex-1 overflow-hidden">
               {selectedFileIsEditable ? (
                 <MdxMarkdownEditor markdown={selectedMarkdown} onChange={updateSelectedMarkdown} />

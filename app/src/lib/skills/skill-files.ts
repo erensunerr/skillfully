@@ -31,6 +31,9 @@ export type ManifestFile = {
   storageUrl?: string | null;
 };
 
+const DEFAULT_SKILL_DESCRIPTION = "Describe when and how agents should use this skill.";
+const MAX_SKILL_SPEC_NAME_LENGTH = 64;
+
 export function skillSlug(value: string) {
   return (
     value
@@ -39,6 +42,14 @@ export function skillSlug(value: string) {
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-+|-+$/g, "") || "skill"
   );
+}
+
+export function skillSpecName(value: string) {
+  return skillSlug(value).slice(0, MAX_SKILL_SPEC_NAME_LENGTH).replace(/-+$/g, "") || "skill";
+}
+
+function yamlQuotedString(value: string) {
+  return JSON.stringify(value.replace(/\r\n/g, "\n").replace(/\r/g, "\n"));
 }
 
 export function normalizeSkillFilePath(value: string) {
@@ -70,25 +81,17 @@ export function createDefaultSkillFile({
   description?: string | null;
   feedbackUrl?: string;
 }) {
-  const summary = description?.trim() || "Describe when and how agents should use this skill.";
+  const summary = description?.trim() || DEFAULT_SKILL_DESCRIPTION;
 
   return {
     path: "SKILL.md",
     kind: "markdown" as const,
     contentText: [
-      `# ${name}`,
+      "---",
+      `name: ${skillSpecName(name)}`,
+      `description: ${yamlQuotedString(summary)}`,
+      "---",
       "",
-      summary,
-      "",
-      "## When to use",
-      "",
-      "- Use this skill when the agent needs the workflow described above.",
-      "",
-      "## Workflow",
-      "",
-      "1. Understand the user's goal.",
-      "2. Follow the instructions in this skill.",
-      "3. Verify the result before responding.",
     ].join("\n"),
   };
 }

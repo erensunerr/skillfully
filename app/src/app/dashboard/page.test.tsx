@@ -227,8 +227,9 @@ test("dashboard skill detail renders the editor tab UI", async () => {
   assert.match(html, /No assets uploaded/);
   assert.match(html, /Markdown editor/i);
   assert.match(html, /MDXEditor/i);
-  assert.match(html, /When to use/);
-  assert.match(html, /Workflow/);
+  assert.doesNotMatch(html, /The user asks for work that this skill is designed to handle/);
+  assert.doesNotMatch(html, /When to use/);
+  assert.doesNotMatch(html, /Workflow/);
   assert.match(html, /SKILL\.md present/);
   assert.match(html, /Version history/);
   assert.match(html, /Version history appears after the first publish/);

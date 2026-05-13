@@ -973,7 +973,6 @@ export function CreateSkillModal({
             <button
               type="button"
               className="font-bold underline"
-              data-github-import-action="/api/github/install"
               onClick={onImportFromGitHub}
             >
               Import from GitHub

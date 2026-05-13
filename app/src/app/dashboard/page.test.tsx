@@ -469,5 +469,4 @@ test("dashboard renders the skill selector menu and create skill modal", async (
   assert.match(html, /Skill name/i);
   assert.match(html, /e\.g\. code-review/i);
   assert.match(html, /Import from GitHub/i);
-  assert.match(html, /data-github-import-action="\/api\/github\/install"/i);
 });

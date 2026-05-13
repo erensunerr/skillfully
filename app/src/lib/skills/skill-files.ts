@@ -5,12 +5,8 @@ import {
   isPrimarySkillMarkdownPath,
   skillfullyFeedbackUrl,
   skillfullyManifestUrl,
-  stripSkillfullyManagedBlock,
 } from "./managed-block";
-import {
-  DEFAULT_SKILL_DESCRIPTION,
-  buildSkillMarkdown,
-} from "./skill-frontmatter";
+import { buildSkillMarkdown } from "./skill-frontmatter";
 
 export type SkillFileKind = "markdown" | "asset" | "json" | "text";
 
@@ -64,12 +60,10 @@ export function createDefaultSkillFile({
   description?: string | null;
   feedbackUrl?: string;
 }) {
-  const summary = description?.trim() || DEFAULT_SKILL_DESCRIPTION;
-
   return {
     path: "SKILL.md",
     kind: "markdown" as const,
-    contentText: buildSkillMarkdown({ name, description: summary }),
+    contentText: buildSkillMarkdown({ name, description }),
   };
 }
 

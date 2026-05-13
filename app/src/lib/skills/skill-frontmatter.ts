@@ -2,7 +2,7 @@ export const DEFAULT_SKILL_DESCRIPTION = "Describe when and how agents should us
 
 const MAX_SKILL_SPEC_NAME_LENGTH = 64;
 
-export type SkillFrontmatter = {
+type SkillFrontmatter = {
   name?: string;
   description?: string;
 };
@@ -21,7 +21,7 @@ export function skillSpecName(value: string) {
   return skillSlug(value).slice(0, MAX_SKILL_SPEC_NAME_LENGTH).replace(/-+$/g, "") || "skill";
 }
 
-export function yamlQuotedString(value: string) {
+function yamlQuotedString(value: string) {
   return JSON.stringify(value.replace(/\r\n/g, "\n").replace(/\r/g, "\n"));
 }
 

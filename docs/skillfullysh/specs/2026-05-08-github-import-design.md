@@ -39,6 +39,7 @@ Make onboarding GitHub import real: after a signed-in Skillfully user installs t
   - `description` is required, non-empty, max 1024 characters.
   - `name` must match the parent directory name.
 - Discovery uses repository trees where possible, handles truncated trees as a repo-level warning, and validates candidate `SKILL.md` files by fetching their contents.
+- Installation repository pagination continues until GitHub returns a short page, so discovery does not stop after an arbitrary fixed repository count.
 
 ## Import Semantics
 

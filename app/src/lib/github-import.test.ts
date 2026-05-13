@@ -3,7 +3,6 @@ import test from "node:test";
 
 import {
   MAX_GITHUB_IMPORT_FILE_BYTES,
-  MAX_GITHUB_IMPORT_SKILL_BYTES,
   createGitHubImportSession,
   discoverGitHubSkillCandidates,
   relativeSkillFilePath,

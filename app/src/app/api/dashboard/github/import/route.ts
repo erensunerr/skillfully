@@ -7,7 +7,6 @@ import {
   MAX_GITHUB_IMPORT_FILE_BYTES,
   MAX_GITHUB_IMPORT_SKILL_BYTES,
   discoverGitHubSkillCandidates,
-  relativeSkillFilePath,
   type ExistingGitHubImport,
   type GitHubSkillCandidate,
   type GitHubTreeEntry,
@@ -122,7 +121,7 @@ async function updateImportSession(session: ImportSessionRow, values: Record<str
 
 async function listInstallationRepositories(token: string) {
   const repositories: GitHubRepositoryResponse[] = [];
-  for (let page = 1; page <= 10; page += 1) {
+  for (let page = 1; ; page += 1) {
     const payload = await githubJson<GitHubRepositoriesResponse>(
       token,
       `/installation/repositories?per_page=100&page=${page}`,

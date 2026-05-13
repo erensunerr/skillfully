@@ -646,15 +646,6 @@ function TargetIcon({ name }: { name: string }) {
   );
 }
 
-function ExternalIcon() {
-  return (
-    <svg aria-hidden viewBox="0 0 16 16" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.6">
-      <path d="M6 3H3v10h10v-3" />
-      <path d="M9 3h4v4M8 8l5-5" />
-    </svg>
-  );
-}
-
 function CopyIcon() {
   return (
     <svg aria-hidden viewBox="0 0 18 18" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.6">
@@ -1227,24 +1218,6 @@ function UsageChart({ events }: { events: SkillUsageEvent[] }) {
           </div>
         </div>
       )}
-    </section>
-  );
-}
-
-function SkillHealth() {
-  return (
-    <section className={`${DASHBOARD_CARD} p-6 sm:p-8`}>
-      <p className="font-editorial-mono text-xs font-bold uppercase">Skill health</p>
-      <p className="mt-6 text-sm leading-6 text-[var(--ink)]/70">Health checks appear after runtime telemetry is connected.</p>
-    </section>
-  );
-}
-
-function AttentionPanel() {
-  return (
-    <section className={`${DASHBOARD_CARD} p-6`}>
-      <p className="font-editorial-mono text-xs font-bold uppercase">Needs attention</p>
-      <p className="mt-6 text-sm leading-6 text-[var(--ink)]/70">No attention items yet.</p>
     </section>
   );
 }

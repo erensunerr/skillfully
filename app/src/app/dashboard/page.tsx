@@ -5,6 +5,14 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Select, { type SingleValue, type StylesConfig } from "react-select";
 import { db, isUsingLocalPreviewDb } from "@/lib/db";
+import { isPrimarySkillMarkdownPath } from "@/lib/skills/managed-block";
+import {
+  DEFAULT_SKILL_DESCRIPTION,
+  buildSkillMarkdown,
+  extractSkillMarkdownBody,
+  parseSkillMarkdownFrontmatter,
+  skillSpecName,
+} from "@/lib/skills/skill-frontmatter";
 import {
   captureClientEvent,
   captureClientException,
@@ -109,8 +117,6 @@ const DASHBOARD_INPUT =
 
 const FEEDBACK_SNIPPET_URL = "/feedback-template.md";
 const validSkillRouteTabs: SkillRouteTab[] = ["overview", "editor", "analytics", "settings"];
-const DEFAULT_SKILL_DESCRIPTION = "Describe when and how agents should use this skill.";
-const MAX_SKILL_FRONTMATTER_NAME_LENGTH = 64;
 
 const publishingDestinationRows = [
   ["skills.sh", "Available after publish", "Public manifest and Skillfully listing", "terminal"],
@@ -121,14 +127,10 @@ const publishingDestinationRows = [
 ] satisfies Array<[string, string, string, string]>;
 
 function defaultEditorMarkdown(skill: Skill) {
-  const summary = skill.description?.trim() || DEFAULT_SKILL_DESCRIPTION;
-  return [
-    "---",
-    `name: ${frontmatterSkillName(skill.name)}`,
-    `description: ${yamlQuotedString(summary)}`,
-    "---",
-    "",
-  ].join("\n");
+  return buildSkillMarkdown({
+    name: skill.name,
+    description: skill.description?.trim() || DEFAULT_SKILL_DESCRIPTION,
+  });
 }
 
 function fallbackEditorFiles(skill: Skill): SkillEditorFile[] {
@@ -149,6 +151,18 @@ function isEditableSkillFile(file: SkillEditorFile) {
 
 function sortSkillFiles(files: SkillEditorFile[]) {
   return [...files].sort((a, b) => a.path.localeCompare(b.path));
+}
+
+function frontmatterStateFromFiles(skill: Skill, files: SkillEditorFile[]) {
+  const primarySkillFile = files.find((file) => isPrimarySkillMarkdownPath(file.path));
+  const parsed = primarySkillFile?.contentText
+    ? parseSkillMarkdownFrontmatter(primarySkillFile.contentText)
+    : {};
+
+  return {
+    name: parsed.name || skillSpecName(skill.name),
+    summary: parsed.description || skill.description?.trim() || DEFAULT_SKILL_DESCRIPTION,
+  };
 }
 
 const skillSettingsPublishingRows = [
@@ -272,14 +286,6 @@ function slugifySkillName(name: string) {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "") || "skill";
-}
-
-function frontmatterSkillName(name: string) {
-  return slugifySkillName(name).slice(0, MAX_SKILL_FRONTMATTER_NAME_LENGTH).replace(/-+$/g, "") || "skill";
-}
-
-function yamlQuotedString(value: string) {
-  return JSON.stringify(value.replace(/\r\n/g, "\n").replace(/\r/g, "\n"));
 }
 
 function formatTimestamp(value: number | Date | null | undefined) {
@@ -1703,8 +1709,7 @@ function SkillEditorWorkspace({
   const [selectedFileId, setSelectedFileId] = useState(() => fallbackEditorFiles(skill)[0]?.id ?? "");
   const [dirtyFileIds, setDirtyFileIds] = useState<Set<string>>(() => new Set());
   const [frontmatter, setFrontmatter] = useState({
-    name: skill.name,
-    summary: skill.description || DEFAULT_SKILL_DESCRIPTION,
+    ...frontmatterStateFromFiles(skill, fallbackEditorFiles(skill)),
     version: "0.1.0",
     status: "Draft",
   });
@@ -1734,7 +1739,11 @@ function SkillEditorWorkspace({
   const selectedFile =
     files.find((file) => file.id === selectedFileId) ?? markdownFiles[0] ?? files[0] ?? null;
   const selectedFileIsEditable = selectedFile ? isEditableSkillFile(selectedFile) : false;
-  const selectedMarkdown = selectedFileIsEditable ? selectedFile?.contentText ?? "" : "";
+  const selectedMarkdown = selectedFileIsEditable
+    ? isPrimarySkillMarkdownPath(selectedFile?.path ?? "")
+      ? extractSkillMarkdownBody(selectedFile?.contentText ?? "")
+      : selectedFile?.contentText ?? ""
+    : "";
   const canPersistFiles = Boolean(user && !isUsingLocalPreviewDb);
   const editorStatusLabel = skill.status === "published" || skill.publishedVersionId ? "Published" : "Draft";
   const editorValidationRows = [
@@ -1759,8 +1768,7 @@ function SkillEditorWorkspace({
     const fallbackFiles = fallbackEditorFiles(skill);
     setFrontmatter((state) => ({
       ...state,
-      name: skill.name,
-      summary: skill.description || DEFAULT_SKILL_DESCRIPTION,
+      ...frontmatterStateFromFiles(skill, fallbackFiles),
     }));
     setDirtyFileIds(new Set());
     setDeletingFileIds(new Set());
@@ -1780,6 +1788,10 @@ function SkillEditorWorkspace({
         if (!active) return;
         const loadedFiles = sortSkillFiles(payload.files.length > 0 ? payload.files : fallbackFiles);
         setFiles(loadedFiles);
+        setFrontmatter((state) => ({
+          ...state,
+          ...frontmatterStateFromFiles(skill, loadedFiles),
+        }));
         setSelectedFileId((current) => {
           if (loadedFiles.some((file) => file.id === current)) {
             return current;
@@ -1792,6 +1804,10 @@ function SkillEditorWorkspace({
         if (!active) return;
         captureClientException(error);
         setFiles(fallbackFiles);
+        setFrontmatter((state) => ({
+          ...state,
+          ...frontmatterStateFromFiles(skill, fallbackFiles),
+        }));
         setSelectedFileId(fallbackFiles[0]?.id ?? "");
         setFileStatus(`Could not load saved files: ${extractErrorMessage(error)}`);
       })
@@ -1806,14 +1822,55 @@ function SkillEditorWorkspace({
     };
   }, [skill.id, skill.skillId, skill.name, skill.description, user?.id, user?.refresh_token]);
 
+  function updateFrontmatterFields(updates: Partial<Pick<typeof frontmatter, "name" | "summary">>) {
+    const nextFrontmatter = { ...frontmatter, ...updates };
+    const primarySkillFile = files.find((file) => isPrimarySkillMarkdownPath(file.path) && isEditableSkillFile(file));
+
+    setFrontmatter(nextFrontmatter);
+
+    if (!primarySkillFile) {
+      return;
+    }
+
+    setFiles((currentFiles) =>
+      currentFiles.map((file) => {
+        if (!isPrimarySkillMarkdownPath(file.path) || !isEditableSkillFile(file)) {
+          return file;
+        }
+
+        const nextContent = buildSkillMarkdown({
+          name: nextFrontmatter.name,
+          description: nextFrontmatter.summary,
+          body: extractSkillMarkdownBody(file.contentText ?? ""),
+        });
+
+        return nextContent === file.contentText ? file : { ...file, contentText: nextContent };
+      }),
+    );
+    setDirtyFileIds((current) => {
+      const next = new Set(current);
+      next.add(primarySkillFile.id);
+      return next;
+    });
+    setFileStatus("Unsaved changes.");
+  }
+
   function updateSelectedMarkdown(markdown: string) {
     if (!selectedFile || !selectedFileIsEditable) {
       return;
     }
 
+    const nextContent = isPrimarySkillMarkdownPath(selectedFile.path)
+      ? buildSkillMarkdown({
+        name: frontmatter.name,
+        description: frontmatter.summary,
+        body: markdown,
+      })
+      : markdown;
+
     setFiles((currentFiles) =>
       currentFiles.map((file) =>
-        file.id === selectedFile.id ? { ...file, contentText: markdown } : file,
+        file.id === selectedFile.id ? { ...file, contentText: nextContent } : file,
       ),
     );
     setDirtyFileIds((current) => {
@@ -2107,7 +2164,7 @@ function SkillEditorWorkspace({
                       value={frontmatter.name}
                       onChange={(event) => {
                         const nextName = event.currentTarget.value;
-                        setFrontmatter((state) => ({ ...state, name: nextName }));
+                        updateFrontmatterFields({ name: nextName });
                       }}
                     />
                   </label>
@@ -2118,7 +2175,7 @@ function SkillEditorWorkspace({
                       value={frontmatter.summary}
                       onChange={(event) => {
                         const nextSummary = event.currentTarget.value;
-                        setFrontmatter((state) => ({ ...state, summary: nextSummary }));
+                        updateFrontmatterFields({ summary: nextSummary });
                       }}
                     />
                   </label>

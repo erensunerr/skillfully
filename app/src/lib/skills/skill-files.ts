@@ -7,6 +7,10 @@ import {
   skillfullyManifestUrl,
   stripSkillfullyManagedBlock,
 } from "./managed-block";
+import {
+  DEFAULT_SKILL_DESCRIPTION,
+  buildSkillMarkdown,
+} from "./skill-frontmatter";
 
 export type SkillFileKind = "markdown" | "asset" | "json" | "text";
 
@@ -30,27 +34,6 @@ export type ManifestFile = {
   contentText?: string | null;
   storageUrl?: string | null;
 };
-
-const DEFAULT_SKILL_DESCRIPTION = "Describe when and how agents should use this skill.";
-const MAX_SKILL_SPEC_NAME_LENGTH = 64;
-
-export function skillSlug(value: string) {
-  return (
-    value
-      .trim()
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "") || "skill"
-  );
-}
-
-export function skillSpecName(value: string) {
-  return skillSlug(value).slice(0, MAX_SKILL_SPEC_NAME_LENGTH).replace(/-+$/g, "") || "skill";
-}
-
-function yamlQuotedString(value: string) {
-  return JSON.stringify(value.replace(/\r\n/g, "\n").replace(/\r/g, "\n"));
-}
 
 export function normalizeSkillFilePath(value: string) {
   const normalized = value
@@ -86,13 +69,7 @@ export function createDefaultSkillFile({
   return {
     path: "SKILL.md",
     kind: "markdown" as const,
-    contentText: [
-      "---",
-      `name: ${skillSpecName(name)}`,
-      `description: ${yamlQuotedString(summary)}`,
-      "---",
-      "",
-    ].join("\n"),
+    contentText: buildSkillMarkdown({ name, description: summary }),
   };
 }
 
@@ -173,3 +150,5 @@ export {
   skillfullyManifestUrl,
   stripSkillfullyManagedBlock,
 } from "./managed-block";
+
+export { skillSlug, skillSpecName } from "./skill-frontmatter";

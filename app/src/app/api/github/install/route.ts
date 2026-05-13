@@ -19,19 +19,39 @@ function githubInstallUrl(state: string) {
   return url;
 }
 
-export async function GET(request: NextRequest) {
+async function createInstallUrl(request: NextRequest) {
   const user = await getDashboardUser(request);
   if (!user) {
-    return jsonResponse({ error: "unauthorized" }, 401, "GET, OPTIONS");
+    return null;
   }
 
+  return githubInstallUrl(createGitHubInstallState({ ownerId: user.id }));
+}
+
+export async function GET(request: NextRequest) {
   try {
-    return NextResponse.redirect(githubInstallUrl(createGitHubInstallState({ ownerId: user.id })));
+    const installUrl = await createInstallUrl(request);
+    if (!installUrl) {
+      return jsonResponse({ error: "unauthorized" }, 401, "GET, POST, OPTIONS");
+    }
+    return NextResponse.redirect(installUrl);
   } catch (error) {
-    return jsonResponse({ error: error instanceof Error ? error.message : "unknown error" }, 400, "GET, OPTIONS");
+    return jsonResponse({ error: error instanceof Error ? error.message : "unknown error" }, 400, "GET, POST, OPTIONS");
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const installUrl = await createInstallUrl(request);
+    if (!installUrl) {
+      return jsonResponse({ error: "unauthorized" }, 401, "GET, POST, OPTIONS");
+    }
+    return jsonResponse({ install_url: installUrl.toString() }, 200, "GET, POST, OPTIONS");
+  } catch (error) {
+    return jsonResponse({ error: error instanceof Error ? error.message : "unknown error" }, 400, "GET, POST, OPTIONS");
   }
 }
 
 export async function OPTIONS() {
-  return jsonResponse({}, 200, "GET, OPTIONS");
+  return jsonResponse({}, 200, "GET, POST, OPTIONS");
 }

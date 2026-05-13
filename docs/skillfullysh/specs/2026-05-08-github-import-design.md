@@ -10,6 +10,10 @@ Make onboarding GitHub import real: after a signed-in Skillfully user installs t
 ## User Flow
 
 - The empty-dashboard onboarding modal keeps its `Connect GitHub` action.
+- Dashboard GitHub-start actions call `/api/github/install` with an authenticated
+  POST first, then navigate to the returned GitHub install URL. This keeps
+  localhost/local-preview flows authenticated even though direct browser
+  navigation cannot attach dashboard auth headers.
 - GitHub installation returns to Skillfully with `installation_id` and signed `state`.
 - The server verifies the signed Skillfully state, verifies the GitHub App installation with app credentials, stores the durable installation, creates a server-side import session, and redirects to `/dashboard?github_import=<sessionId>`.
 - The dashboard opens a modal over the existing empty dashboard, matching the original onboarding modal footprint.

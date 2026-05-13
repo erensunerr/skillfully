@@ -41,9 +41,11 @@ function DocumentPlusIcon() {
 
 export function OnboardingModal({
   onClose,
+  onConnectGitHub,
   onCreateSkill,
 }: {
   onClose: () => void;
+  onConnectGitHub: () => void;
   onCreateSkill: () => void;
 }) {
   useEffect(() => {
@@ -101,7 +103,7 @@ export function OnboardingModal({
                 className={`${BRUTAL_BUTTON} mt-5 w-full`}
                 onClick={() => {
                   captureClientEvent("onboarding_github_connect_clicked");
-                  window.location.href = "/api/github/install";
+                  onConnectGitHub();
                 }}
               >
                 Connect GitHub

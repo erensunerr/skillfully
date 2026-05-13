@@ -294,6 +294,37 @@ test("dashboard skill detail renders the analytics tab UI", async () => {
   assert.doesNotMatch(html, /Cursor/);
 });
 
+test("analytics usage rows keep duplicate-looking events keyed uniquely", async () => {
+  Object.assign(globalThis, { React });
+  const { analyticsRowsFromUsageEvents } = await import("./page");
+  const createdAt = Date.UTC(2026, 4, 11, 17, 11);
+
+  const rows = analyticsRowsFromUsageEvents([
+    {
+      id: "usage-a",
+      ownerId: "user-1",
+      skillId: "sk_test123",
+      eventKind: "manifest_checked",
+      source: "public_manifest",
+      subjectHash: "cb2d9b80-08b6-4803-a6fb-cae14761a386",
+      dayKey: "2026-05-11",
+      createdAt,
+    },
+    {
+      id: "usage-b",
+      ownerId: "user-1",
+      skillId: "sk_test123",
+      eventKind: "manifest_checked",
+      source: "public_manifest",
+      subjectHash: "cb2d9b80-08b6-4803-a6fb-cae14761a386",
+      dayKey: "2026-05-11",
+      createdAt,
+    },
+  ] as never);
+
+  assert.deepEqual(rows.map((row) => row.rowKey), ["usage-a", "usage-b"]);
+});
+
 test("dashboard skill detail renders the skill settings UI", async () => {
   Object.assign(globalThis, { React });
   const { SkillDetail } = await import("./page");

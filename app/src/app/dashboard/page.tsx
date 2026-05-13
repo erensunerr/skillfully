@@ -109,6 +109,9 @@ type GitHubImportSubmitResponse = {
   }>;
   failures?: Array<{ name?: string; error: string }>;
 };
+type GitHubInstallStartResponse = {
+  install_url: string;
+};
 
 const DASHBOARD_CARD = "border border-[var(--ink)] bg-[var(--paper)] text-[var(--ink)]";
 const DASHBOARD_PANEL = "border border-[var(--ink)] bg-[var(--white)] text-[var(--ink)]";
@@ -2262,11 +2265,15 @@ function analyticsRowsFromEntries(entries: Feedback[]) {
     });
 }
 
-function analyticsRowsFromUsageEvents(events: SkillUsageEvent[]) {
+export function analyticsRowsFromUsageEvents(events: SkillUsageEvent[]) {
   return [...events]
     .sort((a, b) => toMillis(b.createdAt) - toMillis(a.createdAt))
     .slice(0, 12)
-    .map((event) => ({
+    .map((event, index) => ({
+      rowKey:
+        typeof event.id === "string" && event.id
+          ? event.id
+          : `${toMillis(event.createdAt)}-${String(event.eventKind || "unknown")}-${String(event.source || "Skillfully")}-${index}`,
       time: formatTimestamp(event.createdAt),
       event: usageEventLabel(String(event.eventKind || "unknown")),
       source: typeof event.source === "string" ? event.source : "Skillfully",
@@ -2400,8 +2407,8 @@ function SkillAnalyticsWorkspace({
                     </td>
                   </tr>
                 ) : (
-                  usageRows.map(({ time, event, source, detail }) => (
-                    <tr key={`${time}-${event}-${source}-${detail}`} className="border-b border-[var(--ink)]/45">
+                  usageRows.map(({ rowKey, time, event, source, detail }) => (
+                    <tr key={rowKey} className="border-b border-[var(--ink)]/45">
                       <td className="px-5 py-4">{time}</td>
                       <td className="px-5 py-4">{event}</td>
                       <td className="px-5 py-4">{source}</td>
@@ -3434,6 +3441,32 @@ export default function Dashboard({
     setScreen("list");
   }
 
+  async function openGitHubInstall(surface: string) {
+    if (!user) {
+      setErrorMessage("Sign in before connecting GitHub.");
+      return;
+    }
+
+    setErrorMessage("");
+    setGitHubImportError("");
+    captureClientEvent("github_install_started", { surface });
+
+    try {
+      const payload = await dashboardJson<GitHubInstallStartResponse>(user, "/api/github/install", {
+        method: "POST",
+      });
+      if (!payload.install_url) {
+        throw new Error("GitHub install URL was not returned.");
+      }
+      window.location.href = payload.install_url;
+    } catch (error) {
+      captureClientException(error);
+      const message = extractErrorMessage(error);
+      setErrorMessage(message);
+      setGitHubImportError(message);
+    }
+  }
+
   function clearGitHubImportUrl() {
     if (typeof window === "undefined") {
       return;
@@ -3716,6 +3749,7 @@ export default function Dashboard({
             captureClientEvent("onboarding_modal_closed");
             setOnboardingDismissed(true);
           }}
+          onConnectGitHub={() => void openGitHubInstall("onboarding_modal")}
           onCreateSkill={openCreateSkill}
         />
       ) : null}
@@ -3730,9 +3764,7 @@ export default function Dashboard({
           onSubmit={createSkillFromModal}
           onImportFromGitHub={() => {
             captureClientEvent("create_skill_modal_github_import_clicked");
-            if (typeof window !== "undefined") {
-              window.location.href = "/api/github/install";
-            }
+            void openGitHubInstall("create_skill_modal");
           }}
         />
       ) : null}
@@ -3748,9 +3780,7 @@ export default function Dashboard({
           onImport={() => void importSelectedGitHubSkills()}
           onClose={closeGitHubImportModal}
           onChangeRepositoryAccess={() => {
-            if (typeof window !== "undefined") {
-              window.location.href = "/api/github/install";
-            }
+            void openGitHubInstall("github_import_modal");
           }}
         />
       ) : null}

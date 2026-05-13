@@ -88,8 +88,6 @@ test("dashboard does not render seeded demo data for an empty skill", async () =
     <SkillDetail
       skill={skill}
       entries={[] as never}
-      feedbackTemplate="Post feedback to {{feedbackUrl}}"
-      feedbackTemplateError={null}
       onBack={() => undefined}
     />,
   );
@@ -98,8 +96,6 @@ test("dashboard does not render seeded demo data for an empty skill", async () =
       activeTab="editor"
       skill={skill}
       entries={[] as never}
-      feedbackTemplate="Post feedback to {{feedbackUrl}}"
-      feedbackTemplateError={null}
       onBack={() => undefined}
     />,
   );
@@ -108,8 +104,6 @@ test("dashboard does not render seeded demo data for an empty skill", async () =
       activeTab="analytics"
       skill={skill}
       entries={[] as never}
-      feedbackTemplate="Post feedback to {{feedbackUrl}}"
-      feedbackTemplateError={null}
       onBack={() => undefined}
     />,
   );
@@ -118,8 +112,6 @@ test("dashboard does not render seeded demo data for an empty skill", async () =
       activeTab="settings"
       skill={skill}
       entries={[] as never}
-      feedbackTemplate="Post feedback to {{feedbackUrl}}"
-      feedbackTemplateError={null}
       onBack={() => undefined}
     />,
   );
@@ -166,8 +158,6 @@ test("dashboard skill detail renders the operational overview UI", async () => {
       skill={fakeSkill()}
       entries={fakeEntries()}
       usageEvents={fakeUsageEvents()}
-      feedbackTemplate="Post feedback to {{feedbackUrl}}"
-      feedbackTemplateError={null}
       onBack={() => undefined}
     />,
   );
@@ -176,7 +166,8 @@ test("dashboard skill detail renders the operational overview UI", async () => {
   assert.match(html, /Not versioned/);
   assert.match(html, /Draft/);
   assert.match(html, /Go to Editor/);
-  assert.match(html, /Copy installation prompt/);
+  assert.match(html, /Install Skillfully Skill/);
+  assert.doesNotMatch(html, /Install code-review/);
   assert.match(html, /Success rate/i);
   assert.match(html, /Feedback received/i);
   assert.match(html, /Usage events/i);
@@ -201,6 +192,28 @@ test("dashboard skill detail renders the operational overview UI", async () => {
   assert.match(html, /No published versions yet/i);
 });
 
+test("published dashboard overview renders both install prompt actions", async () => {
+  Object.assign(globalThis, { React });
+  const { SkillDetail } = await import("./page");
+
+  const html = renderToStaticMarkup(
+    <SkillDetail
+      skill={{
+        ...fakeSkill(),
+        publishedVersionId: "version-1",
+        status: "published",
+      } as never}
+      entries={fakeEntries()}
+      usageEvents={fakeUsageEvents()}
+      onBack={() => undefined}
+    />,
+  );
+
+  assert.match(html, /Published version/);
+  assert.match(html, /Install Skillfully Skill/);
+  assert.match(html, /Install code-review/);
+});
+
 test("dashboard skill detail renders the editor tab UI", async () => {
   Object.assign(globalThis, { React });
   const { SkillDetail } = await import("./page");
@@ -210,8 +223,6 @@ test("dashboard skill detail renders the editor tab UI", async () => {
       activeTab="editor"
       skill={fakeSkill()}
       entries={fakeEntries()}
-      feedbackTemplate="Install skill from {{feedbackUrl}}"
-      feedbackTemplateError={null}
       onBack={() => undefined}
     />,
   );
@@ -253,8 +264,6 @@ test("dashboard skill detail renders the analytics tab UI", async () => {
       skill={fakeSkill()}
       entries={fakeEntries()}
       usageEvents={fakeUsageEvents()}
-      feedbackTemplate="Post feedback to {{feedbackUrl}}"
-      feedbackTemplateError={null}
       onBack={() => undefined}
     />,
   );
@@ -294,8 +303,6 @@ test("dashboard skill detail renders the skill settings UI", async () => {
       activeTab="settings"
       skill={fakeSkill()}
       entries={fakeEntries()}
-      feedbackTemplate="Post feedback to {{feedbackUrl}}"
-      feedbackTemplateError={null}
       onBack={() => undefined}
     />,
   );
@@ -336,8 +343,6 @@ test("dashboard settings show imported skills as managed in GitHub", async () =>
         originalSkillPath: ".agents/skills/code-review",
       } as never}
       entries={fakeEntries()}
-      feedbackTemplate="Post feedback to {{feedbackUrl}}"
-      feedbackTemplateError={null}
       onBack={() => undefined}
     />,
   );

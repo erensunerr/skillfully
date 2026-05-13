@@ -14,6 +14,10 @@ import {
   skillSpecName,
 } from "@/lib/skills/skill-frontmatter";
 import {
+  buildSkillfullySkillInstallPrompt,
+  buildUserSkillInstallPrompt,
+} from "@/lib/skills/install-prompts";
+import {
   captureClientEvent,
   captureClientException,
   identifyClientUser,
@@ -115,7 +119,6 @@ const DASHBOARD_BUTTON_LIGHT =
 const DASHBOARD_INPUT =
   "mt-2 w-full border border-[var(--ink)] bg-[var(--white)] px-3 py-3 font-editorial-mono text-sm outline-none focus-visible:ring-2 focus-visible:ring-[var(--ink)]";
 
-const FEEDBACK_SNIPPET_URL = "/feedback-template.md";
 const validSkillRouteTabs: SkillRouteTab[] = ["overview", "editor", "analytics", "settings"];
 
 const publishingDestinationRows = [
@@ -245,11 +248,6 @@ function usageEventsByDay(events: SkillUsageEvent[], days = 7) {
   });
 
   return buckets;
-}
-
-function renderFeedbackTemplate(template: string, skillId: string) {
-  const feedbackUrl = `https://www.skillfully.sh/feedback/${skillId}`;
-  return template.replaceAll("{{feedbackUrl}}", feedbackUrl);
 }
 
 function displayUserEmail(user: AppUser | null | undefined) {
@@ -1466,26 +1464,13 @@ function FileGlyph({ locked = false }: { locked?: boolean }) {
 }
 
 function buildPublicInstallPrompt(skill: Skill) {
-  const repoFullName =
-    typeof skill.originalRepoFullName === "string" && skill.originalRepoFullName
-      ? skill.originalRepoFullName
-      : "erensunerr/skillfully-skills";
-  const skillRoot =
-    typeof skill.originalSkillPath === "string" && skill.originalSkillPath
-      ? skill.originalSkillPath
-      : `skills/${skill.slug || skill.name}`;
-  return [
-    `Install the ${skill.name} skill from GitHub (${repoFullName}).`,
-    `Skill path: ${skillRoot}`,
-    "",
-    "When the install is done, call:",
-    `POST https://www.skillfully.sh/api/public/skills/${skill.skillId}/install`,
-    "",
-    "Before each use, check for the latest version:",
-    `Manifest URL: https://www.skillfully.sh/api/public/skills/${skill.skillId}/manifest`,
-    "",
-    "Then load the published files from the manifest and use the latest SKILL.md as your operating instructions.",
-  ].join("\n");
+  return buildUserSkillInstallPrompt({
+    name: skill.name,
+    slug: skill.slug,
+    skillId: skill.skillId,
+    repoFullName: typeof skill.originalRepoFullName === "string" ? skill.originalRepoFullName : null,
+    skillRoot: typeof skill.originalSkillPath === "string" ? skill.originalSkillPath : null,
+  });
 }
 
 function PublishSkillModal({
@@ -2910,8 +2895,6 @@ export function SkillDetail({
   activeTab = "overview",
   onTabChange,
   onOpenEditor,
-  feedbackTemplate,
-  feedbackTemplateError,
 }: {
   skill: Skill;
   entries: Feedback[];
@@ -2921,13 +2904,8 @@ export function SkillDetail({
   activeTab?: DashboardTab;
   onTabChange?: (tab: DashboardTab) => void;
   onOpenEditor?: () => void;
-  feedbackTemplate: string | null;
-  feedbackTemplateError: string | null;
 }) {
-  const [snippetCopied, setSnippetCopied] = useState(false);
-  const resolvedTemplate = feedbackTemplate
-    ? renderFeedbackTemplate(feedbackTemplate, skill.skillId)
-    : null;
+  const [copiedInstallPrompt, setCopiedInstallPrompt] = useState<"skillfully" | "skill" | null>(null);
   const counts = ratingSummary(entries);
   const usageCounts = usageSummary(usageEvents);
   const totalUsageEvents = usageEvents.length;
@@ -2938,11 +2916,25 @@ export function SkillDetail({
     totalRated > 0 ? `${Math.round((counts.positive / totalRated) * 1000) / 10}%` : "0%";
   const feedbackReceived = totalRated.toLocaleString();
   const statusLabel = skill.status === "published" || skill.publishedVersionId ? "Published" : "Draft";
+  const isPublished = statusLabel === "Published";
   const versionLabel = skill.publishedVersionId
     ? "Published version"
     : skill.currentDraftVersionId
       ? "Draft version"
       : "Not versioned";
+  const skillfullySkillInstallPrompt = buildSkillfullySkillInstallPrompt();
+  const userSkillInstallPrompt = buildPublicInstallPrompt(skill);
+
+  async function copyInstallPrompt(kind: "skillfully" | "skill", prompt: string) {
+    await navigator.clipboard.writeText(prompt);
+    captureClientEvent("install_prompt_copied", {
+      prompt_kind: kind,
+      skill_name: skill.name,
+      skill_id: skill.skillId,
+    });
+    setCopiedInstallPrompt(kind);
+    window.setTimeout(() => setCopiedInstallPrompt(null), 1200);
+  }
 
   if (activeTab === "editor") {
     return <SkillEditorWorkspace skill={skill} user={user} />;
@@ -2982,11 +2974,6 @@ export function SkillDetail({
           <p className="mt-6 max-w-2xl text-lg leading-8">
             {skill.description || "No description yet."}
           </p>
-          {feedbackTemplateError ? (
-            <p className="mt-4 border border-red-600 bg-red-50 p-3 font-editorial-mono text-xs font-bold uppercase text-red-700">
-              {feedbackTemplateError}
-            </p>
-          ) : null}
         </div>
 
         <div className="grid gap-3 sm:w-72">
@@ -3008,18 +2995,21 @@ export function SkillDetail({
           <button
             type="button"
             className="flex items-center justify-between border border-[var(--ink)] bg-[var(--paper)] px-5 py-4 font-editorial-sans text-base transition hover:bg-[var(--white)] disabled:cursor-not-allowed disabled:opacity-60"
-            disabled={!resolvedTemplate}
-            onClick={async () => {
-              if (!resolvedTemplate) return;
-              await navigator.clipboard.writeText(resolvedTemplate);
-              captureClientEvent("snippet_copied", { skill_name: skill.name, skill_id: skill.skillId });
-              setSnippetCopied(true);
-              window.setTimeout(() => setSnippetCopied(false), 1200);
-            }}
+            onClick={() => void copyInstallPrompt("skillfully", skillfullySkillInstallPrompt)}
           >
-            {snippetCopied ? "Copied" : "Copy installation prompt"}
+            {copiedInstallPrompt === "skillfully" ? "Copied" : "Install Skillfully Skill"}
             <CopyIcon />
           </button>
+          {isPublished ? (
+            <button
+              type="button"
+              className="flex items-center justify-between border border-[var(--ink)] bg-[var(--paper)] px-5 py-4 font-editorial-sans text-base transition hover:bg-[var(--white)]"
+              onClick={() => void copyInstallPrompt("skill", userSkillInstallPrompt)}
+            >
+              {copiedInstallPrompt === "skill" ? "Copied" : `Install ${skill.name}`}
+              <CopyIcon />
+            </button>
+          ) : null}
         </div>
       </header>
 
@@ -3077,8 +3067,6 @@ export default function Dashboard({
 
   const [errorMessage, setErrorMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [feedbackTemplate, setFeedbackTemplate] = useState<string | null>(null);
-  const [feedbackTemplateError, setFeedbackTemplateError] = useState<string | null>(null);
   const [onboardingDismissed, setOnboardingDismissed] = useState(false);
   const [githubImportSessionId, setGitHubImportSessionId] = useState<string | null>(null);
   const [githubImportState, setGitHubImportState] = useState<GitHubImportModalState>("loading");
@@ -3274,39 +3262,6 @@ export default function Dashboard({
       active = false;
     };
   }, [githubImportSessionId, user?.id]);
-
-  useEffect(() => {
-    let active = true;
-
-    void fetch(FEEDBACK_SNIPPET_URL)
-      .then((response) => {
-        if (!response.ok) {
-          throw new Error(`Failed to fetch feedback template: ${response.status}`);
-        }
-        return response.text();
-      })
-      .then((content) => {
-        if (!active) return;
-        const normalized = content.trim();
-        if (!normalized) {
-          throw new Error("Feedback template file is empty.");
-        }
-        setFeedbackTemplate(normalized);
-        setFeedbackTemplateError(null);
-      })
-      .catch((error) => {
-        if (!active) return;
-        if (error instanceof Error) {
-          setFeedbackTemplateError(error.message);
-          return;
-        }
-        setFeedbackTemplateError("Unable to load feedback template.");
-      });
-
-    return () => {
-      active = false;
-    };
-  }, []);
 
   if (isAuthLoading || (user && isDataLoading)) {
     return <main className="min-h-screen overflow-x-hidden border-x border-[var(--ink)] bg-[var(--paper)]" />;
@@ -3732,8 +3687,6 @@ export default function Dashboard({
               usageEvents={selectedUsageEvents}
               user={user}
               activeTab={activeTab}
-              feedbackTemplate={feedbackTemplate}
-              feedbackTemplateError={feedbackTemplateError}
               onTabChange={openDashboardTab}
               onBack={() => {
                 setSelectedSkillId(null);

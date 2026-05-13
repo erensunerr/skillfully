@@ -930,11 +930,13 @@ export function CreateSkillModal({
   onChange,
   onCancel,
   onSubmit,
+  onImportFromGitHub,
 }: {
   form: SkillForm;
   onChange: (value: SkillForm) => void;
   onCancel: () => void;
   onSubmit: (name: string, description: string) => void;
+  onImportFromGitHub: () => void;
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--ink)]/35 px-5 py-8 backdrop-blur-[1px]">
@@ -974,7 +976,12 @@ export function CreateSkillModal({
 
           <p className="font-editorial-mono text-sm">
             Need an existing repo instead?{" "}
-            <button type="button" className="font-bold underline">
+            <button
+              type="button"
+              className="font-bold underline"
+              data-github-import-action="/api/github/install"
+              onClick={onImportFromGitHub}
+            >
               Import from GitHub
             </button>
           </p>
@@ -3743,6 +3750,12 @@ export default function Dashboard({
             setErrorMessage("");
           }}
           onSubmit={createSkillFromModal}
+          onImportFromGitHub={() => {
+            captureClientEvent("create_skill_modal_github_import_clicked");
+            if (typeof window !== "undefined") {
+              window.location.href = "/api/github/install";
+            }
+          }}
         />
       ) : null}
       {githubImportSessionId ? (

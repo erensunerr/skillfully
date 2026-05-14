@@ -14,13 +14,19 @@
     "@instantdb/admin": "latest",
     "@instantdb/react": "latest",
     "@mdxeditor/editor": "^3.55.0",
+    "gray-matter": "^4.0.3",
     "next": "^16.2.4",
     "posthog-js": "^1.368.0",
     "posthog-node": "^5.29.2",
     "react": "19.1.0",
     "react-dom": "19.1.0",
+    "react-markdown": "^10.1.0",
     "react-select": "^5.10.2",
-    "recharts": "^3.8.1"
+    "recharts": "^3.8.1",
+    "remark-gfm": "^4.0.1",
+    "remark-parse": "^11.0.0",
+    "remark-stringify": "^11.0.0",
+    "unified": "^11.0.5"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

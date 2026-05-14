@@ -5,6 +5,18 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Select, { type SingleValue, type StylesConfig } from "react-select";
 import { db, isUsingLocalPreviewDb } from "@/lib/db";
+import { isPrimarySkillMarkdownPath } from "@/lib/skills/managed-block";
+import {
+  DEFAULT_SKILL_DESCRIPTION,
+  buildSkillMarkdown,
+  extractSkillMarkdownBody,
+  parseSkillMarkdownFrontmatter,
+  skillSpecName,
+} from "@/lib/skills/skill-frontmatter";
+import {
+  buildSkillfullySkillInstallPrompt,
+  buildUserSkillInstallPrompt,
+} from "@/lib/skills/install-prompts";
 import {
   captureClientEvent,
   captureClientException,
@@ -19,6 +31,11 @@ import {
   shouldShowOnboardingModalByDefault,
 } from "./view-state";
 import { OnboardingModal } from "./onboarding-modal";
+import {
+  GitHubImportModal,
+  type GitHubImportCandidateView,
+  type GitHubImportModalState,
+} from "./github-import-modal";
 
 type Skill = InstaQLEntity<AppSchema, "skills">;
 type Feedback = InstaQLEntity<AppSchema, "feedback">;
@@ -80,6 +97,21 @@ type SkillEditorFile = {
   storageUrl?: string | null;
   updatedAt?: number | null;
 };
+type GitHubImportCandidatesResponse = {
+  candidates: GitHubImportCandidateView[];
+  warnings?: string[];
+};
+type GitHubImportSubmitResponse = {
+  imported: Array<{
+    skill_id: string;
+    entity_id?: string;
+    name: string;
+  }>;
+  failures?: Array<{ name?: string; error: string }>;
+};
+type GitHubInstallStartResponse = {
+  install_url: string;
+};
 
 const DASHBOARD_CARD = "border border-[var(--ink)] bg-[var(--paper)] text-[var(--ink)]";
 const DASHBOARD_PANEL = "border border-[var(--ink)] bg-[var(--white)] text-[var(--ink)]";
@@ -90,7 +122,6 @@ const DASHBOARD_BUTTON_LIGHT =
 const DASHBOARD_INPUT =
   "mt-2 w-full border border-[var(--ink)] bg-[var(--white)] px-3 py-3 font-editorial-mono text-sm outline-none focus-visible:ring-2 focus-visible:ring-[var(--ink)]";
 
-const FEEDBACK_SNIPPET_URL = "/feedback-template.md";
 const validSkillRouteTabs: SkillRouteTab[] = ["overview", "editor", "analytics", "settings"];
 
 const publishingDestinationRows = [
@@ -102,28 +133,10 @@ const publishingDestinationRows = [
 ] satisfies Array<[string, string, string, string]>;
 
 function defaultEditorMarkdown(skill: Skill) {
-  const summary = skill.description || "Describe what this skill helps an agent do.";
-  return [
-    `# ${skill.name}`,
-    "",
-    summary,
-    "",
-    "> Use this skill only when it matches the user's task.",
-    "",
-    "## When to use",
-    "",
-    "- The user asks for work that this skill is designed to handle",
-    "- The needed source files, tools, or context are available",
-    "- The expected output can be verified before finishing",
-    "",
-    "## Workflow",
-    "",
-    "1. Read the user's request and identify the concrete goal",
-    "2. Gather the relevant project context before editing",
-    "3. Make the smallest change that satisfies the task",
-    "4. Verify the result with an appropriate command or check",
-    "5. Report what changed and any remaining risk",
-  ].join("\n");
+  return buildSkillMarkdown({
+    name: skill.name,
+    description: skill.description?.trim() || DEFAULT_SKILL_DESCRIPTION,
+  });
 }
 
 function fallbackEditorFiles(skill: Skill): SkillEditorFile[] {
@@ -144,6 +157,18 @@ function isEditableSkillFile(file: SkillEditorFile) {
 
 function sortSkillFiles(files: SkillEditorFile[]) {
   return [...files].sort((a, b) => a.path.localeCompare(b.path));
+}
+
+function frontmatterStateFromFiles(skill: Skill, files: SkillEditorFile[]) {
+  const primarySkillFile = files.find((file) => isPrimarySkillMarkdownPath(file.path));
+  const parsed = primarySkillFile?.contentText
+    ? parseSkillMarkdownFrontmatter(primarySkillFile.contentText)
+    : {};
+
+  return {
+    name: parsed.name || skillSpecName(skill.name),
+    summary: parsed.description || skill.description?.trim() || DEFAULT_SKILL_DESCRIPTION,
+  };
 }
 
 const skillSettingsPublishingRows = [
@@ -226,11 +251,6 @@ function usageEventsByDay(events: SkillUsageEvent[], days = 7) {
   });
 
   return buckets;
-}
-
-function renderFeedbackTemplate(template: string, skillId: string) {
-  const feedbackUrl = `https://www.skillfully.sh/feedback/${skillId}`;
-  return template.replaceAll("{{feedbackUrl}}", feedbackUrl);
 }
 
 function displayUserEmail(user: AppUser | null | undefined) {
@@ -627,15 +647,6 @@ function TargetIcon({ name }: { name: string }) {
   );
 }
 
-function ExternalIcon() {
-  return (
-    <svg aria-hidden viewBox="0 0 16 16" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.6">
-      <path d="M6 3H3v10h10v-3" />
-      <path d="M9 3h4v4M8 8l5-5" />
-    </svg>
-  );
-}
-
 function CopyIcon() {
   return (
     <svg aria-hidden viewBox="0 0 18 18" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.6">
@@ -913,11 +924,13 @@ export function CreateSkillModal({
   onChange,
   onCancel,
   onSubmit,
+  onImportFromGitHub,
 }: {
   form: SkillForm;
   onChange: (value: SkillForm) => void;
   onCancel: () => void;
   onSubmit: (name: string, description: string) => void;
+  onImportFromGitHub: () => void;
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--ink)]/35 px-5 py-8 backdrop-blur-[1px]">
@@ -957,7 +970,11 @@ export function CreateSkillModal({
 
           <p className="font-editorial-mono text-sm">
             Need an existing repo instead?{" "}
-            <button type="button" className="font-bold underline">
+            <button
+              type="button"
+              className="font-bold underline"
+              onClick={onImportFromGitHub}
+            >
               Import from GitHub
             </button>
           </p>
@@ -1201,24 +1218,6 @@ function UsageChart({ events }: { events: SkillUsageEvent[] }) {
           </div>
         </div>
       )}
-    </section>
-  );
-}
-
-function SkillHealth() {
-  return (
-    <section className={`${DASHBOARD_CARD} p-6 sm:p-8`}>
-      <p className="font-editorial-mono text-xs font-bold uppercase">Skill health</p>
-      <p className="mt-6 text-sm leading-6 text-[var(--ink)]/70">Health checks appear after runtime telemetry is connected.</p>
-    </section>
-  );
-}
-
-function AttentionPanel() {
-  return (
-    <section className={`${DASHBOARD_CARD} p-6`}>
-      <p className="font-editorial-mono text-xs font-bold uppercase">Needs attention</p>
-      <p className="mt-6 text-sm leading-6 text-[var(--ink)]/70">No attention items yet.</p>
     </section>
   );
 }
@@ -1467,26 +1466,13 @@ function FileGlyph({ locked = false }: { locked?: boolean }) {
 }
 
 function buildPublicInstallPrompt(skill: Skill) {
-  const repoFullName =
-    typeof skill.originalRepoFullName === "string" && skill.originalRepoFullName
-      ? skill.originalRepoFullName
-      : "erensunerr/skillfully-skills";
-  const skillRoot =
-    typeof skill.originalSkillPath === "string" && skill.originalSkillPath
-      ? skill.originalSkillPath
-      : `skills/${skill.slug || skill.name}`;
-  return [
-    `Install the ${skill.name} skill from GitHub (${repoFullName}).`,
-    `Skill path: ${skillRoot}`,
-    "",
-    "When the install is done, call:",
-    `POST https://www.skillfully.sh/api/public/skills/${skill.skillId}/install`,
-    "",
-    "Before each use, check for the latest version:",
-    `Manifest URL: https://www.skillfully.sh/api/public/skills/${skill.skillId}/manifest`,
-    "",
-    "Then load the published files from the manifest and use the latest SKILL.md as your operating instructions.",
-  ].join("\n");
+  return buildUserSkillInstallPrompt({
+    name: skill.name,
+    slug: skill.slug,
+    skillId: skill.skillId,
+    repoFullName: typeof skill.originalRepoFullName === "string" ? skill.originalRepoFullName : null,
+    skillRoot: typeof skill.originalSkillPath === "string" ? skill.originalSkillPath : null,
+  });
 }
 
 function PublishSkillModal({
@@ -1683,8 +1669,7 @@ function SkillEditorWorkspace({
   const [selectedFileId, setSelectedFileId] = useState(() => fallbackEditorFiles(skill)[0]?.id ?? "");
   const [dirtyFileIds, setDirtyFileIds] = useState<Set<string>>(() => new Set());
   const [frontmatter, setFrontmatter] = useState({
-    name: skill.name,
-    summary: skill.description || "Describe what this skill helps an agent do.",
+    ...frontmatterStateFromFiles(skill, fallbackEditorFiles(skill)),
     version: "0.1.0",
     status: "Draft",
   });
@@ -1714,7 +1699,11 @@ function SkillEditorWorkspace({
   const selectedFile =
     files.find((file) => file.id === selectedFileId) ?? markdownFiles[0] ?? files[0] ?? null;
   const selectedFileIsEditable = selectedFile ? isEditableSkillFile(selectedFile) : false;
-  const selectedMarkdown = selectedFileIsEditable ? selectedFile?.contentText ?? "" : "";
+  const selectedMarkdown = selectedFileIsEditable
+    ? isPrimarySkillMarkdownPath(selectedFile?.path ?? "")
+      ? extractSkillMarkdownBody(selectedFile?.contentText ?? "")
+      : selectedFile?.contentText ?? ""
+    : "";
   const canPersistFiles = Boolean(user && !isUsingLocalPreviewDb);
   const editorStatusLabel = skill.status === "published" || skill.publishedVersionId ? "Published" : "Draft";
   const editorValidationRows = [
@@ -1739,8 +1728,7 @@ function SkillEditorWorkspace({
     const fallbackFiles = fallbackEditorFiles(skill);
     setFrontmatter((state) => ({
       ...state,
-      name: skill.name,
-      summary: skill.description || "Describe what this skill helps an agent do.",
+      ...frontmatterStateFromFiles(skill, fallbackFiles),
     }));
     setDirtyFileIds(new Set());
     setDeletingFileIds(new Set());
@@ -1760,6 +1748,10 @@ function SkillEditorWorkspace({
         if (!active) return;
         const loadedFiles = sortSkillFiles(payload.files.length > 0 ? payload.files : fallbackFiles);
         setFiles(loadedFiles);
+        setFrontmatter((state) => ({
+          ...state,
+          ...frontmatterStateFromFiles(skill, loadedFiles),
+        }));
         setSelectedFileId((current) => {
           if (loadedFiles.some((file) => file.id === current)) {
             return current;
@@ -1772,6 +1764,10 @@ function SkillEditorWorkspace({
         if (!active) return;
         captureClientException(error);
         setFiles(fallbackFiles);
+        setFrontmatter((state) => ({
+          ...state,
+          ...frontmatterStateFromFiles(skill, fallbackFiles),
+        }));
         setSelectedFileId(fallbackFiles[0]?.id ?? "");
         setFileStatus(`Could not load saved files: ${extractErrorMessage(error)}`);
       })
@@ -1786,14 +1782,55 @@ function SkillEditorWorkspace({
     };
   }, [skill.id, skill.skillId, skill.name, skill.description, user?.id, user?.refresh_token]);
 
+  function updateFrontmatterFields(updates: Partial<Pick<typeof frontmatter, "name" | "summary">>) {
+    const nextFrontmatter = { ...frontmatter, ...updates };
+    const primarySkillFile = files.find((file) => isPrimarySkillMarkdownPath(file.path) && isEditableSkillFile(file));
+
+    setFrontmatter(nextFrontmatter);
+
+    if (!primarySkillFile) {
+      return;
+    }
+
+    setFiles((currentFiles) =>
+      currentFiles.map((file) => {
+        if (!isPrimarySkillMarkdownPath(file.path) || !isEditableSkillFile(file)) {
+          return file;
+        }
+
+        const nextContent = buildSkillMarkdown({
+          name: nextFrontmatter.name,
+          description: nextFrontmatter.summary,
+          body: extractSkillMarkdownBody(file.contentText ?? ""),
+        });
+
+        return nextContent === file.contentText ? file : { ...file, contentText: nextContent };
+      }),
+    );
+    setDirtyFileIds((current) => {
+      const next = new Set(current);
+      next.add(primarySkillFile.id);
+      return next;
+    });
+    setFileStatus("Unsaved changes.");
+  }
+
   function updateSelectedMarkdown(markdown: string) {
     if (!selectedFile || !selectedFileIsEditable) {
       return;
     }
 
+    const nextContent = isPrimarySkillMarkdownPath(selectedFile.path)
+      ? buildSkillMarkdown({
+        name: frontmatter.name,
+        description: frontmatter.summary,
+        body: markdown,
+      })
+      : markdown;
+
     setFiles((currentFiles) =>
       currentFiles.map((file) =>
-        file.id === selectedFile.id ? { ...file, contentText: markdown } : file,
+        file.id === selectedFile.id ? { ...file, contentText: nextContent } : file,
       ),
     );
     setDirtyFileIds((current) => {
@@ -2058,7 +2095,6 @@ function SkillEditorWorkspace({
                 {isFileLoading ? "Loading files..." : selectedFile?.path || "No file selected"}
               </span>
             </div>
-            <div className="sr-only">When to use Workflow</div>
             <div className="min-h-0 flex-1 overflow-hidden">
               {selectedFileIsEditable ? (
                 <MdxMarkdownEditor markdown={selectedMarkdown} onChange={updateSelectedMarkdown} />
@@ -2088,7 +2124,7 @@ function SkillEditorWorkspace({
                       value={frontmatter.name}
                       onChange={(event) => {
                         const nextName = event.currentTarget.value;
-                        setFrontmatter((state) => ({ ...state, name: nextName }));
+                        updateFrontmatterFields({ name: nextName });
                       }}
                     />
                   </label>
@@ -2099,7 +2135,7 @@ function SkillEditorWorkspace({
                       value={frontmatter.summary}
                       onChange={(event) => {
                         const nextSummary = event.currentTarget.value;
-                        setFrontmatter((state) => ({ ...state, summary: nextSummary }));
+                        updateFrontmatterFields({ summary: nextSummary });
                       }}
                     />
                   </label>
@@ -2228,11 +2264,15 @@ function analyticsRowsFromEntries(entries: Feedback[]) {
     });
 }
 
-function analyticsRowsFromUsageEvents(events: SkillUsageEvent[]) {
+export function analyticsRowsFromUsageEvents(events: SkillUsageEvent[]) {
   return [...events]
     .sort((a, b) => toMillis(b.createdAt) - toMillis(a.createdAt))
     .slice(0, 12)
-    .map((event) => ({
+    .map((event, index) => ({
+      rowKey:
+        typeof event.id === "string" && event.id
+          ? event.id
+          : `${toMillis(event.createdAt)}-${String(event.eventKind || "unknown")}-${String(event.source || "Skillfully")}-${index}`,
       time: formatTimestamp(event.createdAt),
       event: usageEventLabel(String(event.eventKind || "unknown")),
       source: typeof event.source === "string" ? event.source : "Skillfully",
@@ -2366,8 +2406,8 @@ function SkillAnalyticsWorkspace({
                     </td>
                   </tr>
                 ) : (
-                  usageRows.map(({ time, event, source, detail }) => (
-                    <tr key={`${time}-${event}-${source}-${detail}`} className="border-b border-[var(--ink)]/45">
+                  usageRows.map(({ rowKey, time, event, source, detail }) => (
+                    <tr key={rowKey} className="border-b border-[var(--ink)]/45">
                       <td className="px-5 py-4">{time}</td>
                       <td className="px-5 py-4">{event}</td>
                       <td className="px-5 py-4">{source}</td>
@@ -2581,6 +2621,7 @@ export function SkillSettingsWorkspace({ skill }: { skill: Skill }) {
   const slug = slugifySkillName(skill.name);
   const isGitHubImported = skill.sourceMode === "github_import" && Boolean(skill.originalRepoFullName);
   const sourceRepo = isGitHubImported ? skill.originalRepoFullName : "Skillfully managed repository";
+  const sourcePath = isGitHubImported && skill.originalSkillPath ? skill.originalSkillPath : `skills/${slug}`;
   const publishBehavior = isGitHubImported
     ? "Create pull request on publish"
     : "Publish through the Skillfully-owned skills repository";
@@ -2625,11 +2666,11 @@ export function SkillSettingsWorkspace({ skill }: { skill: Skill }) {
             <span aria-hidden className="flex h-5 w-5 items-center justify-center rounded-full border-2 border-[var(--ink)]">
               {isGitHubImported ? <span className="h-2 w-2 rounded-full bg-[var(--ink)]" /> : null}
             </span>
-            GitHub tracked
+            Managed in GitHub
           </button>
         </div>
         <SettingsRow label="Repository" value={sourceRepo} />
-        <SettingsRow label="Skill path" value={`skills/${slug}`} />
+        <SettingsRow label="Skill path" value={sourcePath} />
         <SettingsRow label="Default branch" value="Configured by publishing target" />
         <SettingsRow label="Publish behavior" value={publishBehavior} />
         <SettingsRow
@@ -2860,8 +2901,6 @@ export function SkillDetail({
   activeTab = "overview",
   onTabChange,
   onOpenEditor,
-  feedbackTemplate,
-  feedbackTemplateError,
 }: {
   skill: Skill;
   entries: Feedback[];
@@ -2871,13 +2910,8 @@ export function SkillDetail({
   activeTab?: DashboardTab;
   onTabChange?: (tab: DashboardTab) => void;
   onOpenEditor?: () => void;
-  feedbackTemplate: string | null;
-  feedbackTemplateError: string | null;
 }) {
-  const [snippetCopied, setSnippetCopied] = useState(false);
-  const resolvedTemplate = feedbackTemplate
-    ? renderFeedbackTemplate(feedbackTemplate, skill.skillId)
-    : null;
+  const [copiedInstallPrompt, setCopiedInstallPrompt] = useState<"skillfully" | "skill" | null>(null);
   const counts = ratingSummary(entries);
   const usageCounts = usageSummary(usageEvents);
   const totalUsageEvents = usageEvents.length;
@@ -2888,11 +2922,25 @@ export function SkillDetail({
     totalRated > 0 ? `${Math.round((counts.positive / totalRated) * 1000) / 10}%` : "0%";
   const feedbackReceived = totalRated.toLocaleString();
   const statusLabel = skill.status === "published" || skill.publishedVersionId ? "Published" : "Draft";
+  const isPublished = statusLabel === "Published";
   const versionLabel = skill.publishedVersionId
     ? "Published version"
     : skill.currentDraftVersionId
       ? "Draft version"
       : "Not versioned";
+  const skillfullySkillInstallPrompt = buildSkillfullySkillInstallPrompt();
+  const userSkillInstallPrompt = buildPublicInstallPrompt(skill);
+
+  async function copyInstallPrompt(kind: "skillfully" | "skill", prompt: string) {
+    await navigator.clipboard.writeText(prompt);
+    captureClientEvent("install_prompt_copied", {
+      prompt_kind: kind,
+      skill_name: skill.name,
+      skill_id: skill.skillId,
+    });
+    setCopiedInstallPrompt(kind);
+    window.setTimeout(() => setCopiedInstallPrompt(null), 1200);
+  }
 
   if (activeTab === "editor") {
     return <SkillEditorWorkspace skill={skill} user={user} />;
@@ -2932,11 +2980,6 @@ export function SkillDetail({
           <p className="mt-6 max-w-2xl text-lg leading-8">
             {skill.description || "No description yet."}
           </p>
-          {feedbackTemplateError ? (
-            <p className="mt-4 border border-red-600 bg-red-50 p-3 font-editorial-mono text-xs font-bold uppercase text-red-700">
-              {feedbackTemplateError}
-            </p>
-          ) : null}
         </div>
 
         <div className="grid gap-3 sm:w-72">
@@ -2958,18 +3001,21 @@ export function SkillDetail({
           <button
             type="button"
             className="flex items-center justify-between border border-[var(--ink)] bg-[var(--paper)] px-5 py-4 font-editorial-sans text-base transition hover:bg-[var(--white)] disabled:cursor-not-allowed disabled:opacity-60"
-            disabled={!resolvedTemplate}
-            onClick={async () => {
-              if (!resolvedTemplate) return;
-              await navigator.clipboard.writeText(resolvedTemplate);
-              captureClientEvent("snippet_copied", { skill_name: skill.name, skill_id: skill.skillId });
-              setSnippetCopied(true);
-              window.setTimeout(() => setSnippetCopied(false), 1200);
-            }}
+            onClick={() => void copyInstallPrompt("skillfully", skillfullySkillInstallPrompt)}
           >
-            {snippetCopied ? "Copied" : "Copy installation prompt"}
+            {copiedInstallPrompt === "skillfully" ? "Copied" : "Install Skillfully Skill"}
             <CopyIcon />
           </button>
+          {isPublished ? (
+            <button
+              type="button"
+              className="flex items-center justify-between border border-[var(--ink)] bg-[var(--paper)] px-5 py-4 font-editorial-sans text-base transition hover:bg-[var(--white)]"
+              onClick={() => void copyInstallPrompt("skill", userSkillInstallPrompt)}
+            >
+              {copiedInstallPrompt === "skill" ? "Copied" : `Install ${skill.name}`}
+              <CopyIcon />
+            </button>
+          ) : null}
         </div>
       </header>
 
@@ -3027,9 +3073,14 @@ export default function Dashboard({
 
   const [errorMessage, setErrorMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [feedbackTemplate, setFeedbackTemplate] = useState<string | null>(null);
-  const [feedbackTemplateError, setFeedbackTemplateError] = useState<string | null>(null);
   const [onboardingDismissed, setOnboardingDismissed] = useState(false);
+  const [githubImportSessionId, setGitHubImportSessionId] = useState<string | null>(null);
+  const [githubImportState, setGitHubImportState] = useState<GitHubImportModalState>("loading");
+  const [githubImportCandidates, setGitHubImportCandidates] = useState<GitHubImportCandidateView[]>([]);
+  const [githubImportWarnings, setGitHubImportWarnings] = useState<string[]>([]);
+  const [selectedGitHubImportIds, setSelectedGitHubImportIds] = useState<Set<string>>(new Set());
+  const [isGitHubImporting, setIsGitHubImporting] = useState(false);
+  const [githubImportError, setGitHubImportError] = useState("");
 
   const query = useMemo(() => {
     if (!user) {
@@ -3116,6 +3167,7 @@ export default function Dashboard({
 
   const shouldShowOnboardingModal =
     screen === "list" &&
+    !githubImportSessionId &&
     !onboardingDismissed &&
     shouldShowOnboardingModalByDefault({ skills });
 
@@ -3158,37 +3210,64 @@ export default function Dashboard({
   }, [initialSkillId, initialTab, skills, user]);
 
   useEffect(() => {
-    let active = true;
+    if (!user || typeof window === "undefined") {
+      return;
+    }
 
-    void fetch(FEEDBACK_SNIPPET_URL)
-      .then((response) => {
-        if (!response.ok) {
-          throw new Error(`Failed to fetch feedback template: ${response.status}`);
-        }
-        return response.text();
-      })
-      .then((content) => {
-        if (!active) return;
-        const normalized = content.trim();
-        if (!normalized) {
-          throw new Error("Feedback template file is empty.");
-        }
-        setFeedbackTemplate(normalized);
-        setFeedbackTemplateError(null);
-      })
-      .catch((error) => {
-        if (!active) return;
-        if (error instanceof Error) {
-          setFeedbackTemplateError(error.message);
+    const params = new URLSearchParams(window.location.search);
+    const sessionId = params.get("github_import");
+    if (!sessionId) {
+      return;
+    }
+    if (window.sessionStorage.getItem(`skillfully.github_import.dismissed.${sessionId}`)) {
+      const url = new URL(window.location.href);
+      url.searchParams.delete("github_import");
+      window.history.replaceState(null, "", `${url.pathname}${url.search}`);
+      return;
+    }
+
+    setOnboardingDismissed(true);
+    setGitHubImportSessionId(sessionId);
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!user || !githubImportSessionId) {
+      return;
+    }
+
+    let active = true;
+    setGitHubImportState("loading");
+    setGitHubImportError("");
+    setGitHubImportCandidates([]);
+    setGitHubImportWarnings([]);
+    setSelectedGitHubImportIds(new Set());
+
+    dashboardJson<GitHubImportCandidatesResponse>(
+      user,
+      `/api/dashboard/github/import?session_id=${encodeURIComponent(githubImportSessionId)}`,
+      { method: "GET" },
+    )
+      .then((payload) => {
+        if (!active) {
           return;
         }
-        setFeedbackTemplateError("Unable to load feedback template.");
+        setGitHubImportCandidates(payload.candidates ?? []);
+        setGitHubImportWarnings(payload.warnings ?? []);
+        setGitHubImportState((payload.candidates ?? []).length > 0 ? "ready" : "empty");
+      })
+      .catch((error) => {
+        if (!active) {
+          return;
+        }
+        captureClientException(error);
+        setGitHubImportError(extractErrorMessage(error));
+        setGitHubImportState("error");
       });
 
     return () => {
       active = false;
     };
-  }, []);
+  }, [githubImportSessionId, user?.id]);
 
   if (isAuthLoading || (user && isDataLoading)) {
     return <main className="min-h-screen overflow-x-hidden border-x border-[var(--ink)] bg-[var(--paper)]" />;
@@ -3359,6 +3438,103 @@ export default function Dashboard({
     setIsAccountMenuOpen(false);
     setActiveTab("overview");
     setScreen("list");
+  }
+
+  async function openGitHubInstall(surface: string) {
+    if (!user) {
+      setErrorMessage("Sign in before connecting GitHub.");
+      return;
+    }
+
+    setErrorMessage("");
+    setGitHubImportError("");
+    captureClientEvent("github_install_started", { surface });
+
+    try {
+      const payload = await dashboardJson<GitHubInstallStartResponse>(user, "/api/github/install", {
+        method: "POST",
+      });
+      if (!payload.install_url) {
+        throw new Error("GitHub install URL was not returned.");
+      }
+      window.location.href = payload.install_url;
+    } catch (error) {
+      captureClientException(error);
+      const message = extractErrorMessage(error);
+      setErrorMessage(message);
+      setGitHubImportError(message);
+    }
+  }
+
+  function clearGitHubImportUrl() {
+    if (typeof window === "undefined") {
+      return;
+    }
+    const url = new URL(window.location.href);
+    url.searchParams.delete("github_import");
+    window.history.replaceState(null, "", `${url.pathname}${url.search}`);
+  }
+
+  function closeGitHubImportModal() {
+    if (githubImportSessionId && typeof window !== "undefined") {
+      window.sessionStorage.setItem(`skillfully.github_import.dismissed.${githubImportSessionId}`, "true");
+    }
+    setGitHubImportSessionId(null);
+    setGitHubImportCandidates([]);
+    setGitHubImportWarnings([]);
+    setSelectedGitHubImportIds(new Set());
+    setGitHubImportError("");
+    setIsGitHubImporting(false);
+    clearGitHubImportUrl();
+  }
+
+  function toggleGitHubImportCandidate(candidateId: string) {
+    setSelectedGitHubImportIds((current) => {
+      const next = new Set(current);
+      if (next.has(candidateId)) {
+        next.delete(candidateId);
+      } else {
+        next.add(candidateId);
+      }
+      return next;
+    });
+  }
+
+  async function importSelectedGitHubSkills() {
+    if (!user || !githubImportSessionId || selectedGitHubImportIds.size === 0) {
+      return;
+    }
+
+    setIsGitHubImporting(true);
+    setGitHubImportError("");
+    try {
+      const payload = await dashboardJson<GitHubImportSubmitResponse>(user, "/api/dashboard/github/import", {
+        method: "POST",
+        body: JSON.stringify({
+          session_id: githubImportSessionId,
+          candidate_ids: Array.from(selectedGitHubImportIds),
+        }),
+      });
+      const firstImported = payload.imported[0];
+      if (!firstImported) {
+        setGitHubImportError(payload.failures?.map((failure) => failure.error).join(" | ") || "No skills were imported.");
+        return;
+      }
+
+      if (typeof window !== "undefined") {
+        window.sessionStorage.setItem(`skillfully.github_import.dismissed.${githubImportSessionId}`, "true");
+      }
+      setGitHubImportSessionId(null);
+      setSelectedGitHubImportIds(new Set());
+      setOnboardingDismissed(true);
+      clearGitHubImportUrl();
+      router.push(`/dashboard/${firstImported.skill_id}/overview`);
+    } catch (error) {
+      captureClientException(error);
+      setGitHubImportError(extractErrorMessage(error));
+    } finally {
+      setIsGitHubImporting(false);
+    }
   }
 
   function openDashboardTab(tab: DashboardTab) {
@@ -3543,8 +3719,6 @@ export default function Dashboard({
               usageEvents={selectedUsageEvents}
               user={user}
               activeTab={activeTab}
-              feedbackTemplate={feedbackTemplate}
-              feedbackTemplateError={feedbackTemplateError}
               onTabChange={openDashboardTab}
               onBack={() => {
                 setSelectedSkillId(null);
@@ -3574,6 +3748,7 @@ export default function Dashboard({
             captureClientEvent("onboarding_modal_closed");
             setOnboardingDismissed(true);
           }}
+          onConnectGitHub={() => void openGitHubInstall("onboarding_modal")}
           onCreateSkill={openCreateSkill}
         />
       ) : null}
@@ -3586,6 +3761,26 @@ export default function Dashboard({
             setErrorMessage("");
           }}
           onSubmit={createSkillFromModal}
+          onImportFromGitHub={() => {
+            captureClientEvent("create_skill_modal_github_import_clicked");
+            void openGitHubInstall("create_skill_modal");
+          }}
+        />
+      ) : null}
+      {githubImportSessionId ? (
+        <GitHubImportModal
+          state={githubImportState}
+          candidates={githubImportCandidates}
+          selectedCandidateIds={selectedGitHubImportIds}
+          warnings={githubImportWarnings}
+          isImporting={isGitHubImporting}
+          importError={githubImportError}
+          onToggleCandidate={toggleGitHubImportCandidate}
+          onImport={() => void importSelectedGitHubSkills()}
+          onClose={closeGitHubImportModal}
+          onChangeRepositoryAccess={() => {
+            void openGitHubInstall("github_import_modal");
+          }}
         />
       ) : null}
     </main>

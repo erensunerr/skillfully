@@ -22,20 +22,45 @@ test("normalizeSkillFilePath keeps skill files inside the skill folder", () => {
   assert.equal(normalizeSkillFilePath("SKILL.md"), "SKILL.md");
   assert.equal(normalizeSkillFilePath("/examples/basic.md"), "examples/basic.md");
   assert.equal(normalizeSkillFilePath("docs//faq.md"), "docs/faq.md");
+  assert.equal(normalizeSkillFilePath(".skillfully/config.json"), ".skillfully/config.json");
+  assert.equal(normalizeSkillFilePath(".env.example"), ".env.example");
   assert.throws(() => normalizeSkillFilePath("../secret.md"), /invalid skill file path/);
-  assert.throws(() => normalizeSkillFilePath(".env"), /invalid skill file path/);
+  assert.throws(() => normalizeSkillFilePath("./secret.md"), /invalid skill file path/);
 });
 
-test("createDefaultSkillFile preserves editable author content without the managed block", () => {
+test("createDefaultSkillFile starts with skill-spec frontmatter and no fallback body", () => {
   const file = createDefaultSkillFile({
     name: "billing-support",
     description: "Helps agents answer billing questions.",
   });
 
   assert.equal(file.path, "SKILL.md");
-  assert.match(file.contentText, /^# billing-support/m);
-  assert.match(file.contentText, /Helps agents answer billing questions\./);
+  assert.equal(
+    file.contentText,
+    [
+      "---",
+      "name: billing-support",
+      'description: "Helps agents answer billing questions."',
+      "---",
+      "",
+    ].join("\n"),
+  );
+  assert.doesNotMatch(file.contentText, /When to use/);
+  assert.doesNotMatch(file.contentText, /Workflow/);
   assert.doesNotMatch(file.contentText, /Skillfully feedback and updates/);
+});
+
+test("createDefaultSkillFile normalizes frontmatter names and keeps required descriptions", () => {
+  const file = createDefaultSkillFile({
+    name: "Customer Support Workflow",
+    description: "",
+  });
+
+  assert.match(file.contentText, /^name: customer-support-workflow$/m);
+  assert.match(
+    file.contentText,
+    /^description: "Describe when and how agents should use this skill\."$/m,
+  );
 });
 
 test("buildSkillManifest includes text files, assets, version metadata, and hashes", () => {

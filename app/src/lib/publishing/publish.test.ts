@@ -74,6 +74,25 @@ test("buildGitHubWritePlan writes skill files under the resolved skill root", ()
   assert.match(plan.pullRequestTitle, /Publish demo-skill v1\.0\.0/);
 });
 
+test("buildGitHubWritePlan preserves dot-prefixed imported skill roots", () => {
+  const plan = buildGitHubWritePlan({
+    repoFullName: "acme/agent-skills",
+    skillRoot: ".agents/skills/code-review",
+    baseBranch: "main",
+    skillSlug: "code-review",
+    version: "1.0.0",
+    files: [
+      { path: "SKILL.md", contentText: "# code-review", kind: "markdown" },
+      { path: "scripts/check.sh", contentText: "echo ok", kind: "text" },
+    ],
+  });
+
+  assert.deepEqual(
+    plan.files.map((file) => file.path),
+    [".agents/skills/code-review/SKILL.md", ".agents/skills/code-review/scripts/check.sh"],
+  );
+});
+
 test("manual directory adapters produce submission packets instead of pretending to auto-submit", async () => {
   const adapter = createManualDirectoryAdapter("lobehub");
   const result = await adapter.submit({

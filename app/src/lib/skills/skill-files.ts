@@ -5,8 +5,8 @@ import {
   isPrimarySkillMarkdownPath,
   skillfullyFeedbackUrl,
   skillfullyManifestUrl,
-  stripSkillfullyManagedBlock,
 } from "./managed-block";
+import { buildSkillMarkdown } from "./skill-frontmatter";
 
 export type SkillFileKind = "markdown" | "asset" | "json" | "text";
 
@@ -31,16 +31,6 @@ export type ManifestFile = {
   storageUrl?: string | null;
 };
 
-export function skillSlug(value: string) {
-  return (
-    value
-      .trim()
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "") || "skill"
-  );
-}
-
 export function normalizeSkillFilePath(value: string) {
   const normalized = value
     .trim()
@@ -54,8 +44,7 @@ export function normalizeSkillFilePath(value: string) {
     normalized.startsWith("../") ||
     normalized.includes("/../") ||
     normalized.endsWith("/..") ||
-    normalized.split("/").some((part) => part === "." || part === "..") ||
-    normalized.startsWith(".")
+    normalized.split("/").some((part) => part === "." || part === "..")
   ) {
     throw new Error("invalid skill file path");
   }
@@ -71,26 +60,10 @@ export function createDefaultSkillFile({
   description?: string | null;
   feedbackUrl?: string;
 }) {
-  const summary = description?.trim() || "Describe when and how agents should use this skill.";
-
   return {
     path: "SKILL.md",
     kind: "markdown" as const,
-    contentText: [
-      `# ${name}`,
-      "",
-      summary,
-      "",
-      "## When to use",
-      "",
-      "- Use this skill when the agent needs the workflow described above.",
-      "",
-      "## Workflow",
-      "",
-      "1. Understand the user's goal.",
-      "2. Follow the instructions in this skill.",
-      "3. Verify the result before responding.",
-    ].join("\n"),
+    contentText: buildSkillMarkdown({ name, description }),
   };
 }
 
@@ -171,3 +144,5 @@ export {
   skillfullyManifestUrl,
   stripSkillfullyManagedBlock,
 } from "./managed-block";
+
+export { skillSlug, skillSpecName } from "./skill-frontmatter";

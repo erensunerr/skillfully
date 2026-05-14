@@ -3,12 +3,17 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { adminDb } from "@/lib/adminDb";
 import { getDashboardUser } from "@/lib/dashboard-auth";
+import { createGitHubImportSession } from "@/lib/github-import";
 import { verifyGitHubInstallState } from "@/lib/github-install-state";
 import { getGitHubAppInstallation } from "@/lib/publishing/adapters/github-app";
+import { defaultSkillStore } from "@/lib/skills/repository";
 
-function dashboardRedirect(request: NextRequest, status: string) {
+function dashboardRedirect(request: NextRequest, status: string, params: Record<string, string> = {}) {
   const url = new URL("/dashboard", request.url);
   url.searchParams.set("github", status);
+  for (const [key, value] of Object.entries(params)) {
+    url.searchParams.set(key, value);
+  }
   return NextResponse.redirect(url);
 }
 
@@ -36,6 +41,8 @@ export async function GET(request: NextRequest) {
       privateKey: process.env.GITHUB_APP_PRIVATE_KEY,
       installationId,
     });
+    const accountLogin = String(installation.account?.login || "unknown");
+    const accountType = String(installation.account?.type || "User");
     const now = Date.now();
     const rows = await adminDb.query({
       githubInstallations: {
@@ -60,8 +67,9 @@ export async function GET(request: NextRequest) {
       existing
         ? tx.githubInstallations[id].update({
             ownerId: user.id,
-            accountLogin: String(installation.account?.login || existing.accountLogin || "unknown"),
-            accountType: String(installation.account?.type || existing.accountType || "User"),
+            accountId: installation.account?.id ? String(installation.account.id) : existing.accountId,
+            accountLogin,
+            accountType,
             repositorySelection: String(installation.repository_selection || existing.repositorySelection || "selected"),
             permissionsJson: installation.permissions || existing.permissionsJson || {},
             updatedAt: now,
@@ -69,17 +77,24 @@ export async function GET(request: NextRequest) {
         : tx.githubInstallations[id].create({
             ownerId: user.id,
             installationId,
-            accountLogin: String(installation.account?.login || "unknown"),
-            accountType: String(installation.account?.type || "User"),
+            ...(installation.account?.id ? { accountId: String(installation.account.id) } : {}),
+            accountLogin,
+            accountType,
             repositorySelection: String(installation.repository_selection || "selected"),
             permissionsJson: installation.permissions || {},
             createdAt: now,
             updatedAt: now,
           }),
     ] as never);
+    const session = await createGitHubImportSession({
+      store: defaultSkillStore,
+      ownerId: user.id,
+      installationId,
+      accountLogin,
+      accountType,
+    });
+    return dashboardRedirect(request, "installed", { github_import: session.sessionId });
   } catch {
     return dashboardRedirect(request, "install_failed");
   }
-
-  return dashboardRedirect(request, "installed");
 }

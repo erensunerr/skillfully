@@ -88,8 +88,6 @@ test("dashboard does not render seeded demo data for an empty skill", async () =
     <SkillDetail
       skill={skill}
       entries={[] as never}
-      feedbackTemplate="Post feedback to {{feedbackUrl}}"
-      feedbackTemplateError={null}
       onBack={() => undefined}
     />,
   );
@@ -98,8 +96,6 @@ test("dashboard does not render seeded demo data for an empty skill", async () =
       activeTab="editor"
       skill={skill}
       entries={[] as never}
-      feedbackTemplate="Post feedback to {{feedbackUrl}}"
-      feedbackTemplateError={null}
       onBack={() => undefined}
     />,
   );
@@ -108,8 +104,6 @@ test("dashboard does not render seeded demo data for an empty skill", async () =
       activeTab="analytics"
       skill={skill}
       entries={[] as never}
-      feedbackTemplate="Post feedback to {{feedbackUrl}}"
-      feedbackTemplateError={null}
       onBack={() => undefined}
     />,
   );
@@ -118,8 +112,6 @@ test("dashboard does not render seeded demo data for an empty skill", async () =
       activeTab="settings"
       skill={skill}
       entries={[] as never}
-      feedbackTemplate="Post feedback to {{feedbackUrl}}"
-      feedbackTemplateError={null}
       onBack={() => undefined}
     />,
   );
@@ -166,8 +158,6 @@ test("dashboard skill detail renders the operational overview UI", async () => {
       skill={fakeSkill()}
       entries={fakeEntries()}
       usageEvents={fakeUsageEvents()}
-      feedbackTemplate="Post feedback to {{feedbackUrl}}"
-      feedbackTemplateError={null}
       onBack={() => undefined}
     />,
   );
@@ -176,7 +166,8 @@ test("dashboard skill detail renders the operational overview UI", async () => {
   assert.match(html, /Not versioned/);
   assert.match(html, /Draft/);
   assert.match(html, /Go to Editor/);
-  assert.match(html, /Copy installation prompt/);
+  assert.match(html, /Install Skillfully Skill/);
+  assert.doesNotMatch(html, /Install code-review/);
   assert.match(html, /Success rate/i);
   assert.match(html, /Feedback received/i);
   assert.match(html, /Usage events/i);
@@ -201,6 +192,28 @@ test("dashboard skill detail renders the operational overview UI", async () => {
   assert.match(html, /No published versions yet/i);
 });
 
+test("published dashboard overview renders both install prompt actions", async () => {
+  Object.assign(globalThis, { React });
+  const { SkillDetail } = await import("./page");
+
+  const html = renderToStaticMarkup(
+    <SkillDetail
+      skill={{
+        ...fakeSkill(),
+        publishedVersionId: "version-1",
+        status: "published",
+      } as never}
+      entries={fakeEntries()}
+      usageEvents={fakeUsageEvents()}
+      onBack={() => undefined}
+    />,
+  );
+
+  assert.match(html, /Published version/);
+  assert.match(html, /Install Skillfully Skill/);
+  assert.match(html, /Install code-review/);
+});
+
 test("dashboard skill detail renders the editor tab UI", async () => {
   Object.assign(globalThis, { React });
   const { SkillDetail } = await import("./page");
@@ -210,8 +223,6 @@ test("dashboard skill detail renders the editor tab UI", async () => {
       activeTab="editor"
       skill={fakeSkill()}
       entries={fakeEntries()}
-      feedbackTemplate="Install skill from {{feedbackUrl}}"
-      feedbackTemplateError={null}
       onBack={() => undefined}
     />,
   );
@@ -227,8 +238,9 @@ test("dashboard skill detail renders the editor tab UI", async () => {
   assert.match(html, /No assets uploaded/);
   assert.match(html, /Markdown editor/i);
   assert.match(html, /MDXEditor/i);
-  assert.match(html, /When to use/);
-  assert.match(html, /Workflow/);
+  assert.doesNotMatch(html, /The user asks for work that this skill is designed to handle/);
+  assert.doesNotMatch(html, /When to use/);
+  assert.doesNotMatch(html, /Workflow/);
   assert.match(html, /SKILL\.md present/);
   assert.match(html, /Version history/);
   assert.match(html, /Version history appears after the first publish/);
@@ -252,8 +264,6 @@ test("dashboard skill detail renders the analytics tab UI", async () => {
       skill={fakeSkill()}
       entries={fakeEntries()}
       usageEvents={fakeUsageEvents()}
-      feedbackTemplate="Post feedback to {{feedbackUrl}}"
-      feedbackTemplateError={null}
       onBack={() => undefined}
     />,
   );
@@ -284,6 +294,37 @@ test("dashboard skill detail renders the analytics tab UI", async () => {
   assert.doesNotMatch(html, /Cursor/);
 });
 
+test("analytics usage rows keep duplicate-looking events keyed uniquely", async () => {
+  Object.assign(globalThis, { React });
+  const { analyticsRowsFromUsageEvents } = await import("./page");
+  const createdAt = Date.UTC(2026, 4, 11, 17, 11);
+
+  const rows = analyticsRowsFromUsageEvents([
+    {
+      id: "usage-a",
+      ownerId: "user-1",
+      skillId: "sk_test123",
+      eventKind: "manifest_checked",
+      source: "public_manifest",
+      subjectHash: "cb2d9b80-08b6-4803-a6fb-cae14761a386",
+      dayKey: "2026-05-11",
+      createdAt,
+    },
+    {
+      id: "usage-b",
+      ownerId: "user-1",
+      skillId: "sk_test123",
+      eventKind: "manifest_checked",
+      source: "public_manifest",
+      subjectHash: "cb2d9b80-08b6-4803-a6fb-cae14761a386",
+      dayKey: "2026-05-11",
+      createdAt,
+    },
+  ] as never);
+
+  assert.deepEqual(rows.map((row) => row.rowKey), ["usage-a", "usage-b"]);
+});
+
 test("dashboard skill detail renders the skill settings UI", async () => {
   Object.assign(globalThis, { React });
   const { SkillDetail } = await import("./page");
@@ -293,8 +334,6 @@ test("dashboard skill detail renders the skill settings UI", async () => {
       activeTab="settings"
       skill={fakeSkill()}
       entries={fakeEntries()}
-      feedbackTemplate="Post feedback to {{feedbackUrl}}"
-      feedbackTemplateError={null}
       onBack={() => undefined}
     />,
   );
@@ -304,7 +343,7 @@ test("dashboard skill detail renders the skill settings UI", async () => {
   assert.match(html, /Skill name/i);
   assert.match(html, /Slug/i);
   assert.match(html, /02\. Source/i);
-  assert.match(html, /GitHub tracked/i);
+  assert.match(html, /Managed in GitHub/i);
   assert.match(html, /Skillfully managed repository/i);
   assert.match(html, /skills\/code-review/i);
   assert.match(html, /03\. Publishing/i);
@@ -319,6 +358,30 @@ test("dashboard skill detail renders the skill settings UI", async () => {
   assert.doesNotMatch(html, /\/api\/install/i);
   assert.match(html, /05\. Danger zone/i);
   assert.match(html, /Delete skill/i);
+});
+
+test("dashboard settings show imported skills as managed in GitHub", async () => {
+  Object.assign(globalThis, { React });
+  const { SkillDetail } = await import("./page");
+
+  const html = renderToStaticMarkup(
+    <SkillDetail
+      activeTab="settings"
+      skill={{
+        ...fakeSkill(),
+        sourceMode: "github_import",
+        originalRepoFullName: "octocat/Hello-World",
+        originalSkillPath: ".agents/skills/code-review",
+      } as never}
+      entries={fakeEntries()}
+      onBack={() => undefined}
+    />,
+  );
+
+  assert.match(html, /Managed in GitHub/i);
+  assert.match(html, /octocat\/Hello-World/i);
+  assert.match(html, /\.agents\/skills\/code-review/i);
+  assert.match(html, /Create pull request on publish/i);
 });
 
 test("dashboard renders the account settings UI", async () => {
@@ -393,6 +456,7 @@ test("dashboard renders the skill selector menu and create skill modal", async (
         onChange={() => undefined}
         onCancel={() => undefined}
         onSubmit={() => undefined}
+        onImportFromGitHub={() => undefined}
       />
     </>,
   );

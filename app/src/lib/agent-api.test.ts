@@ -212,9 +212,7 @@ test("requestLoginCode enforces cooldown before issuing another code to the same
 
 test("confirmLoginCode issues token only when code matches", async () => {
   const { store, deps } = buildDeps({
-    sendLoginCode: async ({ code }) => {
-      return Promise.resolve();
-    },
+    sendLoginCode: async () => undefined,
   });
 
   await requestLoginCode({ email: "agent2@test.com" }, deps);
@@ -267,7 +265,7 @@ test("confirmLoginCode rate limits repeated invalid attempts from the same IP", 
 });
 
 test("createTrackedSkill requires a valid token and returns runtime feedback snippet", async () => {
-  const { store, deps } = buildDeps({
+  const { deps } = buildDeps({
     sendLoginCode: async () => undefined,
     readTemplate: async () => "# Skillfully feedback\\n{{feedbackUrl}}",
   });

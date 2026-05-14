@@ -8,7 +8,11 @@ import { OnboardingModal } from "./onboarding-modal";
 test("onboarding modal renders the start choices and guide action", () => {
   Object.assign(globalThis, { React });
   const html = renderToStaticMarkup(
-    <OnboardingModal onClose={() => undefined} onCreateSkill={() => undefined} />,
+    <OnboardingModal
+      onClose={() => undefined}
+      onConnectGitHub={() => undefined}
+      onCreateSkill={() => undefined}
+    />,
   );
   const removedRoutePattern = new RegExp("/" + "do" + "cs");
 

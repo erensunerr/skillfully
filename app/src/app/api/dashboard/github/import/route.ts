@@ -32,6 +32,9 @@ type GitHubTreeResponse = {
   truncated?: boolean;
 };
 
+const MAX_GITHUB_INSTALLATION_REPOSITORY_PAGES = 50;
+const MAX_IMPORT_ERROR_MESSAGE_LENGTH = 240;
+
 type ImportSessionRow = {
   id: string;
   ownerId: string;
@@ -40,6 +43,9 @@ type ImportSessionRow = {
   status?: string;
   accountLogin?: string;
   accountType?: string;
+  candidatesJson?: unknown;
+  warningsJson?: unknown;
+  repositoriesChecked?: number;
 };
 
 function randomSkillId() {
@@ -119,9 +125,18 @@ async function updateImportSession(session: ImportSessionRow, values: Record<str
   ]);
 }
 
-async function listInstallationRepositories(token: string) {
+function truncateMessage(message: string, maxLength = MAX_IMPORT_ERROR_MESSAGE_LENGTH) {
+  return message.length > maxLength ? `${message.slice(0, maxLength - 1)}…` : message;
+}
+
+function joinedFailureMessage(failures: Array<{ error: string }>) {
+  return failures.map((failure) => truncateMessage(failure.error)).join(" | ");
+}
+
+export async function listInstallationRepositories(token: string) {
   const repositories: GitHubRepositoryResponse[] = [];
-  for (let page = 1; ; page += 1) {
+  const warnings: string[] = [];
+  for (let page = 1; page <= MAX_GITHUB_INSTALLATION_REPOSITORY_PAGES; page += 1) {
     const payload = await githubJson<GitHubRepositoriesResponse>(
       token,
       `/installation/repositories?per_page=100&page=${page}`,
@@ -131,8 +146,13 @@ async function listInstallationRepositories(token: string) {
     if (pageRepositories.length < 100) {
       break;
     }
+    if (page === MAX_GITHUB_INSTALLATION_REPOSITORY_PAGES) {
+      warnings.push(
+        `GitHub repository listing stopped after ${MAX_GITHUB_INSTALLATION_REPOSITORY_PAGES} pages. Change repository access or contact support if expected repositories are missing.`,
+      );
+    }
   }
-  return repositories;
+  return { repositories, warnings };
 }
 
 async function upsertGitHubRepository({
@@ -143,7 +163,7 @@ async function upsertGitHubRepository({
   ownerId: string;
   installationId: string;
   repository: GitHubRepositoryResponse;
-}) {
+}): Promise<string | null> {
   const repositoryId = String(repository.id);
   const rows = await defaultSkillStore.query({
     githubRepositories: {
@@ -156,7 +176,7 @@ async function upsertGitHubRepository({
   });
   const existing = rows.githubRepositories?.[0];
   if (existing?.ownerId && existing.ownerId !== ownerId) {
-    return;
+    return `${repository.full_name}: already connected to another Skillfully account`;
   }
 
   const values = {
@@ -176,6 +196,7 @@ async function upsertGitHubRepository({
           createdAt: Date.now(),
         }),
   ]);
+  return null;
 }
 
 async function getExistingGitHubImports(ownerId: string): Promise<ExistingGitHubImport[]> {
@@ -189,22 +210,75 @@ async function getExistingGitHubImports(ownerId: string): Promise<ExistingGitHub
     }));
 }
 
+function isCachedCandidate(value: unknown): value is GitHubSkillCandidate {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+  const candidate = value as Partial<GitHubSkillCandidate>;
+  return (
+    typeof candidate.id === "string" &&
+    typeof candidate.repositoryId === "string" &&
+    typeof candidate.repoFullName === "string" &&
+    typeof candidate.branch === "string" &&
+    typeof candidate.skillRoot === "string" &&
+    typeof candidate.skillName === "string" &&
+    (candidate.status === "valid" || candidate.status === "invalid" || candidate.status === "already_imported") &&
+    Array.isArray(candidate.files) &&
+    Array.isArray(candidate.oversizedFiles) &&
+    typeof candidate.totalSize === "number" &&
+    typeof candidate.totalSizeExceedsLimit === "boolean"
+  );
+}
+
+export function cachedDiscoveryForSession(session: ImportSessionRow) {
+  if (session.status !== "discovered" && session.status !== "imported") {
+    return null;
+  }
+  if (!Array.isArray(session.candidatesJson)) {
+    return null;
+  }
+  const candidates = session.candidatesJson.filter(isCachedCandidate);
+  if (candidates.length !== session.candidatesJson.length) {
+    return null;
+  }
+  const warnings = Array.isArray(session.warningsJson)
+    ? session.warningsJson.filter((warning): warning is string => typeof warning === "string")
+    : [];
+  return {
+    candidates,
+    warnings,
+    repositoriesChecked: Number(session.repositoriesChecked ?? 0),
+  };
+}
+
 async function discoverCandidatesForSession({
   ownerId,
   token,
   session,
+  refresh = false,
 }: {
   ownerId: string;
   token: string;
   session: ImportSessionRow;
+  refresh?: boolean;
 }) {
-  const repositories = await listInstallationRepositories(token);
+  if (!refresh) {
+    const cached = cachedDiscoveryForSession(session);
+    if (cached) {
+      return cached;
+    }
+  }
+
+  const { repositories, warnings: repositoryWarnings } = await listInstallationRepositories(token);
   const existingImports = await getExistingGitHubImports(ownerId);
   const candidates: GitHubSkillCandidate[] = [];
-  const warnings: string[] = [];
+  const warnings: string[] = [...repositoryWarnings];
 
   for (const repository of repositories) {
-    await upsertGitHubRepository({ ownerId, installationId: session.installationId, repository });
+    const repositoryWarning = await upsertGitHubRepository({ ownerId, installationId: session.installationId, repository });
+    if (repositoryWarning) {
+      warnings.push(repositoryWarning);
+    }
     const repoFullName = repository.full_name;
     const defaultBranch = repository.default_branch || "main";
     const { owner, repo } = splitRepoFullName(repoFullName);
@@ -257,9 +331,12 @@ async function discoverCandidatesForSession({
   await updateImportSession(session, {
     status: "discovered",
     discoveredCount: candidates.filter((candidate) => candidate.status === "valid").length,
+    repositoriesChecked: repositories.length,
+    candidatesJson: candidates,
+    warningsJson: warnings,
   });
 
-  return { candidates, warnings, repositories };
+  return { candidates, warnings, repositoriesChecked: repositories.length };
 }
 
 function importableFiles(candidate: GitHubSkillCandidate) {
@@ -309,10 +386,11 @@ export async function GET(request: NextRequest) {
       privateKey: process.env.GITHUB_APP_PRIVATE_KEY,
       installationId: session.installationId,
     });
-    const { candidates, warnings, repositories } = await discoverCandidatesForSession({
+    const { candidates, warnings, repositoriesChecked } = await discoverCandidatesForSession({
       ownerId: user.id,
       token,
       session,
+      refresh: request.nextUrl.searchParams.get("refresh") === "1",
     });
 
     return jsonResponse({
@@ -321,7 +399,7 @@ export async function GET(request: NextRequest) {
         status: "discovered",
         account_login: session.accountLogin ?? null,
       },
-      repositories_checked: repositories.length,
+      repositories_checked: repositoriesChecked,
       candidates,
       warnings,
     }, 200, "GET, POST, OPTIONS");
@@ -416,7 +494,7 @@ export async function POST(request: NextRequest) {
           skillIdGenerator: randomSkillId,
           store: defaultSkillStore,
           uploadAssetFile: async (file) => {
-            const storagePath = `skills/${user.id}/${candidate.id}/${crypto.randomUUID()}/${file.relativePath}`;
+            const storagePath = `skills/${user.id}/github-imports/${crypto.randomUUID()}/${file.relativePath}`;
             const uploaded = await adminDb.storage.uploadFile(storagePath, file.content, {
               contentType: file.mimeType || "application/octet-stream",
             });
@@ -449,7 +527,7 @@ export async function POST(request: NextRequest) {
         failures.push({
           candidate_id: candidate.id,
           name: candidate.skillName,
-          error: error instanceof Error ? error.message : "unknown import error",
+          error: truncateMessage(error instanceof Error ? error.message : "unknown import error"),
         });
       }
     }
@@ -457,7 +535,7 @@ export async function POST(request: NextRequest) {
     await updateImportSession(session, {
       status: imported.length > 0 ? "imported" : "failed",
       importedCount: imported.length,
-      ...(failures.length > 0 ? { error: failures.map((failure) => failure.error).join(" | ") } : {}),
+      ...(failures.length > 0 ? { error: joinedFailureMessage(failures) } : {}),
       ...(imported.length > 0 ? { completedAt: Date.now() } : {}),
     });
 
@@ -487,7 +565,7 @@ export async function POST(request: NextRequest) {
       imported,
       failures,
       ...(imported.length === 0
-        ? { error: failures.map((failure) => failure.error).join(" | ") || "No skills were imported." }
+        ? { error: joinedFailureMessage(failures) || "No skills were imported." }
         : {}),
     }, status, "GET, POST, OPTIONS");
   } catch (error) {

@@ -73,7 +73,7 @@ function randomSessionId() {
   const chars = "abcdefghijkmnopqrstuvwxyz23456789";
   let out = "gis_";
   for (let index = 0; index < 24; index += 1) {
-    out += chars[Math.floor(Math.random() * chars.length)];
+    out += chars[crypto.randomInt(0, chars.length)];
   }
   return out;
 }

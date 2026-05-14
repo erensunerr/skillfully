@@ -122,3 +122,52 @@ test("imports a GitHub skill candidate with relative text files and source publi
   assert.equal(githubTarget?.baseBranch, "main");
   assert.equal(githubTarget?.autoMerge, false);
 });
+
+test("cleans up the draft when a GitHub skill import fails mid-stream", async () => {
+  const store = new InMemorySkillStore();
+  let counter = 0;
+
+  await assert.rejects(
+    () =>
+      importGitHubSkillCandidate({
+        store,
+        now: () => 1700000000000,
+        idGenerator: () => `id_${++counter}`,
+        skillIdGenerator: () => "sk_imported",
+        ownerId: "user-1",
+        baseUrl: "https://www.skillfully.sh",
+        installationId: "installation-1",
+        repository: {
+          repositoryId: "1296269",
+          repoFullName: "octocat/Hello-World",
+          defaultBranch: "main",
+        },
+        candidate: {
+          skillRoot: ".agents/skills/code-review",
+          skillName: "code-review",
+          description: "Reviews code changes. Use when checking a diff.",
+        },
+        files: [
+          {
+            relativePath: "SKILL.md",
+            content: Buffer.from([
+              "---",
+              "name: code-review",
+              "description: Reviews code changes. Use when checking a diff.",
+              "---",
+            ].join("\n")),
+          },
+          {
+            relativePath: "assets/model.bin",
+            content: Buffer.from([0, 1, 2, 3]),
+          },
+        ],
+      }),
+    /asset upload is required/,
+  );
+
+  assert.equal(Object.keys(store.rows.skills).length, 0);
+  assert.equal(Object.keys(store.rows.skillVersions).length, 0);
+  assert.equal(Object.keys(store.rows.skillFiles).length, 0);
+  assert.equal(Object.keys(store.rows.publishingTargets).length, 0);
+});

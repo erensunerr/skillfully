@@ -242,3 +242,28 @@ test("creates owner-scoped GitHub import sessions", async () => {
     updatedAt: 1700000000000,
   });
 });
+
+test("default GitHub import session ids do not use Math.random", async () => {
+  const store = new InMemoryImportStore();
+  const originalRandom = Math.random;
+  Math.random = () => {
+    throw new Error("Math.random should not be used for session ids");
+  };
+
+  try {
+    const session = await createGitHubImportSession({
+      store,
+      now: () => 1700000000000,
+      idGenerator: () => "row-1",
+      ownerId: "user-1",
+      installationId: "installation-1",
+      accountLogin: "octocat",
+      accountType: "User",
+    });
+
+    assert.match(session.sessionId, /^gis_[a-z0-9]+$/);
+    assert.equal(session.sessionId.length, 28);
+  } finally {
+    Math.random = originalRandom;
+  }
+});

@@ -68,8 +68,8 @@ export async function GET(request: NextRequest) {
         ? tx.githubInstallations[id].update({
             ownerId: user.id,
             accountId: installation.account?.id ? String(installation.account.id) : existing.accountId,
-            accountLogin: accountLogin || String(existing.accountLogin || "unknown"),
-            accountType: accountType || String(existing.accountType || "User"),
+            accountLogin,
+            accountType,
             repositorySelection: String(installation.repository_selection || existing.repositorySelection || "selected"),
             permissionsJson: installation.permissions || existing.permissionsJson || {},
             updatedAt: now,

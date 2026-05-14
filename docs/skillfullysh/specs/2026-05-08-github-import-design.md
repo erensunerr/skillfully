@@ -43,7 +43,8 @@ Make onboarding GitHub import real: after a signed-in Skillfully user installs t
   - `description` is required, non-empty, max 1024 characters.
   - `name` must match the parent directory name.
 - Discovery uses repository trees where possible, handles truncated trees as a repo-level warning, and validates candidate `SKILL.md` files by fetching their contents.
-- Installation repository pagination continues until GitHub returns a short page, so discovery does not stop after an arbitrary fixed repository count.
+- Installation repository pagination continues until GitHub returns a short page, capped at 50 pages / 5,000 repositories with a warning if the cap is reached.
+- Discovered candidates and warnings are cached on the server-created import session so refreshes and imports reuse the discovered candidate list unless the dashboard explicitly requests a refresh.
 
 ## Import Semantics
 
@@ -53,6 +54,7 @@ Make onboarding GitHub import real: after a signed-in Skillfully user installs t
 - Per GitHub platform limits, skip files larger than 100 MiB and cap imported content at 1 GiB per skill directory. Oversized files are reported in import results.
 - Duplicate detection uses owner id plus `installationId + repositoryId + skillRoot`. Duplicates are not importable.
 - Imported skills use `sourceMode = github_import`, store original repo/root/repository id, and set their GitHub publishing target to the source repo/root with `autoMerge = false`.
+- If an individual import fails after draft creation starts, Skillfully deletes the partially-created skill/version/file/target rows so retry does not show a broken candidate as already imported.
 
 ## Publishing Behavior
 

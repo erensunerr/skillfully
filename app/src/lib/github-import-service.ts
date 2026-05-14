@@ -59,6 +59,61 @@ function mimeTypeForPath(path: string, isText: boolean) {
   return isText ? "text/plain" : "application/octet-stream";
 }
 
+async function cleanupImportedDraft({
+  store,
+  ownerId,
+  skillId,
+}: {
+  store: SkillStore;
+  ownerId: string;
+  skillId: string;
+}) {
+  const rows = await store.query({
+    skills: {
+      $: {
+        where: {
+          ownerId,
+          skillId,
+        },
+      },
+    },
+    skillVersions: {
+      $: {
+        where: {
+          ownerId,
+          skillId,
+        },
+      },
+    },
+    skillFiles: {
+      $: {
+        where: {
+          ownerId,
+          skillId,
+        },
+      },
+    },
+    publishingTargets: {
+      $: {
+        where: {
+          ownerId,
+          skillId,
+        },
+      },
+    },
+  });
+  const ops = [
+    ...(rows.skillFiles ?? []).map((row) => store.delete("skillFiles", String(row.id))),
+    ...(rows.publishingTargets ?? []).map((row) => store.delete("publishingTargets", String(row.id))),
+    ...(rows.skillVersions ?? []).map((row) => store.delete("skillVersions", String(row.id))),
+    ...(rows.skills ?? []).map((row) => store.delete("skills", String(row.id))),
+  ];
+
+  if (ops.length > 0) {
+    await store.transact(ops);
+  }
+}
+
 export async function importGitHubSkillCandidate({
   store,
   now = () => Date.now(),
@@ -104,25 +159,45 @@ export async function importGitHubSkillCandidate({
     originalSkillPath: candidate.skillRoot,
   });
 
-  await updateSkillFileText({
-    store,
-    now,
-    ownerId,
-    fileId: created.file.id,
-    path: "SKILL.md",
-    contentText: skillFile.content.toString("utf8"),
-  });
+  try {
+    await updateSkillFileText({
+      store,
+      now,
+      ownerId,
+      fileId: created.file.id,
+      path: "SKILL.md",
+      contentText: skillFile.content.toString("utf8"),
+    });
 
-  for (const file of files) {
-    if (file.relativePath === "SKILL.md") {
-      continue;
-    }
+    for (const file of files) {
+      if (file.relativePath === "SKILL.md") {
+        continue;
+      }
 
-    const isText = isTextBuffer(file.content);
-    const kind = fileKindForPath(file.relativePath, isText);
-    const mimeType = file.mimeType || mimeTypeForPath(file.relativePath, isText);
+      const isText = isTextBuffer(file.content);
+      const kind = fileKindForPath(file.relativePath, isText);
+      const mimeType = file.mimeType || mimeTypeForPath(file.relativePath, isText);
 
-    if (isText) {
+      if (isText) {
+        await createSkillFile({
+          store,
+          now,
+          ...(idGenerator ? { idGenerator } : {}),
+          ownerId,
+          skillId: created.skill.skillId,
+          versionId: created.version.id,
+          path: file.relativePath,
+          kind,
+          mimeType,
+          contentText: file.content.toString("utf8"),
+        });
+        continue;
+      }
+
+      if (!uploadAssetFile) {
+        throw new Error(`asset upload is required for ${file.relativePath}`);
+      }
+      const uploaded = await uploadAssetFile(file);
       await createSkillFile({
         store,
         now,
@@ -131,48 +206,37 @@ export async function importGitHubSkillCandidate({
         skillId: created.skill.skillId,
         versionId: created.version.id,
         path: file.relativePath,
-        kind,
-        mimeType,
-        contentText: file.content.toString("utf8"),
+        kind: "asset",
+        mimeType: uploaded.mimeType || mimeType,
+        storageFileId: uploaded.storageFileId,
+        storageUrl: uploaded.storageUrl,
       });
-      continue;
     }
 
-    if (!uploadAssetFile) {
-      throw new Error(`asset upload is required for ${file.relativePath}`);
+    const targets = await listPublishingTargets({ store, ownerId, skillId: created.skill.skillId });
+    const githubTarget = targets.find((target) => target.targetKind === "github");
+    if (githubTarget) {
+      await store.transact([
+        store.update("publishingTargets", githubTarget.id, {
+          repoFullName: repository.repoFullName,
+          repositoryId: repository.repositoryId,
+          installationId,
+          skillRoot: candidate.skillRoot,
+          baseBranch: repository.defaultBranch,
+          autoMerge: false,
+          consentStatus: "pending",
+          updatedAt: now(),
+        }),
+      ]);
     }
-    const uploaded = await uploadAssetFile(file);
-    await createSkillFile({
+
+    return created;
+  } catch (error) {
+    await cleanupImportedDraft({
       store,
-      now,
-      ...(idGenerator ? { idGenerator } : {}),
       ownerId,
       skillId: created.skill.skillId,
-      versionId: created.version.id,
-      path: file.relativePath,
-      kind: "asset",
-      mimeType: uploaded.mimeType || mimeType,
-      storageFileId: uploaded.storageFileId,
-      storageUrl: uploaded.storageUrl,
     });
+    throw error;
   }
-
-  const targets = await listPublishingTargets({ store, ownerId, skillId: created.skill.skillId });
-  const githubTarget = targets.find((target) => target.targetKind === "github");
-  if (githubTarget) {
-    await store.transact([
-      store.update("publishingTargets", githubTarget.id, {
-        repoFullName: repository.repoFullName,
-        repositoryId: repository.repositoryId,
-        installationId,
-        skillRoot: candidate.skillRoot,
-        baseBranch: repository.defaultBranch,
-        autoMerge: false,
-        consentStatus: "pending",
-        updatedAt: now(),
-      }),
-    ]);
-  }
-
-  return created;
 }

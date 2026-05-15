@@ -4,17 +4,18 @@ import { test } from "node:test";
 import { __internal, blogArticles, getBlogArticle, getNextArticle } from "./blog";
 
 test("blog content loads from markdown files", () => {
-  assert.ok(blogArticles.length >= 2);
-  assert.equal(blogArticles[0]?.slug, "how-to-write-better-agent-skills");
-  assert.equal(blogArticles[1]?.slug, "measuring-agent-skill-quality");
+  assert.ok(blogArticles.length >= 3);
+  assert.equal(blogArticles[0]?.slug, "what-is-an-agent-skill");
+  assert.equal(blogArticles[1]?.slug, "how-to-write-better-agent-skills");
+  assert.equal(blogArticles[2]?.slug, "measuring-agent-skill-quality");
 });
 
 test("blog article includes rendered sections and markdown body", () => {
-  const article = getBlogArticle("how-to-write-better-agent-skills");
+  const article = getBlogArticle("what-is-an-agent-skill");
   assert.ok(article);
-  assert.equal(article?.author.name, "Skillfully Editorial");
-  assert.equal(article?.sections[0]?.title, "Instrument the outcome");
-  assert.match(article?.sections[0]?.markdown ?? "", /A useful skill has a clear job/);
+  assert.equal(article?.author.name, "Tau Valerius");
+  assert.equal(article?.sections[0]?.title, "What an agent skill is");
+  assert.match(article?.sections[0]?.markdown ?? "", /An agent skill is a reusable package/);
 });
 
 test("section ids remain unique even when headings repeat", () => {

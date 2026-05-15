@@ -9,3 +9,9 @@ export const skillfullyEditorialAuthor: ArticleAuthor = {
   initials: "SE",
   role: "Skillfully team",
 };
+
+export const tauValeriusAuthor: ArticleAuthor = {
+  name: "Tau Valerius",
+  initials: "TV",
+  role: "Editorial contributor",
+};

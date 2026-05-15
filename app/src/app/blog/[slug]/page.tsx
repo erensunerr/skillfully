@@ -2,12 +2,14 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+
 import { AuthorByline } from "@/app/article-author";
 import {
   blogArticles,
   getBlogArticle,
   getNextArticle,
-  type ArticleBlock,
 } from "@/content/blog";
 
 type BlogArticleRouteProps = {
@@ -40,33 +42,44 @@ export async function generateMetadata({
   };
 }
 
-function ArticleBlockView({ block }: { block: ArticleBlock }) {
-  if (block.type === "paragraph") {
-    return <p>{block.text}</p>;
-  }
-
-  if (block.type === "list") {
-    return (
-      <ul className="space-y-4 rounded-lg bg-[#f3f5f9] p-6">
-        {block.items.map((item) => (
-          <li key={item} className="flex gap-3">
-            <span aria-hidden className="mt-3 h-1.5 w-1.5 shrink-0 bg-[#0b66ff]" />
-            <span>{item}</span>
-          </li>
-        ))}
-      </ul>
-    );
-  }
-
+function ArticleMarkdown({ markdown }: { markdown: string }) {
   return (
-    <aside className="border-l-4 border-[#0b66ff] bg-[#f3f5f9] p-6">
-      <p className="font-bold">{block.title}</p>
-      <div className="mt-4 space-y-4">
-        {block.body.map((line) => (
-          <p key={line}>{line}</p>
-        ))}
-      </div>
-    </aside>
+    <ReactMarkdown
+      remarkPlugins={[remarkGfm]}
+      components={{
+        p: ({ children }) => <p>{children}</p>,
+        ul: ({ children }) => (
+          <ul className="space-y-4 rounded-lg bg-[#f3f5f9] p-6">{children}</ul>
+        ),
+        li: ({ children }) => (
+          <li className="flex gap-3">
+            <span aria-hidden className="mt-3 h-1.5 w-1.5 shrink-0 bg-[#0b66ff]" />
+            <span>{children}</span>
+          </li>
+        ),
+        blockquote: ({ children }) => (
+          <aside className="border-l-4 border-[#0b66ff] bg-[#f3f5f9] p-6">{children}</aside>
+        ),
+        strong: ({ children }) => <strong className="font-bold">{children}</strong>,
+        a: ({ children, href }) => (
+          <a
+            href={href}
+            className="text-[#0b66ff] underline decoration-[0.08em] underline-offset-4"
+            target={href?.startsWith("http") ? "_blank" : undefined}
+            rel={href?.startsWith("http") ? "noreferrer" : undefined}
+          >
+            {children}
+          </a>
+        ),
+        h3: ({ children }) => (
+          <h3 className="font-editorial-sans text-2xl font-bold leading-tight sm:text-3xl">
+            {children}
+          </h3>
+        ),
+      }}
+    >
+      {markdown}
+    </ReactMarkdown>
   );
 }
 
@@ -132,9 +145,7 @@ export default async function BlogArticlePage({ params }: BlogArticleRouteProps)
                   {section.title}
                 </h2>
                 <div className="mt-6 space-y-6">
-                  {section.blocks.map((block, index) => (
-                    <ArticleBlockView key={`${section.id}-${index}`} block={block} />
-                  ))}
+                  <ArticleMarkdown markdown={section.markdown} />
                 </div>
               </section>
             ))}

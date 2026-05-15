@@ -1,27 +1,20 @@
+import * as fs from "node:fs";
+import * as path from "node:path";
+
+const matter = require("gray-matter");
+const { unified } = require("unified");
+const remarkParse = require("remark-parse").default;
+const remarkStringify = require("remark-stringify").default;
+
 import {
   skillfullyEditorialAuthor,
   type ArticleAuthor,
-} from "@/content/authors";
+} from "./authors";
 
-export type ArticleBlock =
-  | {
-      type: "paragraph";
-      text: string;
-    }
-  | {
-      type: "callout";
-      title: string;
-      body: string[];
-    }
-  | {
-      type: "list";
-      items: string[];
-    };
-
-export type ArticleSection = {
+export type BlogArticleSection = {
   id: string;
   title: string;
-  blocks: ArticleBlock[];
+  markdown: string;
 };
 
 export type BlogArticle = {
@@ -30,141 +23,214 @@ export type BlogArticle = {
   subtitle: string;
   category: string;
   publishedAt: string;
+  publishedAtSortKey: number;
   readTime: string;
   author: ArticleAuthor;
-  sections: ArticleSection[];
+  sections: BlogArticleSection[];
   nextSlug?: string;
 };
 
-export const blogArticles: BlogArticle[] = [
-  {
-    slug: "how-to-write-better-agent-skills",
-    title: "How to write better agent skills",
-    subtitle:
-      "A practical system for turning a good prompt into an agent skill that can be reused, measured, and improved.",
-    category: "Skill authoring",
-    publishedAt: "Apr 25, 2026",
-    readTime: "7 min read",
-    author: skillfullyEditorialAuthor,
-    nextSlug: "measuring-agent-skill-quality",
-    sections: [
-      {
-        id: "instrument-the-outcome",
-        title: "Instrument the outcome",
-        blocks: [
-          {
-            type: "paragraph",
-            text: "A useful skill has a clear job. It should tell the agent what done means, what evidence to collect, and where to report whether the run helped.",
-          },
-          {
-            type: "callout",
-            title: "The feedback question",
-            body: [
-              "Ask for the result, the blocker, and the confidence level while the execution context is still fresh.",
-              "Skillfully turns that self-assessment into a dataset you can review instead of guessing from chat transcripts.",
-            ],
-          },
-        ],
-      },
-      {
-        id: "keep-instructions-operational",
-        title: "Keep instructions operational",
-        blocks: [
-          {
-            type: "paragraph",
-            text: "Good skills read like working procedure, not brand copy. Prefer concrete checks, command paths, fallback behavior, and stop rules.",
-          },
-          {
-            type: "list",
-            items: [
-              "Name the exact files, routes, or APIs the agent should inspect first.",
-              "Describe the smallest acceptable proof before the agent reports completion.",
-              "Call out what is intentionally out of scope so the agent does not expand the task.",
-            ],
-          },
-        ],
-      },
-      {
-        id: "tighten-after-real-runs",
-        title: "Tighten after real runs",
-        blocks: [
-          {
-            type: "paragraph",
-            text: "A skill gets better when you compare what it promised against what happened. Review negative and neutral feedback first, then edit the skill around repeated failure modes.",
-          },
-          {
-            type: "callout",
-            title: "Revision loop",
-            body: [
-              "Group feedback by failure cause.",
-              "Patch the instruction that would have prevented the failure.",
-              "Run the skill again and check whether the next feedback batch changes.",
-            ],
-          },
-        ],
-      },
-    ],
-  },
-  {
-    slug: "measuring-agent-skill-quality",
-    title: "Measuring agent skill quality",
-    subtitle:
-      "How to read Skillfully feedback when you are deciding whether a skill is ready to share with other agents or teammates.",
-    category: "Analytics",
-    publishedAt: "Apr 25, 2026",
-    readTime: "5 min read",
-    author: skillfullyEditorialAuthor,
-    nextSlug: "how-to-write-better-agent-skills",
-    sections: [
-      {
-        id: "start-with-ratio",
-        title: "Start with the rating ratio",
-        blocks: [
-          {
-            type: "paragraph",
-            text: "Positive feedback tells you the skill worked at least once. Negative and neutral feedback are the better product signals because they show where the skill lost context, stalled, or needed a human to recover.",
-          },
-          {
-            type: "list",
-            items: [
-              "Positive: the skill completed the intended job.",
-              "Neutral: the skill partly worked, but the agent could not fully prove the result.",
-              "Negative: the skill failed, blocked the run, or gave the agent the wrong next step.",
-            ],
-          },
-        ],
-      },
-      {
-        id: "read-the-words",
-        title: "Read the words, not only the score",
-        blocks: [
-          {
-            type: "paragraph",
-            text: "The rating is the sorting layer. The written feedback is where you find the actual repair. Look for repeated nouns, missing prerequisites, unclear commands, and vague completion standards.",
-          },
-          {
-            type: "callout",
-            title: "Useful review habit",
-            body: [
-              "Keep a short changelog next to the skill.",
-              "Each time you edit the skill, note which feedback cluster the change is meant to fix.",
-            ],
-          },
-        ],
-      },
-      {
-        id: "share-only-after-patterns",
-        title: "Share only after patterns stabilize",
-        blocks: [
-          {
-            type: "paragraph",
-            text: "Do not promote a skill because the first run was impressive. Promote it when repeated runs produce similar positive evidence and the remaining negative feedback is explainable.",
-          },
-        ],
-      },
-    ],
-  },
-];
+type BlogFrontmatter = {
+  title?: unknown;
+  subtitle?: unknown;
+  category?: unknown;
+  publishedAt?: unknown;
+  readTime?: unknown;
+  author?: unknown;
+  nextSlug?: unknown;
+};
+
+const BLOG_CONTENT_DIR = path.join(process.cwd(), "content", "blog");
+
+const authorMap: Record<string, ArticleAuthor> = {
+  "skillfully-editorial": skillfullyEditorialAuthor,
+};
+
+function slugifyHeading(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80);
+}
+
+function nodeText(node: any): string {
+  if (!node) {
+    return "";
+  }
+
+  if (typeof node.value === "string") {
+    return node.value;
+  }
+
+  if (Array.isArray(node.children)) {
+    return node.children.map((child: any) => nodeText(child)).join("");
+  }
+
+  return "";
+}
+
+function stringifyNodes(nodes: any[]) {
+  if (!nodes.length) {
+    return "";
+  }
+
+  return unified().use(remarkStringify).stringify({
+    type: "root",
+    children: nodes,
+  });
+}
+
+function parseSections(body: string) {
+  const trimmed = body.trim();
+  if (!trimmed) {
+    return [] as BlogArticleSection[];
+  }
+
+  const tree = unified().use(remarkParse).parse(trimmed) as { children?: any[] };
+  const children = tree.children ?? [];
+  const sections: BlogArticleSection[] = [];
+  const idCounts = new Map<string, number>();
+  let currentSection: { title: string; nodes: any[] } | null = null;
+
+  for (const node of children) {
+    if (node.type === "heading" && node.depth === 2) {
+      if (currentSection) {
+        const baseId = slugifyHeading(currentSection.title);
+        const seen = (idCounts.get(baseId) ?? 0) + 1;
+        idCounts.set(baseId, seen);
+        sections.push({
+          id: seen === 1 ? baseId : `${baseId}-${seen}`,
+          title: currentSection.title,
+          markdown: stringifyNodes(currentSection.nodes).trim(),
+        });
+      }
+
+      currentSection = {
+        title: nodeText(node).trim(),
+        nodes: [],
+      };
+      continue;
+    }
+
+    if (!currentSection) {
+      throw new Error("Blog content must start with a level-two heading (## Title). Add an H2 before body copy.");
+    }
+
+    currentSection.nodes.push(node);
+  }
+
+  if (currentSection) {
+    const baseId = slugifyHeading(currentSection.title);
+    const seen = (idCounts.get(baseId) ?? 0) + 1;
+    idCounts.set(baseId, seen);
+    sections.push({
+      id: seen === 1 ? baseId : `${baseId}-${seen}`,
+      title: currentSection.title,
+      markdown: stringifyNodes(currentSection.nodes).trim(),
+    });
+  }
+
+  return sections;
+}
+
+function requireString(value: unknown, field: string, slug: string) {
+  if (typeof value !== "string" || value.trim().length === 0) {
+    throw new Error(`Blog post \"${slug}\" is missing required field \"${field}\".`);
+  }
+  return value.trim();
+}
+
+function normalizePublishedDate(value: unknown, slug: string) {
+  const parsed =
+    value instanceof Date
+      ? value
+      : typeof value === "string" && value.trim().length > 0
+        ? new Date(value)
+        : null;
+
+  if (!parsed || Number.isNaN(parsed.getTime())) {
+    throw new Error(`Blog post \"${slug}\" has an invalid or missing \"publishedAt\" value.`);
+  }
+
+  return {
+    display: parsed.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      timeZone: "UTC",
+    }),
+    sortKey: parsed.getTime(),
+  };
+}
+
+function loadBlogArticleFromFile(filePath: string): BlogArticle {
+  const source = fs.readFileSync(filePath, "utf8");
+  const { data, content } = matter(source);
+  const slug = path.basename(filePath).replace(/\.mdx?$/, "");
+  const frontmatter = data as BlogFrontmatter;
+  const authorKey = requireString(frontmatter.author, "author", slug);
+  const author = authorMap[authorKey];
+
+  if (!author) {
+    throw new Error(`Blog post \"${slug}\" references unknown author key \"${authorKey}\".`);
+  }
+
+  const normalizedPublishedAt = normalizePublishedDate(frontmatter.publishedAt, slug);
+
+  return {
+    slug,
+    title: requireString(frontmatter.title, "title", slug),
+    subtitle: requireString(frontmatter.subtitle, "subtitle", slug),
+    category: requireString(frontmatter.category, "category", slug),
+    publishedAt: normalizedPublishedAt.display,
+    publishedAtSortKey: normalizedPublishedAt.sortKey,
+    readTime: requireString(frontmatter.readTime, "readTime", slug),
+    author,
+    nextSlug:
+      typeof frontmatter.nextSlug === "string" && frontmatter.nextSlug.trim().length > 0
+        ? frontmatter.nextSlug.trim()
+        : undefined,
+    sections: parseSections(content),
+  };
+}
+
+function compareArticles(a: BlogArticle, b: BlogArticle) {
+  const dateComparison = b.publishedAtSortKey - a.publishedAtSortKey;
+
+  if (dateComparison !== 0) {
+    return dateComparison;
+  }
+
+  return a.slug.localeCompare(b.slug);
+}
+
+function loadBlogArticles() {
+  if (!fs.existsSync(BLOG_CONTENT_DIR)) {
+    return [] as BlogArticle[];
+  }
+
+  const articles = fs
+    .readdirSync(BLOG_CONTENT_DIR)
+    .filter((fileName) => /\.mdx?$/.test(fileName))
+    .map((fileName) => loadBlogArticleFromFile(path.join(BLOG_CONTENT_DIR, fileName)))
+    .sort(compareArticles);
+
+  const knownSlugs = new Set(articles.map((article) => article.slug));
+  for (const article of articles) {
+    if (article.nextSlug && !knownSlugs.has(article.nextSlug)) {
+      throw new Error(`Blog post \"${article.slug}\" references missing nextSlug \"${article.nextSlug}\".`);
+    }
+  }
+
+  return articles;
+}
+
+export const blogArticles: BlogArticle[] = loadBlogArticles();
+
+export const __internal = {
+  parseSections,
+};
 
 export function getBlogArticle(slug: string) {
   return blogArticles.find((article) => article.slug === slug);

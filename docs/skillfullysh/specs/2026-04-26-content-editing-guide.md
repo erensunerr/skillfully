@@ -1,25 +1,23 @@
 # Guide And Blog Editing Guide
 
-**Date:** 2026-04-26
+**Date:** 2026-05-14
 **Status:** Current
 
 ## Overview
 
-The public guide and blog are not MDX right now. Both are generated from typed
-TypeScript content modules:
+The public guide and blog now use two different content models:
 
-- Guide articles: `app/src/content/guide.ts`
-- Blog articles: `app/src/content/blog.ts`
+- Guide articles remain typed TypeScript content in `app/src/content/guide.ts`
+- Blog posts are filesystem-backed Markdown content in `app/content/blog/`
 
-The route files render those content objects:
+The route files render those content sources:
 
 - Guide index: `app/src/app/guide/page.tsx`
 - Guide article: `app/src/app/guide/[slug]/page.tsx`
 - Blog index: `app/src/app/blog/page.tsx`
 - Blog article: `app/src/app/blog/[slug]/page.tsx`
 
-Edit the content files for normal writing changes. Edit the route files only
-when the layout, styling, navigation, or rendering model needs to change.
+Edit the content files for normal writing changes. Edit the route files only when the layout, styling, navigation, or rendering model needs to change.
 
 ## Editing The Guide
 
@@ -47,7 +45,6 @@ Each object is one public article under `/guide/[slug]`.
 ```
 
 Guide fields:
-
 - `slug`: URL segment. `start-with-agent-skills` renders at `/guide/start-with-agent-skills`.
 - `number`: visible article number in the guide navigation.
 - `title`: article headline.
@@ -58,12 +55,9 @@ Guide fields:
 - `section.body`: main paragraph for the section.
 - `section.bullets`: callout bullet list under the section body.
 
-Current constraint: the guide is intentionally five articles with five sections
-each. Tests enforce that shape. If you want a different count, update the tests
-and the copy that says `5 articles. 5 sections each.`
+Current constraint: the guide is intentionally five articles with five sections each. Tests enforce that shape. If you want a different count, update the tests and the copy that says `5 articles. 5 sections each.`
 
 To add a guide article:
-
 1. Add a new object to `guideArticles`.
 2. Give it a unique `slug`.
 3. Give it the next `number`.
@@ -72,116 +66,109 @@ To add a guide article:
 6. Update guide tests if the article count changes.
 
 To reorder guide articles:
-
 1. Move objects inside `guideArticles`.
 2. Update the `number` fields so visible numbering still matches the order.
-3. Check `getNextGuideArticle` behavior at the bottom of `guide.ts`; it uses
-   array order.
+3. Check `getNextGuideArticle` behavior at the bottom of `guide.ts`; it uses array order.
 
 To rename a guide URL:
-
 1. Change the article `slug`.
 2. Search for the old slug across the repo and update links.
 3. If external links already exist, consider adding a redirect before shipping.
 
 ## Editing Blog Posts
 
-Open `app/src/content/blog.ts`. The blog is an array named `blogArticles`.
-Each object is one public post under `/blog/[slug]`.
+Blog posts now live as Markdown files in:
 
-```ts
-{
-  slug: "how-to-write-better-agent-skills",
-  title: "How to write better agent skills",
-  subtitle: "A practical system for turning a good prompt into an agent skill.",
-  category: "Skill authoring",
-  publishedAt: "Apr 25, 2026",
-  readTime: "7 min read",
-  author: "Skillfully",
-  nextSlug: "measuring-agent-skill-quality",
-  sections: [
-    {
-      id: "instrument-the-outcome",
-      title: "Instrument the outcome",
-      blocks: [
-        {
-          type: "paragraph",
-          text: "A useful skill has a clear job.",
-        },
-      ],
-    },
-  ],
-}
+- `app/content/blog/*.md`
+
+Each file represents one public blog post under `/blog/[slug]`.
+The file name becomes the slug.
+
+Example:
+
+```md
+---
+title: How to write better agent skills
+subtitle: A practical system for turning a good prompt into an agent skill.
+category: Skill authoring
+publishedAt: 2026-04-25
+readTime: 7 min read
+author: skillfully-editorial
+nextSlug: measuring-agent-skill-quality
+---
+
+## Instrument the outcome
+
+A useful skill has a clear job.
+
+> **The feedback question**
+>
+> Ask for the result, the blocker, and the confidence level.
 ```
 
-Blog fields:
-
-- `slug`: URL segment. `how-to-write-better-agent-skills` renders at `/blog/how-to-write-better-agent-skills`.
+Blog frontmatter fields:
 - `title`: post headline.
 - `subtitle`: summary shown on the index and article page.
 - `category`: label shown in article metadata.
-- `publishedAt`: display date string.
+- `publishedAt`: ISO-style date in frontmatter. It renders as a human-readable date.
 - `readTime`: display read-time string.
-- `author`: display author.
-- `nextSlug`: optional slug for the next article CTA.
-- `sections`: post body sections.
-- `section.id`: anchor-friendly section identifier.
-- `section.title`: visible section heading.
-- `section.blocks`: mixed content blocks inside the section.
+- `author`: author key resolved by `app/src/content/authors.ts`.
+- `nextSlug`: optional slug for the next-article CTA.
 
-Blog block types:
+Author keys currently supported:
+- `skillfully-editorial`
 
-```ts
-{ type: "paragraph", text: "Paragraph text." }
-```
-
-```ts
-{
-  type: "callout",
-  title: "Callout title",
-  body: ["First line.", "Second line."],
-}
-```
-
-```ts
-{
-  type: "list",
-  items: ["First item.", "Second item."],
-}
-```
+Markdown rules:
+- Use `##` headings for top-level article sections. These become the table of contents.
+- Use standard Markdown paragraphs, lists, links, and blockquotes.
+- Use blockquotes for callout-style content.
+- Use `###` headings inside a section if you need subheadings.
 
 To add a blog post:
-
-1. Add a new object to `blogArticles`.
-2. Give it a unique `slug`.
-3. Fill in title, subtitle, category, date, read time, and author.
-4. Add one or more sections.
-5. Use `paragraph`, `callout`, and `list` blocks only unless you extend the
-   renderer in `app/src/app/blog/[slug]/page.tsx`.
-6. Set `nextSlug` if the article should link to another article.
+1. Create a new file in `app/content/blog/`.
+2. Name it with the intended slug, for example `what-is-an-agent-skill.md`.
+3. Add frontmatter with all required fields.
+4. Use `##` headings to create sections.
+5. If the post should link to another post in the next-article CTA, set `nextSlug`.
 
 To reorder blog posts:
-
-1. Move objects inside `blogArticles`.
-2. Check the blog index ordering after the move.
-3. Update `nextSlug` values if the "next article" loop should change.
+1. Change `publishedAt` or the file set as needed.
+2. The loader sorts posts by `publishedAt` descending, then slug ascending for ties.
+3. Update `nextSlug` values if the next-article loop should change.
 
 To rename a blog URL:
-
-1. Change the article `slug`.
+1. Rename the file.
 2. Update any `nextSlug` values that point to the old slug.
 3. Search for the old slug across the repo and update links.
 4. If external links already exist, consider adding a redirect before shipping.
 
 ## Validation
 
-Run tests after content edits:
+Install dependencies if needed:
 
 ```bash
-cd app && npm test
+cd app && npm install
 ```
 
-Run a production build before shipping larger changes:
+Focused blog tests:
+
+```bash
+cd app && node --import tsx --test src/content/blog.test.ts src/app/blog/page.test.tsx src/app/blog/[slug]/page.test.tsx
+```
+
+Full test pass:
+
+```bash
+cd app && node --import tsx --test $(find src -name '*.test.ts' -o -name '*.test.tsx' | sort)
+```
+
+Type check:
+
+```bash
+cd app && npm run lint
+```
+
+Production build:
 
 ```bash
 cd app && npm run build
@@ -190,24 +177,18 @@ cd app && npm run build
 Useful route checks:
 
 ```text
-/guide
-/guide/start-with-agent-skills
 /blog
 /blog/how-to-write-better-agent-skills
+/blog/measuring-agent-skill-quality
+/guide
+/guide/start-with-agent-skills
 ```
-
-If you changed a slug, open the changed URL and at least one page that links to
-it.
 
 ## Common Gotchas
 
-- This is typed TypeScript content, not MDX. Unescaped quotes, missing commas,
-  and unsupported block types will fail tests or build.
-- Guide article counts and section counts are currently tested. Change tests
-  deliberately if the content model changes.
-- `nextSlug` must match an existing blog `slug`; otherwise the next-article CTA
-  will not render.
-- In shell commands, quote paths with brackets, such as
-  `app/src/app/guide/[slug]/page.tsx`.
-- Keep public links on `/guide` and `/blog`; do not reintroduce the removed
-  legacy public route.
+- The guide is still typed TypeScript content. The blog is now Markdown files. Do not assume they share the same editing model.
+- The blog loader expects valid frontmatter. Missing `title`, `subtitle`, `category`, `publishedAt`, `readTime`, or `author` will fail the load.
+- `author` must match a known author key in `app/src/content/authors.ts`.
+- `nextSlug` must match an existing blog slug if you want the next-article CTA to render.
+- Blog table-of-contents entries come from `##` headings. If a post has no `##` headings, it will not render like the other posts.
+- Keep public links on `/guide` and `/blog`; do not reintroduce the removed legacy public route.

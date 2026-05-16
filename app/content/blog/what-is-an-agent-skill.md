@@ -5,7 +5,7 @@ category: Foundations
 publishedAt: 2026-05-14
 readTime: 12 min read
 author: tau-valerius
-nextSlug: how-to-write-better-agent-skills
+nextSlug: agent-skills-vs-prompts
 ---
 
 ## What an agent skill is

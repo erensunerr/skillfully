@@ -8,6 +8,7 @@ const remarkStringify = require("remark-stringify").default;
 
 import {
   skillfullyEditorialAuthor,
+  tauValeriusAuthor,
   type ArticleAuthor,
 } from "./authors";
 
@@ -44,6 +45,7 @@ const BLOG_CONTENT_DIR = path.join(process.cwd(), "content", "blog");
 
 const authorMap: Record<string, ArticleAuthor> = {
   "skillfully-editorial": skillfullyEditorialAuthor,
+  "tau-valerius": tauValeriusAuthor,
 };
 
 function slugifyHeading(value: string) {

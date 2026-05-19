@@ -45,6 +45,9 @@ async function existingInstallationImportSession(ownerId: string) {
     return null;
   }
 
+  // A stored installation means the GitHub App is already connected for this
+  // Skillfully user. Start a fresh import session in Skillfully instead of
+  // sending the browser back to GitHub's installation management screen.
   return createGitHubImportSession({
     store: defaultSkillStore,
     ownerId,
@@ -74,6 +77,8 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json().catch(() => ({})) as { intent?: unknown };
+    // Normal import starts should reuse an existing installation. The
+    // repository-access flow opts into GitHub explicitly with intent=configure.
     if (body.intent !== "configure" && process.env.NEXT_PUBLIC_INSTANT_APP_ID) {
       const session = await existingInstallationImportSession(user.id);
       if (session) {

@@ -61,6 +61,8 @@ export function verifyGitHubInstallStateOwner({
   state: string | null;
   now?: number;
 }) {
+  // The install state is intentionally self-contained because the callback
+  // cannot rely on dashboard cookies or bearer headers after GitHub redirects.
   const secret = stateSecret();
   if (!secret || !state) {
     return null;

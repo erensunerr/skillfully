@@ -232,6 +232,9 @@ function isCachedCandidate(value: unknown): value is GitHubSkillCandidate {
 }
 
 export function cachedDiscoveryForSession(session: ImportSessionRow) {
+  // Discovery can touch every repository in the installation. Cache the result
+  // on the server-created session so refreshes and imports do not repeatedly
+  // walk the same GitHub trees unless the caller explicitly asks to refresh.
   if (session.status !== "discovered" && session.status !== "imported") {
     return null;
   }
@@ -338,6 +341,8 @@ async function discoverCandidatesForSession({
     status: "discovered",
     discoveredCount: candidates.filter((candidate) => candidate.status === "valid").length,
     repositoriesChecked: repositories.length,
+    // The UI shows repository scope from Skillfully after discovery; users only
+    // leave for GitHub when they explicitly choose to add repositories.
     repositoriesJson: repositoryNames,
     candidatesJson: candidates,
     warningsJson: warnings,

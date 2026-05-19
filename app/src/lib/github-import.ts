@@ -101,6 +101,9 @@ export function selectExistingGitHubInstallation(
   rows: ExistingGitHubInstallationRow[],
   ownerId: string,
 ): ExistingGitHubInstallation | null {
+  // A user can reconnect/update the GitHub App over time; choose the freshest
+  // owner-bound installation and ignore webhook-created rows that are still
+  // unclaimed.
   const [installation] = rows
     .filter((row) =>
       row.ownerId === ownerId &&

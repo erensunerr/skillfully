@@ -75,6 +75,8 @@ export function GitHubImportModal({
   const selectableCount = candidates.filter((candidate) => candidate.status === "valid").length;
   const selectedCount = candidates.filter((candidate) => selectedCandidateIds.has(candidate.id)).length;
   const isReady = state === "ready" && selectableCount > 0;
+  // Large installations can include thousands of repositories; keep the modal
+  // readable while still proving which GitHub installation Skillfully checked.
   const visibleConnectedRepositories = connectedRepositories.slice(0, CONNECTED_REPOSITORY_DISPLAY_LIMIT);
   const hiddenConnectedRepositoryCount = Math.max(0, connectedRepositories.length - visibleConnectedRepositories.length);
 

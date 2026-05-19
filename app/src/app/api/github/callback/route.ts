@@ -19,6 +19,9 @@ function dashboardRedirect(request: NextRequest, status: string, params: Record<
 export async function GET(request: NextRequest) {
   const installationId = request.nextUrl.searchParams.get("installation_id");
   const state = request.nextUrl.searchParams.get("state");
+  // GitHub returns here through a browser redirect, so the Authorization header
+  // from the dashboard's install-start POST is not available. The signed state
+  // is the owner binding for this callback.
   const ownerId = verifyGitHubInstallStateOwner({ state });
   if (!ownerId) {
     return dashboardRedirect(request, "invalid_state");
@@ -50,6 +53,8 @@ export async function GET(request: NextRequest) {
       },
     } as never) as { githubInstallations?: Array<Record<string, unknown>> };
     const existing = rows.githubInstallations?.[0];
+    // Webhooks can create unowned installation rows before the user completes
+    // Skillfully setup. They may be claimed here, but never by another owner.
     if (existing?.ownerId && existing.ownerId !== ownerId) {
       return dashboardRedirect(request, "owner_conflict");
     }

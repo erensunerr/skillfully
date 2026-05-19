@@ -3476,6 +3476,8 @@ export default function Dashboard({
         method: "POST",
         body: JSON.stringify({ intent }),
       });
+      // Existing installations stay inside Skillfully: the API returns a new
+      // import session id instead of a GitHub URL.
       if (payload.session_id) {
         setOnboardingDismissed(true);
         setIsCreateSkillModalOpen(false);

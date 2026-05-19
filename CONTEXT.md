@@ -23,6 +23,10 @@ _Avoid_: Unpublished skill, hidden public skill
 A frozen release of a private skill that authorized users and their agents can use without public publication.
 _Avoid_: Shared draft, private publish
 
+**Skill Release**:
+A frozen released state of a skill whose audience is determined by the skill's visibility and access grants.
+_Avoid_: Separate public publish, separate private publish
+
 **Use Access**:
 Permission for an account and its connected agents to install and run a private release.
 _Avoid_: View access, read-only edit access
@@ -56,6 +60,7 @@ _Avoid_: Public-only endpoint, private-only endpoint
 - A **Skill** can have many **Authors**.
 - A **Skill** has exactly one **Skill Owner**.
 - A **Private Skill** can have many authorized accounts.
+- A **Private Release** is a **Skill Release** served only to authorized accounts.
 - The **Install Surface** serves public releases anonymously.
 - The **Install Surface** serves **Private Releases** only to accounts with **Use Access** or **Edit Access**.
 - **Use Access** applies to a **Private Release**.
@@ -67,7 +72,7 @@ _Avoid_: Public-only endpoint, private-only endpoint
 - A **Skill Invite** notifies an account about existing **Use Access** or **Edit Access**.
 - An **Invite Delivery Failure** does not revoke or roll back **Use Access** or **Edit Access**.
 - **Access Revocation** stops Skillfully from serving current and future **Private Releases** to the revoked account.
-- A **Skill Version** identifies exactly one released state of a **Skill**.
+- A **Skill Version** identifies exactly one **Skill Release**.
 
 ## Example Dialogue
 
@@ -77,6 +82,7 @@ _Avoid_: Public-only endpoint, private-only endpoint
 ## Flagged Ambiguities
 
 - "Version" previously suggested semantic versioning; resolved: **Skill Version** is an integer release number.
+- "Publish" can imply separate public and private actions; resolved: publishing creates one **Skill Release**, and access rules decide who can retrieve it.
 - "Share" can mean both **Use Access** and **Edit Access**; resolved: private sharing must state the permission explicitly.
 - "Invite" can imply a pending accept step; resolved: a **Skill Invite** is notification only, and access is effective once the email address is shared.
 - "Email failed" can sound like sharing failed; resolved: **Invite Delivery Failure** only means the notification failed.

@@ -31,12 +31,17 @@ _Avoid_: Write access, admin access
 An ordinal release number that increments by one each time authors publish the skill.
 _Avoid_: Semantic version, semver
 
+**Skill Invite**:
+An email notification that points a person to a skill whose access has already been granted to that email address.
+_Avoid_: Access request, pending approval
+
 ## Relationships
 
 - A **Skill** can have many **Authors**.
 - A **Private Skill** can have many authorized accounts.
 - **Use Access** applies to a **Private Release**.
 - **Edit Access** applies to a **Skill** draft.
+- A **Skill Invite** notifies an account about existing **Use Access** or **Edit Access**.
 - A **Skill Version** identifies exactly one released state of a **Skill**.
 
 ## Example Dialogue
@@ -48,3 +53,4 @@ _Avoid_: Semantic version, semver
 
 - "Version" previously suggested semantic versioning; resolved: **Skill Version** is an integer release number.
 - "Share" can mean both **Use Access** and **Edit Access**; resolved: private sharing must state the permission explicitly.
+- "Invite" can imply a pending accept step; resolved: a **Skill Invite** is notification only, and access is effective once the email address is shared.

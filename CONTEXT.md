@@ -55,6 +55,7 @@ _Avoid_: Public-only endpoint, private-only endpoint
 - The **Install Surface** serves public releases anonymously.
 - The **Install Surface** serves **Private Releases** only to accounts with **Use Access** or **Edit Access**.
 - **Use Access** applies to a **Private Release**.
+- **Use Access** can exist before the first **Private Release**, but it serves no skill files until a release exists.
 - **Edit Access** applies to a **Skill** draft.
 - **Edit Access** includes **Use Access**.
 - **Edit Access** can publish a new **Private Release**.

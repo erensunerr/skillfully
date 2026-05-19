@@ -9,7 +9,11 @@ A reusable set of instructions and supporting files that an agent can install an
 
 **Author**:
 A person or authorized agent that can change a skill's draft.
-_Avoid_: Owner, maintainer, collaborator
+_Avoid_: Maintainer, collaborator
+
+**Skill Owner**:
+The account that controls a skill and whose access cannot be revoked by other authors.
+_Avoid_: Original author, administrator
 
 **Private Skill**:
 A skill that is not listed publicly and is only available to explicitly authorized accounts.
@@ -24,7 +28,7 @@ Permission for an account and its connected agents to install and run a private 
 _Avoid_: View access, read-only edit access
 
 **Edit Access**:
-Permission for an account and its connected agents to change a skill's draft and use its private releases.
+Permission for an account and its connected agents to change a skill's draft, use its private releases, and manage non-owner sharing permissions.
 _Avoid_: Write access, admin access
 
 **Skill Version**:
@@ -38,10 +42,12 @@ _Avoid_: Access request, pending approval
 ## Relationships
 
 - A **Skill** can have many **Authors**.
+- A **Skill** has exactly one **Skill Owner**.
 - A **Private Skill** can have many authorized accounts.
 - **Use Access** applies to a **Private Release**.
 - **Edit Access** applies to a **Skill** draft.
 - **Edit Access** includes **Use Access**.
+- **Edit Access** can grant or revoke **Use Access** and **Edit Access** for accounts other than the **Skill Owner**.
 - A **Skill Invite** notifies an account about existing **Use Access** or **Edit Access**.
 - A **Skill Version** identifies exactly one released state of a **Skill**.
 
@@ -56,3 +62,4 @@ _Avoid_: Access request, pending approval
 - "Share" can mean both **Use Access** and **Edit Access**; resolved: private sharing must state the permission explicitly.
 - "Invite" can imply a pending accept step; resolved: a **Skill Invite** is notification only, and access is effective once the email address is shared.
 - "Edit" can be mistaken for draft-only access; resolved: **Edit Access** also includes **Use Access**.
+- "Owner" is distinct from general authorship; resolved: the **Skill Owner** is the only account whose access cannot be revoked by editors.

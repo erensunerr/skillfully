@@ -2,9 +2,8 @@ import crypto from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 
 import { adminDb } from "@/lib/adminDb";
-import { getDashboardUser } from "@/lib/dashboard-auth";
 import { createGitHubImportSession } from "@/lib/github-import";
-import { verifyGitHubInstallState } from "@/lib/github-install-state";
+import { verifyGitHubInstallStateOwner } from "@/lib/github-install-state";
 import { getGitHubAppInstallation } from "@/lib/publishing/adapters/github-app";
 import { defaultSkillStore } from "@/lib/skills/repository";
 
@@ -20,15 +19,15 @@ function dashboardRedirect(request: NextRequest, status: string, params: Record<
 export async function GET(request: NextRequest) {
   const installationId = request.nextUrl.searchParams.get("installation_id");
   const state = request.nextUrl.searchParams.get("state");
-  const user = await getDashboardUser(request);
-  if (!user) {
-    return dashboardRedirect(request, "unauthorized");
+  // GitHub returns here through a browser redirect, so the Authorization header
+  // from the dashboard's install-start POST is not available. The signed state
+  // is the owner binding for this callback.
+  const ownerId = verifyGitHubInstallStateOwner({ state });
+  if (!ownerId) {
+    return dashboardRedirect(request, "invalid_state");
   }
   if (!installationId) {
     return dashboardRedirect(request, "missing_installation");
-  }
-  if (!verifyGitHubInstallState({ state, ownerId: user.id })) {
-    return dashboardRedirect(request, "invalid_state");
   }
   if (!process.env.GITHUB_APP_ID || !process.env.GITHUB_APP_PRIVATE_KEY) {
     return dashboardRedirect(request, "not_configured");
@@ -54,7 +53,9 @@ export async function GET(request: NextRequest) {
       },
     } as never) as { githubInstallations?: Array<Record<string, unknown>> };
     const existing = rows.githubInstallations?.[0];
-    if (existing?.ownerId && existing.ownerId !== user.id) {
+    // Webhooks can create unowned installation rows before the user completes
+    // Skillfully setup. They may be claimed here, but never by another owner.
+    if (existing?.ownerId && existing.ownerId !== ownerId) {
       return dashboardRedirect(request, "owner_conflict");
     }
 
@@ -66,7 +67,7 @@ export async function GET(request: NextRequest) {
     await adminDb.transact([
       existing
         ? tx.githubInstallations[id].update({
-            ownerId: user.id,
+            ownerId,
             accountId: installation.account?.id ? String(installation.account.id) : existing.accountId,
             accountLogin,
             accountType,
@@ -75,7 +76,7 @@ export async function GET(request: NextRequest) {
             updatedAt: now,
           })
         : tx.githubInstallations[id].create({
-            ownerId: user.id,
+            ownerId,
             installationId,
             ...(installation.account?.id ? { accountId: String(installation.account.id) } : {}),
             accountLogin,
@@ -88,7 +89,7 @@ export async function GET(request: NextRequest) {
     ] as never);
     const session = await createGitHubImportSession({
       store: defaultSkillStore,
-      ownerId: user.id,
+      ownerId,
       installationId,
       accountLogin,
       accountType,

@@ -27,6 +27,7 @@ import { type AppSchema } from "@/instant.schema";
 import { type InstaQLEntity, id } from "@instantdb/react";
 import type { User as InstantUser } from "@instantdb/core";
 import {
+  githubConnectionStatusMessage,
   resolveDashboardViewState,
   shouldShowOnboardingModalByDefault,
 } from "./view-state";
@@ -100,6 +101,7 @@ type SkillEditorFile = {
 type GitHubImportCandidatesResponse = {
   candidates: GitHubImportCandidateView[];
   warnings?: string[];
+  repositories?: string[];
 };
 type GitHubImportSubmitResponse = {
   imported: Array<{
@@ -110,7 +112,9 @@ type GitHubImportSubmitResponse = {
   failures?: Array<{ name?: string; error: string }>;
 };
 type GitHubInstallStartResponse = {
-  install_url: string;
+  install_url?: string;
+  session_id?: string;
+  account_login?: string;
 };
 
 const DASHBOARD_CARD = "border border-[var(--ink)] bg-[var(--paper)] text-[var(--ink)]";
@@ -3078,6 +3082,7 @@ export default function Dashboard({
   const [githubImportState, setGitHubImportState] = useState<GitHubImportModalState>("loading");
   const [githubImportCandidates, setGitHubImportCandidates] = useState<GitHubImportCandidateView[]>([]);
   const [githubImportWarnings, setGitHubImportWarnings] = useState<string[]>([]);
+  const [githubConnectedRepositories, setGitHubConnectedRepositories] = useState<string[]>([]);
   const [selectedGitHubImportIds, setSelectedGitHubImportIds] = useState<Set<string>>(new Set());
   const [isGitHubImporting, setIsGitHubImporting] = useState(false);
   const [githubImportError, setGitHubImportError] = useState("");
@@ -3210,18 +3215,32 @@ export default function Dashboard({
   }, [initialSkillId, initialTab, skills, user]);
 
   useEffect(() => {
-    if (!user || typeof window === "undefined") {
+    if (typeof window === "undefined") {
       return;
     }
 
     const params = new URLSearchParams(window.location.search);
     const sessionId = params.get("github_import");
+    const statusMessage = githubConnectionStatusMessage({
+      status: params.get("github"),
+      hasImportSession: Boolean(sessionId),
+    });
+    if (statusMessage) {
+      setOnboardingDismissed(true);
+      setErrorMessage(statusMessage);
+    }
+
+    if (!user) {
+      return;
+    }
+
     if (!sessionId) {
       return;
     }
     if (window.sessionStorage.getItem(`skillfully.github_import.dismissed.${sessionId}`)) {
       const url = new URL(window.location.href);
       url.searchParams.delete("github_import");
+      url.searchParams.delete("github");
       window.history.replaceState(null, "", `${url.pathname}${url.search}`);
       return;
     }
@@ -3240,6 +3259,7 @@ export default function Dashboard({
     setGitHubImportError("");
     setGitHubImportCandidates([]);
     setGitHubImportWarnings([]);
+    setGitHubConnectedRepositories([]);
     setSelectedGitHubImportIds(new Set());
 
     dashboardJson<GitHubImportCandidatesResponse>(
@@ -3253,6 +3273,7 @@ export default function Dashboard({
         }
         setGitHubImportCandidates(payload.candidates ?? []);
         setGitHubImportWarnings(payload.warnings ?? []);
+        setGitHubConnectedRepositories(payload.repositories ?? []);
         setGitHubImportState((payload.candidates ?? []).length > 0 ? "ready" : "empty");
       })
       .catch((error) => {
@@ -3440,7 +3461,7 @@ export default function Dashboard({
     setScreen("list");
   }
 
-  async function openGitHubInstall(surface: string) {
+  async function openGitHubInstall(surface: string, intent: "import" | "configure" = "import") {
     if (!user) {
       setErrorMessage("Sign in before connecting GitHub.");
       return;
@@ -3453,7 +3474,16 @@ export default function Dashboard({
     try {
       const payload = await dashboardJson<GitHubInstallStartResponse>(user, "/api/github/install", {
         method: "POST",
+        body: JSON.stringify({ intent }),
       });
+      // Existing installations stay inside Skillfully: the API returns a new
+      // import session id instead of a GitHub URL.
+      if (payload.session_id) {
+        setOnboardingDismissed(true);
+        setIsCreateSkillModalOpen(false);
+        setGitHubImportSessionId(payload.session_id);
+        return;
+      }
       if (!payload.install_url) {
         throw new Error("GitHub install URL was not returned.");
       }
@@ -3472,6 +3502,7 @@ export default function Dashboard({
     }
     const url = new URL(window.location.href);
     url.searchParams.delete("github_import");
+    url.searchParams.delete("github");
     window.history.replaceState(null, "", `${url.pathname}${url.search}`);
   }
 
@@ -3482,6 +3513,7 @@ export default function Dashboard({
     setGitHubImportSessionId(null);
     setGitHubImportCandidates([]);
     setGitHubImportWarnings([]);
+    setGitHubConnectedRepositories([]);
     setSelectedGitHubImportIds(new Set());
     setGitHubImportError("");
     setIsGitHubImporting(false);
@@ -3526,6 +3558,7 @@ export default function Dashboard({
       }
       setGitHubImportSessionId(null);
       setSelectedGitHubImportIds(new Set());
+      setGitHubConnectedRepositories([]);
       setOnboardingDismissed(true);
       clearGitHubImportUrl();
       router.push(`/dashboard/${firstImported.skill_id}/overview`);
@@ -3771,6 +3804,7 @@ export default function Dashboard({
         <GitHubImportModal
           state={githubImportState}
           candidates={githubImportCandidates}
+          connectedRepositories={githubConnectedRepositories}
           selectedCandidateIds={selectedGitHubImportIds}
           warnings={githubImportWarnings}
           isImporting={isGitHubImporting}
@@ -3779,7 +3813,7 @@ export default function Dashboard({
           onImport={() => void importSelectedGitHubSkills()}
           onClose={closeGitHubImportModal}
           onChangeRepositoryAccess={() => {
-            void openGitHubInstall("github_import_modal");
+            void openGitHubInstall("github_import_modal", "configure");
           }}
         />
       ) : null}

@@ -6,6 +6,7 @@ import {
   createGitHubImportSession,
   discoverGitHubSkillCandidates,
   relativeSkillFilePath,
+  selectExistingGitHubInstallation,
   validateSkillMarkdown,
 } from "./github-import";
 
@@ -240,6 +241,38 @@ test("creates owner-scoped GitHub import sessions", async () => {
     importedCount: 0,
     createdAt: 1700000000000,
     updatedAt: 1700000000000,
+  });
+});
+
+test("selects the newest existing GitHub installation for an owner", () => {
+  const installation = selectExistingGitHubInstallation([
+    {
+      ownerId: "user-1",
+      installationId: "old-installation",
+      accountLogin: "octocat",
+      accountType: "User",
+      updatedAt: 1,
+    },
+    {
+      ownerId: "user-2",
+      installationId: "other-user",
+      accountLogin: "hubot",
+      accountType: "User",
+      updatedAt: 3,
+    },
+    {
+      ownerId: "user-1",
+      installationId: "new-installation",
+      accountLogin: "octocat",
+      accountType: "User",
+      updatedAt: 2,
+    },
+  ], "user-1");
+
+  assert.deepEqual(installation, {
+    installationId: "new-installation",
+    accountLogin: "octocat",
+    accountType: "User",
   });
 });
 

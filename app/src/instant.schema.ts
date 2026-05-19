@@ -180,6 +180,7 @@ const _schema = i.schema({
       repositoriesChecked: i.number().optional(),
       candidatesJson: i.json().optional(),
       warningsJson: i.json().optional(),
+      repositoriesJson: i.json().optional(),
       consentStatus: i.string().indexed().optional(),
       error: i.string().optional(),
       dismissedAt: i.number().indexed().optional(),

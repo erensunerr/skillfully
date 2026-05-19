@@ -45,6 +45,7 @@ type ImportSessionRow = {
   accountType?: string;
   candidatesJson?: unknown;
   warningsJson?: unknown;
+  repositoriesJson?: unknown;
   repositoriesChecked?: number;
 };
 
@@ -148,7 +149,7 @@ export async function listInstallationRepositories(token: string) {
     }
     if (page === MAX_GITHUB_INSTALLATION_REPOSITORY_PAGES) {
       warnings.push(
-        `GitHub repository listing stopped after ${MAX_GITHUB_INSTALLATION_REPOSITORY_PAGES} pages. Change repository access or contact support if expected repositories are missing.`,
+        `GitHub repository listing stopped after ${MAX_GITHUB_INSTALLATION_REPOSITORY_PAGES} pages. Add repositories or contact support if expected repositories are missing.`,
       );
     }
   }
@@ -231,6 +232,9 @@ function isCachedCandidate(value: unknown): value is GitHubSkillCandidate {
 }
 
 export function cachedDiscoveryForSession(session: ImportSessionRow) {
+  // Discovery can touch every repository in the installation. Cache the result
+  // on the server-created session so refreshes and imports do not repeatedly
+  // walk the same GitHub trees unless the caller explicitly asks to refresh.
   if (session.status !== "discovered" && session.status !== "imported") {
     return null;
   }
@@ -244,9 +248,13 @@ export function cachedDiscoveryForSession(session: ImportSessionRow) {
   const warnings = Array.isArray(session.warningsJson)
     ? session.warningsJson.filter((warning): warning is string => typeof warning === "string")
     : [];
+  const repositories = Array.isArray(session.repositoriesJson)
+    ? session.repositoriesJson.filter((repository): repository is string => typeof repository === "string")
+    : [];
   return {
     candidates,
     warnings,
+    repositories,
     repositoriesChecked: Number(session.repositoriesChecked ?? 0),
   };
 }
@@ -270,6 +278,7 @@ async function discoverCandidatesForSession({
   }
 
   const { repositories, warnings: repositoryWarnings } = await listInstallationRepositories(token);
+  const repositoryNames = repositories.map((repository) => repository.full_name).filter(Boolean);
   const existingImports = await getExistingGitHubImports(ownerId);
   const candidates: GitHubSkillCandidate[] = [];
   const warnings: string[] = [...repositoryWarnings];
@@ -332,11 +341,14 @@ async function discoverCandidatesForSession({
     status: "discovered",
     discoveredCount: candidates.filter((candidate) => candidate.status === "valid").length,
     repositoriesChecked: repositories.length,
+    // The UI shows repository scope from Skillfully after discovery; users only
+    // leave for GitHub when they explicitly choose to add repositories.
+    repositoriesJson: repositoryNames,
     candidatesJson: candidates,
     warningsJson: warnings,
   });
 
-  return { candidates, warnings, repositoriesChecked: repositories.length };
+  return { candidates, warnings, repositories: repositoryNames, repositoriesChecked: repositories.length };
 }
 
 function importableFiles(candidate: GitHubSkillCandidate) {
@@ -386,7 +398,7 @@ export async function GET(request: NextRequest) {
       privateKey: process.env.GITHUB_APP_PRIVATE_KEY,
       installationId: session.installationId,
     });
-    const { candidates, warnings, repositoriesChecked } = await discoverCandidatesForSession({
+    const { candidates, warnings, repositories, repositoriesChecked } = await discoverCandidatesForSession({
       ownerId: user.id,
       token,
       session,
@@ -400,6 +412,7 @@ export async function GET(request: NextRequest) {
         account_login: session.accountLogin ?? null,
       },
       repositories_checked: repositoriesChecked,
+      repositories,
       candidates,
       warnings,
     }, 200, "GET, POST, OPTIONS");

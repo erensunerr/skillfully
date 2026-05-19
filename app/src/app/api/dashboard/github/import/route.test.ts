@@ -30,7 +30,7 @@ test("listInstallationRepositories stops at a bounded page cap and warns", async
     assert.equal(calls, 50);
     assert.equal(result.repositories.length, 5000);
     assert.deepEqual(result.warnings, [
-      "GitHub repository listing stopped after 50 pages. Change repository access or contact support if expected repositories are missing.",
+      "GitHub repository listing stopped after 50 pages. Add repositories or contact support if expected repositories are missing.",
     ]);
   } finally {
     globalThis.fetch = originalFetch;
@@ -60,10 +60,12 @@ test("cachedDiscoveryForSession serves stored candidates without rediscovery", (
       },
     ],
     warningsJson: ["octocat/Hello-World: repository tree is too large to check completely"],
+    repositoriesJson: ["octocat/Hello-World"],
     repositoriesChecked: 1,
   });
 
   assert.equal(cached?.repositoriesChecked, 1);
   assert.equal(cached?.candidates[0].skillName, "code-review");
+  assert.deepEqual(cached?.repositories, ["octocat/Hello-World"]);
   assert.deepEqual(cached?.warnings, ["octocat/Hello-World: repository tree is too large to check completely"]);
 });

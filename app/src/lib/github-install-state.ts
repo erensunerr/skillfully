@@ -51,14 +51,26 @@ export function verifyGitHubInstallState({
   ownerId: string;
   now?: number;
 }) {
+  return verifyGitHubInstallStateOwner({ state, now }) === ownerId;
+}
+
+export function verifyGitHubInstallStateOwner({
+  state,
+  now = Date.now(),
+}: {
+  state: string | null;
+  now?: number;
+}) {
+  // The install state is intentionally self-contained because the callback
+  // cannot rely on dashboard cookies or bearer headers after GitHub redirects.
   const secret = stateSecret();
   if (!secret || !state) {
-    return false;
+    return null;
   }
 
   const [payload, signature] = state.split(".");
   if (!payload || !signature) {
-    return false;
+    return null;
   }
 
   const expected = base64Url(sign(payload, secret));
@@ -68,13 +80,16 @@ export function verifyGitHubInstallState({
     expectedBuffer.length !== signatureBuffer.length ||
     !crypto.timingSafeEqual(expectedBuffer, signatureBuffer)
   ) {
-    return false;
+    return null;
   }
 
   try {
     const decoded = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as GitHubInstallStatePayload;
-    return decoded.ownerId === ownerId && decoded.exp >= now;
+    if (typeof decoded.ownerId !== "string" || !decoded.ownerId || decoded.exp < now) {
+      return null;
+    }
+    return decoded.ownerId;
   } catch {
-    return false;
+    return null;
   }
 }

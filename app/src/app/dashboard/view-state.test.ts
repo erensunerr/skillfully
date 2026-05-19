@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  githubConnectionStatusMessage,
   resolveDashboardViewState,
   shouldShowOnboardingModalByDefault,
 } from "./view-state";
@@ -36,5 +37,20 @@ test("shows onboarding modal by default only when no skills exist", () => {
   assert.equal(
     shouldShowOnboardingModalByDefault({ skills: [{ id: "skill-1" }] }),
     false,
+  );
+});
+
+test("shows a dashboard message when GitHub redirects without an import session", () => {
+  assert.equal(
+    githubConnectionStatusMessage({ status: "unauthorized", hasImportSession: false }),
+    "GitHub connected, but Skillfully could not match it to your signed-in session. Sign in and connect GitHub again.",
+  );
+  assert.equal(
+    githubConnectionStatusMessage({ status: "installed", hasImportSession: false }),
+    "GitHub connected, but Skillfully could not start an import session. Connect GitHub again.",
+  );
+  assert.equal(
+    githubConnectionStatusMessage({ status: "installed", hasImportSession: true }),
+    "",
   );
 });

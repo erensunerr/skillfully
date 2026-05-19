@@ -27,6 +27,7 @@ import { type AppSchema } from "@/instant.schema";
 import { type InstaQLEntity, id } from "@instantdb/react";
 import type { User as InstantUser } from "@instantdb/core";
 import {
+  githubConnectionStatusMessage,
   resolveDashboardViewState,
   shouldShowOnboardingModalByDefault,
 } from "./view-state";
@@ -3210,18 +3211,32 @@ export default function Dashboard({
   }, [initialSkillId, initialTab, skills, user]);
 
   useEffect(() => {
-    if (!user || typeof window === "undefined") {
+    if (typeof window === "undefined") {
       return;
     }
 
     const params = new URLSearchParams(window.location.search);
     const sessionId = params.get("github_import");
+    const statusMessage = githubConnectionStatusMessage({
+      status: params.get("github"),
+      hasImportSession: Boolean(sessionId),
+    });
+    if (statusMessage) {
+      setOnboardingDismissed(true);
+      setErrorMessage(statusMessage);
+    }
+
+    if (!user) {
+      return;
+    }
+
     if (!sessionId) {
       return;
     }
     if (window.sessionStorage.getItem(`skillfully.github_import.dismissed.${sessionId}`)) {
       const url = new URL(window.location.href);
       url.searchParams.delete("github_import");
+      url.searchParams.delete("github");
       window.history.replaceState(null, "", `${url.pathname}${url.search}`);
       return;
     }
@@ -3472,6 +3487,7 @@ export default function Dashboard({
     }
     const url = new URL(window.location.href);
     url.searchParams.delete("github_import");
+    url.searchParams.delete("github");
     window.history.replaceState(null, "", `${url.pathname}${url.search}`);
   }
 

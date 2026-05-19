@@ -15,7 +15,8 @@ Make onboarding GitHub import real: after a signed-in Skillfully user installs t
   localhost/local-preview flows authenticated even though direct browser
   navigation cannot attach dashboard auth headers.
 - GitHub installation returns to Skillfully with `installation_id` and signed `state`.
-- The server verifies the signed Skillfully state, verifies the GitHub App installation with app credentials, stores the durable installation, creates a server-side import session, and redirects to `/dashboard?github_import=<sessionId>`.
+- The server verifies the signed Skillfully state and uses its owner id as the Skillfully account binding. The callback must not require dashboard auth headers because GitHub returns through a browser redirect, not the authenticated `/api/github/install` fetch.
+- The server verifies the GitHub App installation with app credentials, stores the durable installation, creates a server-side import session, and redirects to `/dashboard?github=installed&github_import=<sessionId>`.
 - The dashboard opens a modal over the existing empty dashboard, matching the original onboarding modal footprint.
 - The modal immediately shows `Finding skills in your GitHub repositories...` and checks only the installation that just returned.
 - The modal lists discovered candidates as `<repo full name> - <skill name>`, unchecked by default.
@@ -67,6 +68,7 @@ Make onboarding GitHub import real: after a signed-in Skillfully user installs t
 
 - GitHub App configuration missing: show a configured error in the modal or dashboard.
 - GitHub installation callback missing or invalid: redirect to dashboard with a GitHub error state.
+- GitHub redirect statuses without a usable `github_import` session: show a dashboard message instead of silently returning to the empty dashboard.
 - No repositories selected: show no-skills state with change-access action.
 - No valid skills found: show no-skills state with invalid candidates, if any, and change-access action.
 - Partial repository check failures: show discovered candidates plus a compact warning.

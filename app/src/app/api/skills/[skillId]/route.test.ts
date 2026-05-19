@@ -123,6 +123,18 @@ class InMemoryInstallStore {
     }
     return result;
   }
+
+  create(entity: string, id: string, values: Row) {
+    return { entity, id, values };
+  }
+
+  update(entity: string, id: string, values: Row) {
+    return { entity, id, values };
+  }
+
+  async transact() {
+    return;
+  }
 }
 
 function installContext(skillId: string, path: string[] = []) {

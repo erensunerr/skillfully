@@ -27,6 +27,8 @@ import { type AppSchema } from "@/instant.schema";
 import { type InstaQLEntity, id } from "@instantdb/react";
 import type { User as InstantUser } from "@instantdb/core";
 import {
+  canOpenSkillTab,
+  resolveDashboardTabForSkill,
   resolveDashboardViewState,
   shouldShowOnboardingModalByDefault,
 } from "./view-state";
@@ -37,7 +39,11 @@ import {
   type GitHubImportModalState,
 } from "./github-import-modal";
 
-type Skill = InstaQLEntity<AppSchema, "skills">;
+type SkillAccessLevel = "owner" | "edit" | "use";
+type Skill = InstaQLEntity<AppSchema, "skills"> & {
+  accessLevel?: SkillAccessLevel;
+  ownerEmail?: string | null;
+};
 type Feedback = InstaQLEntity<AppSchema, "feedback">;
 type SkillUsageEvent = InstaQLEntity<AppSchema, "skillUsageEvents">;
 type AppUser = InstantUser;
@@ -111,6 +117,18 @@ type GitHubImportSubmitResponse = {
 };
 type GitHubInstallStartResponse = {
   install_url: string;
+};
+type SkillAccessGrantView = {
+  id: string;
+  email: string;
+  user_id: string | null;
+  permission: "use" | "edit";
+  status: string;
+  is_owner: boolean;
+  can_revoke: boolean;
+  created_at: number;
+  updated_at: number;
+  revoked_at: number | null;
 };
 
 const DASHBOARD_CARD = "border border-[var(--ink)] bg-[var(--paper)] text-[var(--ink)]";
@@ -300,6 +318,29 @@ function formatTimestamp(value: number | Date | null | undefined) {
 
 function isSkillRouteTab(value: DashboardTab): value is SkillRouteTab {
   return validSkillRouteTabs.includes(value as SkillRouteTab);
+}
+
+function skillAccessLevel(skill: Pick<Skill, "accessLevel"> | null | undefined): SkillAccessLevel {
+  return skill?.accessLevel ?? "owner";
+}
+
+function isSharedSkill(skill: Pick<Skill, "accessLevel"> | null | undefined) {
+  return skillAccessLevel(skill) !== "owner";
+}
+
+function skillAccessLabel(skill: Pick<Skill, "accessLevel"> | null | undefined) {
+  const level = skillAccessLevel(skill);
+  if (level === "use") {
+    return "Use only";
+  }
+  if (level === "edit") {
+    return "Edit access";
+  }
+  return "Owner";
+}
+
+function canEditSkill(skill: Pick<Skill, "accessLevel"> | null | undefined) {
+  return skillAccessLevel(skill) !== "use";
 }
 
 function skillRoute(skill: Skill, tab: SkillRouteTab) {
@@ -844,6 +885,8 @@ export function SkillSelector({
       id: skill.id,
       name: skill.name,
       description: skill.description || "Skillfully skill",
+      accessLabel: skillAccessLabel(skill),
+      isShared: isSharedSkill(skill),
       skill,
     })),
   ];
@@ -859,7 +902,15 @@ export function SkillSelector({
         className="flex w-full min-w-0 items-center justify-between gap-3 border border-[var(--ink)] bg-[var(--paper)] px-4 py-3 text-left font-editorial-mono text-sm transition hover:bg-[var(--white)]"
         onClick={onToggle}
       >
-        <span className="min-w-0 truncate">{selectedOption?.name ?? "No skills yet"}</span>
+        <span className="min-w-0">
+          <span className="block truncate">{selectedOption?.name ?? "No skills yet"}</span>
+          {selectedOption?.isShared ? (
+            <span className="mt-1 flex flex-wrap gap-2 font-editorial-sans text-[0.68rem]">
+              <span className="border border-[var(--ink)] bg-[var(--white)] px-2 py-0.5">Shared</span>
+              <span className="border border-[var(--ink)]/45 px-2 py-0.5">{selectedOption.accessLabel}</span>
+            </span>
+          ) : null}
+        </span>
         <span aria-hidden className="text-xl leading-none">{isOpen ? "⌃" : "⌄"}</span>
       </button>
 
@@ -897,6 +948,12 @@ export function SkillSelector({
                   <span className="min-w-0">
                     <span className="block truncate font-editorial-mono">{option.name}</span>
                     <span className="block truncate text-xs text-[var(--ink)]/55">{option.description}</span>
+                    {option.isShared ? (
+                      <span className="mt-1 flex flex-wrap gap-2 font-editorial-sans text-[0.68rem]">
+                        <span className="border border-[var(--ink)] bg-[var(--paper)] px-2 py-0.5">Shared</span>
+                        <span className="border border-[var(--ink)]/45 px-2 py-0.5">{option.accessLabel}</span>
+                      </span>
+                    ) : null}
                   </span>
                   {isSelected ? <span aria-hidden className="text-lg leading-none">✓</span> : null}
                 </button>
@@ -996,6 +1053,7 @@ export function CreateSkillModal({
 function DashboardSidebar({
   user,
   skills,
+  selectedSkill,
   selectedId,
   activeTab,
   isSkillSelectorOpen,
@@ -1007,6 +1065,7 @@ function DashboardSidebar({
 }: {
   user: AppUser;
   skills: Skill[];
+  selectedSkill?: Skill | null;
   selectedId: string | null;
   activeTab: DashboardTab;
   isSkillSelectorOpen: boolean;
@@ -1022,6 +1081,9 @@ function DashboardSidebar({
     ["analytics", "Analytics"],
     ["settings", "Settings"],
   ] satisfies Array<[DashboardTab, string]>;
+  const selectedSkillForNav =
+    selectedSkill ?? skills.find((skill) => skill.id === selectedId) ?? null;
+  const visibleNavItems = navItems.filter(([tab]) => canOpenSkillTab(selectedSkillForNav, tab));
 
   return (
     <aside className="relative z-40 flex min-h-0 w-full max-w-full min-w-0 flex-col overflow-visible border-b border-[var(--ink)] bg-[var(--paper)] text-[var(--ink)] lg:sticky lg:top-0 lg:h-screen lg:w-60 lg:border-b-0 lg:border-r">
@@ -1042,7 +1104,7 @@ function DashboardSidebar({
       </div>
 
       <nav className="grid grid-cols-2 border-y border-[var(--ink)] font-editorial-sans text-sm sm:grid-cols-4 lg:block">
-        {navItems.map(([tab, label]) => {
+        {visibleNavItems.map(([tab, label]) => {
           const isActive = activeTab === tab;
           return (
             <button
@@ -1658,6 +1720,239 @@ function editorGridClass(isFilesOpen: boolean, isFrontmatterOpen: boolean) {
   return "xl:grid-cols-[3.5rem_minmax(0,1fr)_3.5rem]";
 }
 
+function SkillShareDialog({
+  skill,
+  user,
+  onClose,
+}: {
+  skill: Skill;
+  user?: AppUser | null;
+  onClose: () => void;
+}) {
+  const [email, setEmail] = useState("");
+  const [permission, setPermission] = useState<"use" | "edit">("use");
+  const [grants, setGrants] = useState<SkillAccessGrantView[]>([]);
+  const [statusMessage, setStatusMessage] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  async function loadGrants() {
+    if (!user || isUsingLocalPreviewDb) {
+      setGrants([]);
+      setStatusMessage(isUsingLocalPreviewDb ? "Sharing requires a connected Skillfully account." : "");
+      return;
+    }
+
+    setIsLoading(true);
+    setStatusMessage("");
+    try {
+      const payload = await dashboardJson<{ grants: SkillAccessGrantView[] }>(
+        user,
+        `/api/dashboard/skills/${skill.skillId}/access`,
+        { method: "GET" },
+      );
+      setGrants(payload.grants);
+    } catch (error) {
+      captureClientException(error);
+      setStatusMessage(extractErrorMessage(error));
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    void loadGrants();
+  }, [skill.skillId, user?.id, user?.refresh_token]);
+
+  async function submitInvite(event: FormEvent) {
+    event.preventDefault();
+    if (!user || isUsingLocalPreviewDb) {
+      setStatusMessage("Sharing requires a connected Skillfully account.");
+      return;
+    }
+
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!isValidEmail(normalizedEmail)) {
+      setStatusMessage("Enter a valid email address.");
+      return;
+    }
+
+    setIsSubmitting(true);
+    setStatusMessage("");
+    try {
+      const payload = await dashboardJson<{
+        grant: SkillAccessGrantView;
+        notification: { status: "sent" | "failed"; error?: string | null };
+      }>(user, `/api/dashboard/skills/${skill.skillId}/access`, {
+        method: "POST",
+        body: JSON.stringify({
+          email: normalizedEmail,
+          permission,
+        }),
+      });
+      setEmail("");
+      setGrants((current) => [
+        payload.grant,
+        ...current.filter((grant) => grant.id !== payload.grant.id),
+      ]);
+      setStatusMessage(
+        payload.notification.status === "sent"
+          ? "Access granted. Email sent."
+          : `Access granted. Email failed${payload.notification.error ? `: ${payload.notification.error}` : "."}`,
+      );
+    } catch (error) {
+      captureClientException(error);
+      setStatusMessage(extractErrorMessage(error));
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  async function updateGrantPermission(grant: SkillAccessGrantView, nextPermission: "use" | "edit") {
+    if (!user || grant.is_owner) {
+      return;
+    }
+    setStatusMessage("");
+    try {
+      const payload = await dashboardJson<{ grant: SkillAccessGrantView }>(
+        user,
+        `/api/dashboard/skills/${skill.skillId}/access/${grant.id}`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({ permission: nextPermission }),
+        },
+      );
+      setGrants((current) => current.map((entry) => entry.id === grant.id ? payload.grant : entry));
+    } catch (error) {
+      captureClientException(error);
+      setStatusMessage(extractErrorMessage(error));
+    }
+  }
+
+  async function revokeGrant(grant: SkillAccessGrantView) {
+    if (!user || !grant.can_revoke) {
+      return;
+    }
+    setStatusMessage("");
+    try {
+      await dashboardJson<{ grant: SkillAccessGrantView }>(
+        user,
+        `/api/dashboard/skills/${skill.skillId}/access/${grant.id}`,
+        { method: "DELETE" },
+      );
+      setGrants((current) => current.filter((entry) => entry.id !== grant.id));
+    } catch (error) {
+      captureClientException(error);
+      setStatusMessage(extractErrorMessage(error));
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--ink)]/35 px-5 py-8 backdrop-blur-[1px]">
+      <section
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="share-skill-title"
+        className="w-full max-w-2xl border-2 border-[var(--ink)] bg-[var(--white)] p-6 shadow-[8px_8px_0_var(--ink)] sm:p-8"
+      >
+        <div className="flex items-start justify-between gap-6">
+          <div>
+            <p className="font-editorial-mono text-xs font-bold uppercase">Share</p>
+            <h2 id="share-skill-title" className="mt-3 font-editorial-sans text-3xl font-bold">
+              {skill.name}
+            </h2>
+          </div>
+          <button
+            type="button"
+            aria-label="Close share dialog"
+            className="border border-[var(--ink)] px-3 py-1 font-editorial-mono text-lg"
+            onClick={onClose}
+          >
+            ×
+          </button>
+        </div>
+
+        <form className="mt-7 grid gap-3 sm:grid-cols-[minmax(0,1fr)_8rem_auto]" onSubmit={(event) => void submitInvite(event)}>
+          <label className="block font-editorial-mono text-xs font-bold uppercase">
+            Email
+            <input
+              type="email"
+              className={DASHBOARD_INPUT}
+              value={email}
+              onChange={(event) => setEmail(event.currentTarget.value)}
+              placeholder="teammate@example.com"
+              required
+            />
+          </label>
+          <label className="block font-editorial-mono text-xs font-bold uppercase">
+            Permission
+            <select
+              className={DASHBOARD_INPUT}
+              value={permission}
+              onChange={(event) => setPermission(event.currentTarget.value === "edit" ? "edit" : "use")}
+            >
+              <option value="use">Use</option>
+              <option value="edit">Edit</option>
+            </select>
+          </label>
+          <div className="flex items-end">
+            <button type="submit" className={`${DASHBOARD_BUTTON} w-full`} disabled={isSubmitting}>
+              {isSubmitting ? "Sharing..." : "Share"}
+            </button>
+          </div>
+        </form>
+
+        <div className="mt-7 border border-[var(--ink)]">
+          <div className="border-b border-[var(--ink)] px-4 py-3 font-editorial-mono text-xs font-bold uppercase">
+            People with access
+          </div>
+          {isLoading ? (
+            <p className="px-4 py-5 font-editorial-mono text-xs uppercase">Loading access...</p>
+          ) : grants.length === 0 ? (
+            <p className="px-4 py-5 text-sm text-[var(--ink)]/65">No collaborators yet.</p>
+          ) : (
+            <div className="divide-y divide-[var(--ink)]/25">
+              {grants.map((grant) => (
+                <div key={grant.id} className="grid gap-3 px-4 py-4 text-sm sm:grid-cols-[minmax(0,1fr)_8rem_auto] sm:items-center">
+                  <div className="min-w-0">
+                    <p className="truncate font-editorial-sans">{grant.email || grant.user_id || "Owner"}</p>
+                    <p className="mt-1 font-editorial-mono text-[0.68rem] uppercase text-[var(--ink)]/60">
+                      {grant.is_owner ? "Owner" : "Collaborator"}
+                    </p>
+                  </div>
+                  <select
+                    className="border border-[var(--ink)] bg-[var(--paper)] px-3 py-2 text-sm disabled:opacity-65"
+                    value={grant.permission}
+                    disabled={grant.is_owner}
+                    onChange={(event) => void updateGrantPermission(grant, event.currentTarget.value === "edit" ? "edit" : "use")}
+                  >
+                    <option value="use">Use</option>
+                    <option value="edit">Edit</option>
+                  </select>
+                  <button
+                    type="button"
+                    className="border border-[var(--ink)] px-3 py-2 font-editorial-mono text-xs font-bold uppercase disabled:cursor-not-allowed disabled:opacity-50"
+                    disabled={!grant.can_revoke}
+                    onClick={() => void revokeGrant(grant)}
+                  >
+                    Revoke
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {statusMessage ? (
+          <p className="mt-5 border border-[var(--ink)] bg-[var(--paper)] p-3 font-editorial-mono text-xs font-bold uppercase">
+            {statusMessage}
+          </p>
+        ) : null}
+      </section>
+    </div>
+  );
+}
+
 function SkillEditorWorkspace({
   skill,
   user,
@@ -1676,6 +1971,7 @@ function SkillEditorWorkspace({
   const [isFilesOpen, setIsFilesOpen] = useState(true);
   const [isFrontmatterOpen, setIsFrontmatterOpen] = useState(true);
   const [publishStep, setPublishStep] = useState<PublishModalStep | null>(null);
+  const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
   const [installPromptCopied, setInstallPromptCopied] = useState(false);
   const [publishError, setPublishError] = useState("");
   const [, setFileStatus] = useState("Autosaves to Skillfully.");
@@ -2193,6 +2489,15 @@ function SkillEditorWorkspace({
             {publishError}
           </p>
         ) : null}
+        {canEditSkill(skill) ? (
+          <button
+            type="button"
+            className={DASHBOARD_BUTTON_LIGHT}
+            onClick={() => setIsShareDialogOpen(true)}
+          >
+            Share
+          </button>
+        ) : null}
         <Link href={skillRoute(skill, "settings")} className={`${DASHBOARD_BUTTON_LIGHT} text-center`}>
           Change publishing options
         </Link>
@@ -2224,6 +2529,13 @@ function SkillEditorWorkspace({
           onCopyInstallPrompt={() => void copyPublicInstallPrompt()}
           onContinueToInstallCheck={() => setPublishStep("waiting")}
           onFinish={() => setPublishStep(null)}
+        />
+      ) : null}
+      {isShareDialogOpen ? (
+        <SkillShareDialog
+          skill={skill}
+          user={user}
+          onClose={() => setIsShareDialogOpen(false)}
         />
       ) : null}
     </div>
@@ -2912,6 +3224,9 @@ export function SkillDetail({
   onOpenEditor?: () => void;
 }) {
   const [copiedInstallPrompt, setCopiedInstallPrompt] = useState<"skillfully" | "skill" | null>(null);
+  const visibleActiveTab = resolveDashboardTabForSkill(skill, activeTab);
+  const hasEditAccess = canEditSkill(skill);
+  const sharedAccessLabel = skillAccessLabel(skill);
   const counts = ratingSummary(entries);
   const usageCounts = usageSummary(usageEvents);
   const totalUsageEvents = usageEvents.length;
@@ -2942,15 +3257,15 @@ export function SkillDetail({
     window.setTimeout(() => setCopiedInstallPrompt(null), 1200);
   }
 
-  if (activeTab === "editor") {
+  if (visibleActiveTab === "editor") {
     return <SkillEditorWorkspace skill={skill} user={user} />;
   }
 
-  if (activeTab === "analytics") {
+  if (visibleActiveTab === "analytics") {
     return <SkillAnalyticsWorkspace entries={entries} usageEvents={usageEvents} />;
   }
 
-  if (activeTab === "settings") {
+  if (visibleActiveTab === "settings") {
     return <SkillSettingsWorkspace skill={skill} />;
   }
 
@@ -2976,6 +3291,16 @@ export function SkillDetail({
             <span className="border border-emerald-800 bg-emerald-50 px-4 py-3 font-editorial-sans text-sm text-emerald-800">
               {statusLabel}
             </span>
+            {isSharedSkill(skill) ? (
+              <>
+                <span className="border border-[var(--ink)] bg-[var(--white)] px-4 py-3 font-editorial-mono text-sm font-bold">
+                  Shared
+                </span>
+                <span className="border border-[var(--ink)]/45 bg-[var(--paper)] px-4 py-3 font-editorial-sans text-sm">
+                  {sharedAccessLabel}
+                </span>
+              </>
+            ) : null}
           </div>
           <p className="mt-6 max-w-2xl text-lg leading-8">
             {skill.description || "No description yet."}
@@ -2983,21 +3308,23 @@ export function SkillDetail({
         </div>
 
         <div className="grid gap-3 sm:w-72">
-          <button
-            type="button"
-            className="flex items-center justify-between border border-[var(--ink)] bg-[var(--ink)] px-5 py-4 font-editorial-sans text-base font-semibold text-[var(--paper)] transition hover:bg-[var(--paper)] hover:text-[var(--ink)]"
-            onClick={() => {
-              captureClientEvent("dashboard_editor_clicked", { skill_name: skill.name });
-              if (onTabChange) {
-                onTabChange("editor");
-              } else {
-                onOpenEditor?.();
-              }
-            }}
-          >
-            Go to Editor
-            <span aria-hidden className="text-3xl leading-none">→</span>
-          </button>
+          {hasEditAccess ? (
+            <button
+              type="button"
+              className="flex items-center justify-between border border-[var(--ink)] bg-[var(--ink)] px-5 py-4 font-editorial-sans text-base font-semibold text-[var(--paper)] transition hover:bg-[var(--paper)] hover:text-[var(--ink)]"
+              onClick={() => {
+                captureClientEvent("dashboard_editor_clicked", { skill_name: skill.name });
+                if (onTabChange) {
+                  onTabChange("editor");
+                } else {
+                  onOpenEditor?.();
+                }
+              }}
+            >
+              Go to Editor
+              <span aria-hidden className="text-3xl leading-none">→</span>
+            </button>
+          ) : null}
           <button
             type="button"
             className="flex items-center justify-between border border-[var(--ink)] bg-[var(--paper)] px-5 py-4 font-editorial-sans text-base transition hover:bg-[var(--white)] disabled:cursor-not-allowed disabled:opacity-60"
@@ -3081,6 +3408,7 @@ export default function Dashboard({
   const [selectedGitHubImportIds, setSelectedGitHubImportIds] = useState<Set<string>>(new Set());
   const [isGitHubImporting, setIsGitHubImporting] = useState(false);
   const [githubImportError, setGitHubImportError] = useState("");
+  const [visibleSkillsFromApi, setVisibleSkillsFromApi] = useState<Skill[] | null>(null);
 
   const query = useMemo(() => {
     if (!user) {
@@ -3123,7 +3451,8 @@ export default function Dashboard({
 
   const { isLoading: isDataLoading, error: dataError, data } = db.useQuery(query);
 
-  const skills = (data?.skills ?? []) as Skill[];
+  const ownedSkills = (data?.skills ?? []) as Skill[];
+  const skills = visibleSkillsFromApi ?? ownedSkills;
   const feedback = (data?.feedback ?? []) as Feedback[];
   const usageEvents = (data?.skillUsageEvents ?? []) as SkillUsageEvent[];
 
@@ -3178,7 +3507,31 @@ export default function Dashboard({
 
   useEffect(() => {
     setOnboardingDismissed(false);
+    setVisibleSkillsFromApi(null);
   }, [user?.id]);
+
+  useEffect(() => {
+    if (!user || isUsingLocalPreviewDb) {
+      return;
+    }
+
+    let active = true;
+    dashboardJson<{ skills: Skill[] }>(user, "/api/dashboard/skills", { method: "GET" })
+      .then((payload) => {
+        if (active) {
+          setVisibleSkillsFromApi(payload.skills);
+        }
+      })
+      .catch((error) => {
+        if (active) {
+          captureClientException(error);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [user?.id, user?.refresh_token]);
 
   useEffect(() => {
     if (!user) {
@@ -3204,7 +3557,7 @@ export default function Dashboard({
     }
 
     setSelectedSkillId(routedSkill.id);
-    setActiveTab(isSkillRouteTab(initialTab) ? initialTab : "overview");
+    setActiveTab(isSkillRouteTab(initialTab) ? resolveDashboardTabForSkill(routedSkill, initialTab) : "overview");
     setScreen("detail");
     setOnboardingDismissed(true);
   }, [initialSkillId, initialTab, skills, user]);
@@ -3543,9 +3896,9 @@ export default function Dashboard({
     setErrorMessage("");
     setIsSkillSelectorOpen(false);
     setIsAccountMenuOpen(false);
-    setActiveTab(tab);
 
     if (tab === "account") {
+      setActiveTab("account");
       setScreen("list");
       router.push("/dashboard/settings");
       return;
@@ -3553,23 +3906,30 @@ export default function Dashboard({
 
     if (skills.length === 0) {
       if (tab === "editor") {
+        setActiveTab("editor");
         setScreen("create");
         return;
       }
 
+      setActiveTab(tab);
       setScreen("list");
       return;
     }
 
     const routeSkill =
       skills.find((skill) => skill.id === selectedSkillId) ?? selectedSkill ?? skills[0];
+    const nextTab = isSkillRouteTab(tab)
+      ? resolveDashboardTabForSkill(routeSkill, tab)
+      : "overview";
 
     if (!selectedSkillId) {
       setSelectedSkillId(routeSkill.id);
     }
 
-    if (isSkillRouteTab(tab)) {
-      router.push(skillRoute(routeSkill, tab));
+    setActiveTab(nextTab);
+
+    if (isSkillRouteTab(nextTab)) {
+      router.push(skillRoute(routeSkill, nextTab));
     }
     setScreen("detail");
   }
@@ -3616,6 +3976,11 @@ export default function Dashboard({
         });
         createdSkillId = response.skill.skillId;
         createdEntityId = response.skill.id;
+        setVisibleSkillsFromApi((current) =>
+          current
+            ? [{ ...response.skill, accessLevel: "owner" }, ...current]
+            : current,
+        );
       }
 
       setSkillForm({ name: "", description: "" });
@@ -3664,6 +4029,7 @@ export default function Dashboard({
         <DashboardSidebar
           user={user}
           skills={skills}
+          selectedSkill={selectedSkill}
           activeTab={screen === "create" ? "editor" : activeTab}
           selectedId={viewState.kind === "detail" ? viewState.skillId : selectedSkillId}
           isSkillSelectorOpen={isSkillSelectorOpen}
@@ -3675,7 +4041,11 @@ export default function Dashboard({
             setIsAccountMenuOpen(false);
             setScreen("detail");
             setErrorMessage("");
-            router.push(skillRoute(skill, isSkillRouteTab(activeTab) ? activeTab : "overview"));
+            const nextTab: SkillRouteTab = isSkillRouteTab(activeTab)
+              ? resolveDashboardTabForSkill(skill, activeTab) as SkillRouteTab
+              : "overview";
+            setActiveTab(nextTab);
+            router.push(skillRoute(skill, nextTab));
           }}
           onTabChange={openDashboardTab}
           onToggleSkillSelector={() => {

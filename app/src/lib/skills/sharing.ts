@@ -289,7 +289,7 @@ export async function updateSkillSharingGrant({
     },
   });
   const existing = rows.skillAccessGrants?.[0] as SkillAccessGrantRow | undefined;
-  if (!existing || existing.ownerId !== access.skill.ownerId) {
+  if (!access.skill || !existing || existing.ownerId !== access.skill.ownerId) {
     throw new Error("grant not found");
   }
 

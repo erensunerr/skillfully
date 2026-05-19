@@ -15,11 +15,11 @@ Turn the dashboard's UI-only skill authoring and publishing surfaces into real p
 - Next.js route handlers own privileged mutations. The client reads with Instant where useful, but creation, file editing, imports, publishing, and GitHub sync go through API routes.
 - Publishing runs through adapter interfaces. GitHub App publishing is the first automated adapter; LobeHub, ClawHub, and Hermes initially produce submission packets and status records until their API contracts are known.
 
-## GitHub Model
+## Ownership Model
 
-- If a user creates a skill without importing a repository, publishing targets `erensunerr/skillfully-skills` and writes into `skills/<skill-slug>/...`.
-- The Skillfully GitHub App must be installed on `erensunerr/skillfully-skills`; Skillfully stores that installation id as the default internal installation.
+- If a user creates a skill without importing a repository, the skill is Skillfully-managed. Skillfully stores the files and publishing updates the public manifest/file endpoints directly.
 - If a user imports from GitHub, the user installs the Skillfully GitHub App on selected repos. Each detected skill becomes its own Skillfully skill, preserving the original skill name/frontmatter.
+- GitHub-managed imported skills publish through a pull request to the original repository and skill path. The user must merge that PR before installing the published version.
 - Before Skillfully writes update or analytics excerpts back into imported skills, it asks the author for explicit consent. Consent is tracked per imported skill/target.
 
 ## Data Model

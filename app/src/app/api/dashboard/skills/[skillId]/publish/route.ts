@@ -2,9 +2,9 @@ import { NextRequest } from "next/server";
 
 import { getDashboardUser } from "@/lib/dashboard-auth";
 import { captureServerEvent } from "@/lib/posthog-server";
-import { createGitHubAppAdapter } from "@/lib/publishing/adapters/github-app";
-import { createManualDirectoryAdapter } from "@/lib/publishing/adapters/manual-directory";
+import { createPublishAdaptersForContext } from "@/lib/publishing/adapters/for-context";
 import { publishSkillVersion } from "@/lib/publishing/publish";
+import { buildPublishResponse } from "@/lib/publishing/publish-response";
 import { jsonResponse } from "@/lib/route-helpers";
 import { buildPublishContextForSkill, markDraftPublished, recordPublishResult } from "@/lib/skills/repository";
 
@@ -25,12 +25,7 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
     const context = await buildPublishContextForSkill({ ownerId: user.id, skillId });
     const result = await publishSkillVersion({
       context,
-      adapters: [
-        createGitHubAppAdapter(),
-        createManualDirectoryAdapter("lobehub"),
-        createManualDirectoryAdapter("clawhub"),
-        createManualDirectoryAdapter("hermes"),
-      ],
+      adapters: createPublishAdaptersForContext(context),
       recordResult: async (entry) => {
         await recordPublishResult({
           ownerId: user.id,
@@ -76,7 +71,7 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
       });
     }
 
-    return jsonResponse(result, 200, "POST, OPTIONS");
+    return jsonResponse(buildPublishResponse({ context, result }), 200, "POST, OPTIONS");
   } catch (error) {
     return jsonResponse({ error: error instanceof Error ? error.message : "unknown error" }, 400, "POST, OPTIONS");
   }

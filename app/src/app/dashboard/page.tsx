@@ -88,7 +88,7 @@ type UsageEventKind =
   | "feedback_received"
   | string;
 
-type PublishModalStep = "confirm" | "published" | "waiting" | "confirmed";
+type PublishModalStep = "confirm" | "merge" | "published" | "waiting" | "confirmed";
 type SkillEditorFile = {
   id: string;
   path: string;
@@ -116,6 +116,14 @@ type GitHubInstallStartResponse = {
   session_id?: string;
   account_login?: string;
 };
+type PublishApiResult = {
+  results: Array<{ targetKind: string; status: string; url?: string; error?: string }>;
+  next_action?: {
+    type?: string;
+    pull_request_url?: string;
+    install_prompt?: string;
+  };
+};
 
 const DASHBOARD_CARD = "border border-[var(--ink)] bg-[var(--paper)] text-[var(--ink)]";
 const DASHBOARD_PANEL = "border border-[var(--ink)] bg-[var(--white)] text-[var(--ink)]";
@@ -125,12 +133,13 @@ const DASHBOARD_BUTTON_LIGHT =
   "editorial-button bg-[var(--paper)] px-4 py-3 text-[0.72rem] hover:bg-[var(--white)]";
 const DASHBOARD_INPUT =
   "mt-2 w-full border border-[var(--ink)] bg-[var(--white)] px-3 py-3 font-editorial-mono text-sm outline-none focus-visible:ring-2 focus-visible:ring-[var(--ink)]";
+const SKILLS_GUIDE_PATH = "/guide/start-with-agent-skills";
 
 const validSkillRouteTabs: SkillRouteTab[] = ["overview", "editor", "analytics", "settings"];
 
 const publishingDestinationRows = [
   ["skills.sh", "Available after publish", "Public manifest and Skillfully listing", "terminal"],
-  ["GitHub", "Creates a pull request on publish", "Uses the configured GitHub target", "github"],
+  ["GitHub", "Creates a PR for GitHub-managed skills", "Uses the imported source repository", "github"],
   ["LobeHub Skills", "Generates a submission packet", "Manual directory adapter", "circle"],
   ["ClawHub", "Generates a submission packet", "Manual directory adapter", "triangle"],
   ["Hermes Skills Hub", "Generates a submission packet", "Manual directory adapter", "square"],
@@ -199,13 +208,21 @@ function frontmatterStateFromFiles(skill: Skill, files: SkillEditorFile[]) {
   };
 }
 
-const skillSettingsPublishingRows = [
-  ["skills.sh", "Publish on release", "Configured", "terminal", "bg-emerald-700"],
-  ["GitHub", "Create PR on publish", "Configured", "github", "bg-emerald-700"],
-  ["LobeHub Skills", "Manual submission packet", "Configured", "circle", "bg-emerald-700"],
-  ["ClawHub", "Manual submission packet", "Configured", "triangle", "bg-emerald-700"],
-  ["Hermes Skills Hub", "Manual submission packet", "Configured", "square", "bg-emerald-700"],
-] satisfies Array<[string, string, string, string, string]>;
+function skillSettingsPublishingRows(isGitHubImported: boolean) {
+  return [
+    ["skills.sh", "Publish on release", "Configured", "terminal", "bg-emerald-700"],
+    [
+      "GitHub",
+      isGitHubImported ? "Create PR on publish" : "Only for GitHub-managed skills",
+      isGitHubImported ? "Configured" : "Not used",
+      "github",
+      isGitHubImported ? "bg-emerald-700" : "bg-[var(--ink)]/35",
+    ],
+    ["LobeHub Skills", "Manual submission packet", "Configured", "circle", "bg-emerald-700"],
+    ["ClawHub", "Manual submission packet", "Configured", "triangle", "bg-emerald-700"],
+    ["Hermes Skills Hub", "Manual submission packet", "Configured", "square", "bg-emerald-700"],
+  ] satisfies Array<[string, string, string, string, string]>;
+}
 
 function randomSkillId() {
   const chars = "abcdefghijkmnopqrstuvwxyz23456789";
@@ -237,6 +254,24 @@ function usageSummary(events: SkillUsageEvent[]) {
     acc[kind] = (acc[kind] ?? 0) + 1;
     return acc;
   }, {});
+}
+
+export function hasInstallationConfirmation(
+  events: Array<{ eventKind?: string | null; createdAt?: number | Date | null }>,
+  startedAt: number | null,
+) {
+  if (!startedAt) {
+    return false;
+  }
+
+  return events.some((event) => {
+    if (event.eventKind !== "skill_installed" && event.eventKind !== "feedback_received") {
+      return false;
+    }
+
+    const createdAt = toMillis(event.createdAt);
+    return Boolean(createdAt && createdAt >= startedAt);
+  });
 }
 
 function usageEventLabel(kind: UsageEventKind) {
@@ -326,7 +361,7 @@ function formatTimestamp(value: number | Date | null | undefined) {
   return `${new Date(millis).toISOString().replace("T", " ").slice(0, 16)} UTC`;
 }
 
-function isSkillRouteTab(value: DashboardTab): value is SkillRouteTab {
+function isSkillRouteTab(value: string | null | undefined): value is SkillRouteTab {
   return validSkillRouteTabs.includes(value as SkillRouteTab);
 }
 
@@ -401,22 +436,42 @@ function DashboardSelect({
   );
 }
 
+let cachedMdxMarkdownEditor: ComponentType<MdxMarkdownEditorProps> | null = null;
+let mdxMarkdownEditorLoad: Promise<ComponentType<MdxMarkdownEditorProps>> | null = null;
+
+function loadMdxMarkdownEditor() {
+  if (cachedMdxMarkdownEditor) {
+    return Promise.resolve(cachedMdxMarkdownEditor);
+  }
+
+  mdxMarkdownEditorLoad ??= import("./mdx-editor-client").then((mod) => {
+    cachedMdxMarkdownEditor = mod.MdxMarkdownEditor;
+    return mod.MdxMarkdownEditor;
+  });
+
+  return mdxMarkdownEditorLoad;
+}
+
 function MdxMarkdownEditor(props: MdxMarkdownEditorProps) {
-  const [Editor, setEditor] = useState<ComponentType<MdxMarkdownEditorProps> | null>(null);
+  const [Editor, setEditor] = useState<ComponentType<MdxMarkdownEditorProps> | null>(() => cachedMdxMarkdownEditor);
 
   useEffect(() => {
+    if (Editor) {
+      return;
+    }
+
     let isMounted = true;
 
-    import("./mdx-editor-client").then((mod) => {
+    loadMdxMarkdownEditor().then((LoadedEditor) => {
       if (isMounted) {
-        setEditor(() => mod.MdxMarkdownEditor);
+        setEditor(() => LoadedEditor);
       }
     });
 
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [Editor]);
 
   if (!Editor) {
     return (
@@ -437,6 +492,15 @@ function useOptionalRouter() {
       push: () => undefined,
     };
   }
+}
+
+function pushDashboardPath(router: { push: (path: string) => void }, path: string) {
+  if (typeof window === "undefined") {
+    router.push(path);
+    return;
+  }
+
+  window.history.pushState(null, "", path);
 }
 
 function dashboardAuthHeaders(user: AppUser, contentType: string | null = "application/json") {
@@ -1021,7 +1085,7 @@ export function CreateSkillModal({
   );
 }
 
-function DashboardSidebar({
+export function DashboardSidebar({
   user,
   skills,
   selectedId,
@@ -1105,9 +1169,15 @@ function DashboardSidebar({
           <p className="mt-3 text-sm leading-6">
             Read the guide to learn how to build great agent skills.
           </p>
-          <button type="button" className="mt-5 font-editorial-mono text-xs font-bold uppercase underline">
+          <Link
+            href={SKILLS_GUIDE_PATH}
+            target="_blank"
+            rel="noreferrer"
+            className="mt-5 inline-block font-editorial-mono text-xs font-bold uppercase underline"
+            onClick={() => captureClientEvent("sidebar_guide_clicked")}
+          >
             Open Guide <span aria-hidden>→</span>
-          </button>
+          </Link>
         </div>
 
         <div className="min-w-0 space-y-2 sm:col-span-2 lg:space-y-3">
@@ -1494,23 +1564,32 @@ function FileGlyph({ locked = false }: { locked?: boolean }) {
 }
 
 function buildPublicInstallPrompt(skill: Skill) {
+  const isGitHubManaged = skill.sourceMode === "github_import";
   return buildUserSkillInstallPrompt({
     name: skill.name,
     slug: skill.slug,
     skillId: skill.skillId,
-    repoFullName: typeof skill.originalRepoFullName === "string" ? skill.originalRepoFullName : null,
-    skillRoot: typeof skill.originalSkillPath === "string" ? skill.originalSkillPath : null,
+    repoFullName: isGitHubManaged && typeof skill.originalRepoFullName === "string"
+      ? skill.originalRepoFullName
+      : null,
+    skillRoot: isGitHubManaged && typeof skill.originalSkillPath === "string"
+      ? skill.originalSkillPath
+      : null,
   });
 }
 
-function PublishSkillModal({
+export function PublishSkillModal({
   step,
   skillName,
   installPrompt,
   installPromptCopied,
+  isPublishing,
+  publishError,
+  pullRequestUrl,
   onCancel,
   onConfirm,
   onCopyInstallPrompt,
+  onContinueAfterMerge,
   onContinueToInstallCheck,
   onFinish,
 }: {
@@ -1518,13 +1597,26 @@ function PublishSkillModal({
   skillName: string;
   installPrompt: string;
   installPromptCopied: boolean;
+  isPublishing: boolean;
+  publishError: string;
+  pullRequestUrl?: string | null;
   onCancel: () => void;
   onConfirm: () => void;
   onCopyInstallPrompt: () => void;
+  onContinueAfterMerge: () => void;
   onContinueToInstallCheck: () => void;
   onFinish: () => void;
 }) {
-  const stepIndex = step === "confirm" ? 1 : step === "published" ? 2 : 3;
+  const requiresMerge = Boolean(pullRequestUrl) || step === "merge";
+  const stepTotal = requiresMerge ? 4 : 3;
+  const stepIndex =
+    step === "confirm"
+      ? 1
+      : step === "merge"
+        ? 2
+        : step === "published"
+          ? requiresMerge ? 3 : 2
+          : stepTotal;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--ink)]/35 px-5 py-8 backdrop-blur-[1px]">
@@ -1532,6 +1624,7 @@ function PublishSkillModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="publish-skill-title"
+        aria-busy={step === "confirm" && isPublishing ? true : undefined}
         className="w-full max-w-2xl border-2 border-[var(--ink)] bg-[var(--white)] p-6 shadow-[8px_8px_0_var(--ink)] sm:p-8"
       >
         <div className="flex items-start justify-between gap-6">
@@ -1540,17 +1633,20 @@ function PublishSkillModal({
             <h2 id="publish-skill-title" className="mt-3 font-editorial-sans text-3xl font-bold">
               {step === "confirm"
                 ? "Are you sure?"
-                : step === "published"
-                  ? "Your skill has been published."
-                  : step === "waiting"
-                    ? "Waiting for installation confirmation"
-                    : "It works now!"}
+                : step === "merge"
+                  ? "Merge the GitHub pull request"
+                  : step === "published"
+                    ? "Your skill has been published."
+                    : step === "waiting"
+                      ? "Waiting for installation confirmation"
+                      : "It works now!"}
             </h2>
           </div>
           <button
             type="button"
             aria-label="Close publish modal"
-            className="border border-[var(--ink)] px-3 py-1 font-editorial-mono text-lg"
+            className="border border-[var(--ink)] px-3 py-1 font-editorial-mono text-lg disabled:cursor-not-allowed disabled:opacity-45"
+            disabled={isPublishing}
             onClick={onCancel}
           >
             ×
@@ -1562,12 +1658,66 @@ function PublishSkillModal({
             <p className="mt-6 text-lg leading-8">
               This will make <strong>{skillName}</strong> publicly accessible.
             </p>
+            {isPublishing ? (
+              <p className="mt-4 border border-[var(--ink)] bg-[var(--paper)] p-3 font-editorial-mono text-xs font-bold uppercase">
+                Publishing can take a few seconds while Skillfully syncs the release targets.
+              </p>
+            ) : null}
+            {publishError ? (
+              <p className="mt-4 border border-red-600 bg-red-50 p-3 font-editorial-mono text-xs font-bold uppercase text-red-700">
+                {publishError}
+              </p>
+            ) : null}
             <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-end">
-              <button type="button" className={DASHBOARD_BUTTON_LIGHT} onClick={onCancel}>
+              <button type="button" className={DASHBOARD_BUTTON_LIGHT} disabled={isPublishing} onClick={onCancel}>
                 No, keep draft
               </button>
-              <button type="button" className={DASHBOARD_BUTTON} onClick={onConfirm}>
-                Yes, publish
+              <button
+                type="button"
+                className={`${DASHBOARD_BUTTON} inline-flex items-center justify-center gap-2 disabled:cursor-not-allowed disabled:opacity-60`}
+                disabled={isPublishing}
+                onClick={onConfirm}
+              >
+                {isPublishing ? (
+                  <span
+                    aria-hidden
+                    className="h-3 w-3 rounded-full border border-current border-t-transparent animate-spin"
+                  />
+                ) : null}
+                {isPublishing ? "Publishing..." : "Yes, publish"}
+              </button>
+            </div>
+          </>
+        ) : null}
+
+        {step === "merge" ? (
+          <>
+            <p className="mt-6 text-base leading-7">
+              <strong>{skillName}</strong> is managed in GitHub. Merge the pull request before installing so agents read the latest files from the source repository.
+            </p>
+            {pullRequestUrl ? (
+              <a
+                href={pullRequestUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-5 block break-all border border-[var(--ink)] bg-[var(--paper)] p-4 font-editorial-mono text-xs font-bold underline"
+              >
+                {pullRequestUrl}
+              </a>
+            ) : null}
+            <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-end">
+              {pullRequestUrl ? (
+                <a
+                  href={pullRequestUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className={`${DASHBOARD_BUTTON_LIGHT} text-center`}
+                >
+                  Open pull request
+                </a>
+              ) : null}
+              <button type="button" className={DASHBOARD_BUTTON} onClick={onContinueAfterMerge}>
+                I merged the PR
               </button>
             </div>
           </>
@@ -1605,9 +1755,14 @@ function PublishSkillModal({
                 <p className="font-editorial-sans text-lg">
                   {step === "confirmed"
                     ? "It works now!"
-                    : "Waiting for installation confirmation..."}
+                    : "Waiting for the agent to call the install or feedback endpoint..."}
                 </p>
               </div>
+              {step === "waiting" ? (
+                <p className="mt-4 text-sm leading-6 text-[var(--ink)]/70">
+                  Skillfully completes this step only after the public install endpoint records `skill_installed` or the feedback endpoint records `feedback_received`.
+                </p>
+              ) : null}
             </div>
             <div className="mt-8 flex justify-end">
               <button
@@ -1689,9 +1844,13 @@ function editorGridClass(isFilesOpen: boolean, isFrontmatterOpen: boolean) {
 function SkillEditorWorkspace({
   skill,
   user,
+  usageEvents = [],
+  onTabChange,
 }: {
   skill: Skill;
   user?: AppUser | null;
+  usageEvents?: SkillUsageEvent[];
+  onTabChange?: (tab: DashboardTab) => void;
 }) {
   const [files, setFiles] = useState<SkillEditorFile[]>(() => fallbackEditorFiles(skill));
   const [selectedFileId, setSelectedFileId] = useState(() => fallbackEditorFiles(skill)[0]?.id ?? "");
@@ -1706,6 +1865,9 @@ function SkillEditorWorkspace({
   const [publishStep, setPublishStep] = useState<PublishModalStep | null>(null);
   const [installPromptCopied, setInstallPromptCopied] = useState(false);
   const [publishError, setPublishError] = useState("");
+  const [isPublishing, setIsPublishing] = useState(false);
+  const [publishPullRequestUrl, setPublishPullRequestUrl] = useState<string | null>(null);
+  const [installPromptShownAt, setInstallPromptShownAt] = useState<number | null>(null);
   const [, setFileStatus] = useState("Autosaves to Skillfully.");
   const [isFileLoading, setIsFileLoading] = useState(false);
   const [isFileSaving, setIsFileSaving] = useState(false);
@@ -1741,16 +1903,10 @@ function SkillEditorWorkspace({
   ] satisfies Array<[string, string]>;
 
   useEffect(() => {
-    if (publishStep !== "waiting") {
-      return;
-    }
-
-    const timer = window.setTimeout(() => {
+    if (publishStep === "waiting" && hasInstallationConfirmation(usageEvents, installPromptShownAt)) {
       setPublishStep("confirmed");
-    }, 1300);
-
-    return () => window.clearTimeout(timer);
-  }, [publishStep]);
+    }
+  }, [installPromptShownAt, publishStep, usageEvents]);
 
   useEffect(() => {
     const fallbackFiles = fallbackEditorFiles(skill);
@@ -2016,17 +2172,27 @@ function SkillEditorWorkspace({
     window.setTimeout(() => setInstallPromptCopied(false), 1200);
   }
 
+  function showInstallPrompt() {
+    setInstallPromptShownAt(Date.now());
+    setPublishStep("published");
+  }
+
   async function publishVersion() {
+    if (isPublishing) {
+      return;
+    }
+
     setPublishError("");
+    setIsPublishing(true);
+    setPublishPullRequestUrl(null);
     if (!user || isUsingLocalPreviewDb) {
-      setPublishStep("published");
+      showInstallPrompt();
+      setIsPublishing(false);
       return;
     }
 
     try {
-      const result = await dashboardJson<{
-        results: Array<{ targetKind: string; status: string; error?: string }>;
-      }>(user, `/api/dashboard/skills/${skill.skillId}/publish`, {
+      const result = await dashboardJson<PublishApiResult>(user, `/api/dashboard/skills/${skill.skillId}/publish`, {
         method: "POST",
       });
       const failures = result.results.filter((entry) => entry.status === "failed");
@@ -2035,14 +2201,23 @@ function SkillEditorWorkspace({
           failures.map((entry) => `${entry.targetKind}: ${entry.error || "failed"}`).join(" | "),
         );
       }
-      if (result.results.some((entry) => entry.status === "published" || entry.status === "submitted")) {
-        setPublishStep("published");
+      const pullRequestUrl =
+        result.next_action?.type === "merge_github_pull_request"
+          ? result.next_action.pull_request_url
+          : result.results.find((entry) => entry.targetKind === "github" && entry.status === "submitted")?.url;
+      if (pullRequestUrl) {
+        setPublishPullRequestUrl(pullRequestUrl);
+        setPublishStep("merge");
+      } else if (result.results.some((entry) => entry.status === "published" || entry.status === "submitted")) {
+        showInstallPrompt();
       } else if (failures.length === 0) {
         setPublishError("No publish target completed. Connect GitHub before publishing.");
       }
     } catch (error) {
       captureClientException(error);
       setPublishError(extractErrorMessage(error));
+    } finally {
+      setIsPublishing(false);
     }
   }
 
@@ -2237,13 +2412,24 @@ function SkillEditorWorkspace({
             {publishError}
           </p>
         ) : null}
-        <Link href={skillRoute(skill, "settings")} className={`${DASHBOARD_BUTTON_LIGHT} text-center`}>
+        <Link
+          href={skillRoute(skill, "settings")}
+          className={`${DASHBOARD_BUTTON_LIGHT} text-center`}
+          onClick={(event) => {
+            if (!onTabChange) {
+              return;
+            }
+
+            event.preventDefault();
+            onTabChange("settings");
+          }}
+        >
           Change publishing options
         </Link>
         <button
           type="button"
           className="border border-[var(--ink)] bg-[var(--ink)] px-6 py-4 font-editorial-sans text-lg font-semibold text-[var(--paper)] disabled:cursor-not-allowed disabled:opacity-50"
-          disabled={isFileLoading || isFileSaving || isUploadingFile}
+          disabled={isFileLoading || isFileSaving || isUploadingFile || isPublishing}
           onClick={async () => {
             if (!(await saveDirtyFiles())) {
               setPublishError("Save failed. Try again before publishing.");
@@ -2263,9 +2449,13 @@ function SkillEditorWorkspace({
           skillName={skill.name}
           installPrompt={publicInstallPrompt}
           installPromptCopied={installPromptCopied}
+          isPublishing={isPublishing}
+          publishError={publishError}
+          pullRequestUrl={publishPullRequestUrl}
           onCancel={() => setPublishStep(null)}
           onConfirm={() => void publishVersion()}
           onCopyInstallPrompt={() => void copyPublicInstallPrompt()}
+          onContinueAfterMerge={showInstallPrompt}
           onContinueToInstallCheck={() => setPublishStep("waiting")}
           onFinish={() => setPublishStep(null)}
         />
@@ -2664,11 +2854,11 @@ function AccountTopBar({
 export function SkillSettingsWorkspace({ skill }: { skill: Skill }) {
   const slug = slugifySkillName(skill.name);
   const isGitHubImported = skill.sourceMode === "github_import" && Boolean(skill.originalRepoFullName);
-  const sourceRepo = isGitHubImported ? skill.originalRepoFullName : "Skillfully managed repository";
-  const sourcePath = isGitHubImported && skill.originalSkillPath ? skill.originalSkillPath : `skills/${slug}`;
+  const sourceRepo = isGitHubImported ? skill.originalRepoFullName : "Skillfully storage";
+  const sourcePath = isGitHubImported && skill.originalSkillPath ? skill.originalSkillPath : "Public manifest and files";
   const publishBehavior = isGitHubImported
     ? "Create pull request on publish"
-    : "Publish through the Skillfully-owned skills repository";
+    : "Publish to Skillfully public manifest and files";
 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-6 px-5 py-8 sm:px-8 lg:px-11 lg:py-12">
@@ -2742,7 +2932,7 @@ export function SkillSettingsWorkspace({ skill }: { skill: Skill }) {
               </tr>
             </thead>
             <tbody>
-              {skillSettingsPublishingRows.map(([destination, behavior, status, icon, dot]) => (
+              {skillSettingsPublishingRows(isGitHubImported).map(([destination, behavior, status, icon, dot]) => (
                 <tr key={destination} className="border-b border-[var(--ink)]/50 last:border-b-0">
                   <td className="py-3">
                     <span className="flex items-center gap-3">
@@ -2762,7 +2952,9 @@ export function SkillSettingsWorkspace({ skill }: { skill: Skill }) {
             </tbody>
           </table>
           <p className="mt-4 text-sm leading-6 text-[var(--ink)]/65">
-            Skillfully is the canonical source and syncs outward when you publish.
+            {isGitHubImported
+              ? "GitHub is the source of truth for this skill; merge the publish PR before installing."
+              : "Skillfully is the source of truth for this skill; GitHub is only used for imported skills."}
           </p>
         </div>
       </SettingsSection>
@@ -2987,7 +3179,7 @@ export function SkillDetail({
   }
 
   if (activeTab === "editor") {
-    return <SkillEditorWorkspace skill={skill} user={user} />;
+    return <SkillEditorWorkspace skill={skill} user={user} usageEvents={usageEvents} onTabChange={onTabChange} />;
   }
 
   if (activeTab === "analytics") {
@@ -3209,6 +3401,46 @@ export default function Dashboard({
       skill_name: selectedSkill?.name ?? null,
     });
   }, [activeTab, selectedSkill?.skillId, selectedSkill?.name, user?.id]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    function syncStateFromLocation() {
+      const segments = window.location.pathname.split("/").filter(Boolean);
+      if (segments[0] !== "dashboard") {
+        return;
+      }
+
+      if (segments[1] === "settings") {
+        setActiveTab("account");
+        setSelectedSkillId(null);
+        setScreen("list");
+        return;
+      }
+
+      if (!segments[1]) {
+        setActiveTab("overview");
+        setSelectedSkillId(null);
+        setScreen("list");
+        return;
+      }
+
+      const routeSkillId = decodeURIComponent(segments[1]);
+      const routeSkill = skills.find((skill) => skill.id === routeSkillId || skill.skillId === routeSkillId);
+      if (!routeSkill) {
+        return;
+      }
+
+      setActiveTab(isSkillRouteTab(segments[2]) ? segments[2] : "overview");
+      setSelectedSkillId(routeSkill.id);
+      setScreen("detail");
+    }
+
+    window.addEventListener("popstate", syncStateFromLocation);
+    return () => window.removeEventListener("popstate", syncStateFromLocation);
+  }, [skills]);
 
   const shouldShowOnboardingModal =
     screen === "list" &&
@@ -3620,7 +3852,7 @@ export default function Dashboard({
 
     if (tab === "account") {
       setScreen("list");
-      router.push("/dashboard/settings");
+      pushDashboardPath(router, "/dashboard/settings");
       return;
     }
 
@@ -3642,7 +3874,7 @@ export default function Dashboard({
     }
 
     if (isSkillRouteTab(tab)) {
-      router.push(skillRoute(routeSkill, tab));
+      pushDashboardPath(router, skillRoute(routeSkill, tab));
     }
     setScreen("detail");
   }
@@ -3748,7 +3980,7 @@ export default function Dashboard({
             setIsAccountMenuOpen(false);
             setScreen("detail");
             setErrorMessage("");
-            router.push(skillRoute(skill, isSkillRouteTab(activeTab) ? activeTab : "overview"));
+            pushDashboardPath(router, skillRoute(skill, isSkillRouteTab(activeTab) ? activeTab : "overview"));
           }}
           onTabChange={openDashboardTab}
           onToggleSkillSelector={() => {

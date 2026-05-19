@@ -89,7 +89,31 @@ curl -X POST "$BASE_URL/api/agent/skills/sk_xxxxxx/publish" \
   -H "authorization: Bearer <access_token>"
 ```
 
-Publishing writes to GitHub when configured and prepares manual directory packets for supported directories.
+Publishing has two ownership modes:
+
+- Skillfully-managed skills are stored on Skillfully. Skillfully is the source of truth, and publishing updates the public manifest and public file endpoints directly.
+- GitHub-managed skills are imported from GitHub. GitHub is the source of truth, and publishing creates a pull request back to the original repository/path before the skill should be installed.
+
+Publishing also prepares manual directory packets for supported directories.
+
+Read the publish response before claiming the skill is ready to install. If the response includes:
+
+```json
+{
+  "next_action": {
+    "type": "merge_github_pull_request",
+    "pull_request_url": "https://github.com/owner/repo/pull/123"
+  }
+}
+```
+
+tell the human to merge that pull request first. Do not show the installation prompt before the PR is merged. After the human confirms it is merged, show `next_action.install_prompt`.
+
+If you are the publishing agent and the response has `next_action.type = "merge_github_pull_request"`, report the PR URL to the human and stop before installation until the merge is confirmed.
+
+For `next_action.type = "install_skill"`, this is a Skillfully-managed publish unless the response says otherwise. Show `next_action.install_prompt` immediately. The install prompt must point at Skillfully public manifest/file URLs, not a GitHub repository.
+
+Treat installation as confirmed only after the installing agent calls one of the endpoints in `next_action.confirmation`: the public install endpoint records `skill_installed`, and the feedback endpoint records `feedback_received`. Do not treat the passage of time as installation success.
 
 ## 5) Retrieve analytics and feedback
 

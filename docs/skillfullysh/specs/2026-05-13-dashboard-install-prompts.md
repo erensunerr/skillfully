@@ -18,8 +18,11 @@ skill from the prompt for installing a user's published skill.
   Skill` and also shows `Install <skill-name>`.
 - `Install <skill-name>` copies the same user-skill install prompt that appears
   in the post-publish modal.
-- The default user-skill prompt starts with:
-  `Install <skill-name> from erensunerr/skillfully-skills on github.`
+- Skillfully-managed user-skill prompts start with:
+  `Install <skill-name> from Skillfully.`
+- Skillfully-managed prompts point at the public manifest and `SKILL.md` file
+  URLs, then tell the installing agent to call the public install endpoint
+  after installation.
 - Imported GitHub skills continue to preserve their source repository and skill
   path in the user-skill prompt.
 - The old dashboard feedback-template fetch and public template asset are no

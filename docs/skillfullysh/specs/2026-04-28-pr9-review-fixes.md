@@ -43,7 +43,7 @@ Resolve the security, data integrity, and editor usability issues found in the P
 
 ## Public Install Prompt
 
-The install prompt now tells agents to install the skill from GitHub, using either the imported repository or `erensunerr/skillfully-skills`, then call:
+The install prompt now tells agents to install Skillfully-managed skills from Skillfully public manifest/file URLs. Imported GitHub skills still include their source repository and skill path. In both cases, the installing agent must call:
 
 ```text
 POST https://www.skillfully.sh/api/public/skills/<skillId>/install

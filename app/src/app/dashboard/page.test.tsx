@@ -370,8 +370,11 @@ test("dashboard skill detail renders the skill settings UI", async () => {
   assert.match(html, /Slug/i);
   assert.match(html, /02\. Source/i);
   assert.match(html, /Managed in GitHub/i);
-  assert.match(html, /Skillfully managed repository/i);
-  assert.match(html, /skills\/code-review/i);
+  assert.match(html, /Skillfully storage/i);
+  assert.match(html, /Public manifest and files/i);
+  assert.match(html, /Only for GitHub-managed skills/i);
+  assert.match(html, /Not used/i);
+  assert.match(html, /Skillfully is the source of truth for this skill/i);
   assert.match(html, /03\. Publishing/i);
   assert.match(html, /LobeHub Skills/i);
   assert.match(html, /ClawHub/i);
@@ -408,6 +411,8 @@ test("dashboard settings show imported skills as managed in GitHub", async () =>
   assert.match(html, /octocat\/Hello-World/i);
   assert.match(html, /\.agents\/skills\/code-review/i);
   assert.match(html, /Create pull request on publish/i);
+  assert.match(html, /Create PR on publish/i);
+  assert.match(html, /GitHub is the source of truth for this skill/i);
 });
 
 test("dashboard renders the account settings UI", async () => {
@@ -439,6 +444,102 @@ test("dashboard renders the account settings UI", async () => {
   assert.match(html, /Data &amp; Privacy/i);
   assert.match(html, /Export your data/i);
   assert.match(html, /Sign out/i);
+});
+
+test("dashboard sidebar guide action opens the skills guide in a new tab", async () => {
+  Object.assign(globalThis, { React });
+  const { DashboardSidebar } = await import("./page");
+
+  const html = renderToStaticMarkup(
+    <DashboardSidebar
+      user={{ email: "member@example.com" } as never}
+      skills={[fakeSkill() as never]}
+      selectedId="skill-1"
+      activeTab="overview"
+      isSkillSelectorOpen={false}
+      onSelect={() => undefined}
+      onTabChange={() => undefined}
+      onToggleSkillSelector={() => undefined}
+      onOpenCreateSkill={() => undefined}
+      onSignOut={() => undefined}
+    />,
+  );
+
+  assert.match(html, /Open Guide/);
+  assert.match(html, /href="\/guide\/start-with-agent-skills"/);
+  assert.match(html, /target="_blank"/);
+  assert.match(html, /rel="noreferrer"/);
+});
+
+test("publish modal renders a busy state while publishing", async () => {
+  Object.assign(globalThis, { React });
+  const { PublishSkillModal } = await import("./page");
+
+  const html = renderToStaticMarkup(
+    <PublishSkillModal
+      step="confirm"
+      skillName="code-review"
+      installPrompt="Install prompt"
+      installPromptCopied={false}
+      isPublishing={true}
+      publishError=""
+      onCancel={() => undefined}
+      onConfirm={() => undefined}
+      onCopyInstallPrompt={() => undefined}
+      onContinueAfterMerge={() => undefined}
+      onContinueToInstallCheck={() => undefined}
+      onFinish={() => undefined}
+    />,
+  );
+
+  assert.match(html, /aria-busy="true"/);
+  assert.match(html, /Publishing can take a few seconds/i);
+  assert.match(html, /Publishing\.\.\./);
+  assert.match(html, /disabled=""/);
+});
+
+test("publish modal tells GitHub-managed users to merge the PR before install", async () => {
+  Object.assign(globalThis, { React });
+  const { PublishSkillModal } = await import("./page");
+
+  const html = renderToStaticMarkup(
+    <PublishSkillModal
+      step="merge"
+      skillName="code-review"
+      installPrompt="Install prompt"
+      installPromptCopied={false}
+      isPublishing={false}
+      publishError=""
+      pullRequestUrl="https://github.com/octocat/Hello-World/pull/42"
+      onCancel={() => undefined}
+      onConfirm={() => undefined}
+      onCopyInstallPrompt={() => undefined}
+      onContinueAfterMerge={() => undefined}
+      onContinueToInstallCheck={() => undefined}
+      onFinish={() => undefined}
+    />,
+  );
+
+  assert.match(html, /Merge the GitHub pull request/i);
+  assert.match(html, /https:\/\/github\.com\/octocat\/Hello-World\/pull\/42/);
+  assert.match(html, /before installing/i);
+  assert.doesNotMatch(html, /Copy installation prompt/i);
+});
+
+test("installation confirmation waits for install or feedback endpoint usage", async () => {
+  const { hasInstallationConfirmation } = await import("./page");
+  const startedAt = Date.UTC(2026, 4, 19, 12, 0);
+
+  assert.equal(hasInstallationConfirmation([
+    { eventKind: "manifest_checked", createdAt: startedAt + 1000 },
+    { eventKind: "skill_installed", createdAt: startedAt - 1 },
+  ] as never, startedAt), false);
+  assert.equal(hasInstallationConfirmation([
+    { eventKind: "skill_installed", createdAt: startedAt + 1000 },
+  ] as never, startedAt), true);
+  assert.equal(hasInstallationConfirmation([
+    { eventKind: "feedback_received", createdAt: startedAt + 1000 },
+  ] as never, startedAt), true);
 });
 
 test("dashboard route pages expose skill tab and account settings URLs", async () => {

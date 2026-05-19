@@ -3,6 +3,7 @@ import { NextRequest } from "next/server";
 import { getDashboardUser } from "@/lib/dashboard-auth";
 import { jsonResponse } from "@/lib/route-helpers";
 import { deleteSkillFile, updateSkillFileText } from "@/lib/skills/repository";
+import { SkillFrontmatterValidationError } from "@/lib/skills/skill-frontmatter";
 
 type RouteContext = { params: Promise<{ skillId: string; fileId: string }> };
 
@@ -33,7 +34,8 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
     });
     return jsonResponse({ file }, 200, "PATCH, DELETE, OPTIONS");
   } catch (error) {
-    return jsonResponse({ error: error instanceof Error ? error.message : "unknown error" }, 404, "PATCH, DELETE, OPTIONS");
+    const status = error instanceof SkillFrontmatterValidationError ? 400 : 404;
+    return jsonResponse({ error: error instanceof Error ? error.message : "unknown error" }, status, "PATCH, DELETE, OPTIONS");
   }
 }
 

@@ -10,6 +10,11 @@ import {
   skillSlug,
   stripSkillfullyManagedBlock,
 } from "./skill-files";
+import {
+  SkillFrontmatterValidationError,
+  assertValidSkillMarkdown,
+  skillSpecName,
+} from "./skill-frontmatter";
 import type { PublishContext, PublishResult } from "@/lib/publishing/types";
 
 type EntityName =
@@ -149,6 +154,48 @@ function defaultGitHubRepo() {
     installationId: process.env.SKILLFULLY_DEFAULT_GITHUB_INSTALLATION_ID || "",
     baseBranch: process.env.SKILLFULLY_DEFAULT_SKILLS_REPO_BRANCH || "main",
   };
+}
+
+function pathSegments(path: string) {
+  return path.split("/").filter(Boolean);
+}
+
+function skillPackageDirectoryName(
+  skill: Pick<SkillRow, "name" | "slug" | "sourceMode" | "originalSkillPath">,
+) {
+  if (skill.sourceMode === "github_import" && skill.originalSkillPath) {
+    return pathSegments(skill.originalSkillPath).at(-1) || skillSpecName(skill.name);
+  }
+
+  return skill.slug || skillSpecName(skill.name);
+}
+
+function assertValidSkillFileForPackage({
+  skill,
+  contentText,
+}: {
+  skill: Pick<SkillRow, "name" | "slug" | "sourceMode" | "originalSkillPath">;
+  contentText: string;
+}) {
+  return assertValidSkillMarkdown({
+    markdown: contentText,
+    expectedName: skillPackageDirectoryName(skill),
+  });
+}
+
+function assertValidSkillPackage({
+  skill,
+  files,
+}: {
+  skill: Pick<SkillRow, "name" | "slug" | "sourceMode" | "originalSkillPath">;
+  files: SkillFileRow[];
+}) {
+  const primarySkillFile = files.find((file) => file.path === "SKILL.md");
+  if (!primarySkillFile || typeof primarySkillFile.contentText !== "string") {
+    throw new SkillFrontmatterValidationError("root SKILL.md is required");
+  }
+
+  assertValidSkillFileForPackage({ skill, contentText: primarySkillFile.contentText });
 }
 
 function rowWithId<T extends Row>(row: T): T & { id: string } {
@@ -548,10 +595,22 @@ export async function updateSkillFileText({
     throw new Error("skill file path already exists");
   }
 
+  const existingPath = String(existing.path);
+  if (isPrimarySkillMarkdownPath(existingPath) && !isPrimarySkillMarkdownPath(updatedPath)) {
+    throw new Error("primary skill file cannot be renamed");
+  }
+
   const currentTime = now();
   const updatedContentText = isPrimarySkillMarkdownPath(updatedPath)
     ? stripSkillfullyManagedBlock(contentText)
     : contentText;
+  if (isPrimarySkillMarkdownPath(updatedPath)) {
+    const skill = await getSkillForOwner({ store, ownerId, skillId: String(existing.skillId) });
+    if (!skill) {
+      throw new Error("skill not found");
+    }
+    assertValidSkillFileForPackage({ skill, contentText: updatedContentText });
+  }
   const values = {
     path: updatedPath,
     contentText: updatedContentText,
@@ -657,6 +716,9 @@ export async function createSkillFile({
       : isPrimarySkillMarkdownPath(normalizedPath)
         ? stripSkillfullyManagedBlock(contentText)
         : contentText;
+  if (isPrimarySkillMarkdownPath(normalizedPath)) {
+    assertValidSkillFileForPackage({ skill, contentText: text ?? "" });
+  }
   const id = idGenerator();
   const file: SkillFileRow = {
     id,
@@ -696,6 +758,7 @@ export async function buildPublishContextForSkill({
     throw new Error("draft version not found");
   }
   const files = await listSkillFiles({ store, ownerId, skillId, versionId: version.id });
+  assertValidSkillPackage({ skill, files });
   const targets = await listPublishingTargets({ store, ownerId, skillId });
   const githubTarget = targets.find((target) => target.targetKind === "github");
 
@@ -820,6 +883,7 @@ export async function markDraftPublished({
     throw new Error("draft version not found");
   }
   const files = await listSkillFiles({ store, ownerId, skillId, versionId });
+  assertValidSkillPackage({ skill, files });
   const currentTime = now();
   const manifest = buildSkillManifest({
     skill,

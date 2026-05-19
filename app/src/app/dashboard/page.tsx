@@ -136,9 +136,21 @@ const publishingDestinationRows = [
   ["Hermes Skills Hub", "Generates a submission packet", "Manual directory adapter", "square"],
 ] satisfies Array<[string, string, string, string]>;
 
+function pathSegments(path: string) {
+  return path.split("/").filter(Boolean);
+}
+
+function skillPackageFrontmatterName(skill: Skill) {
+  if (skill.sourceMode === "github_import" && skill.originalSkillPath) {
+    return pathSegments(skill.originalSkillPath).at(-1) || skillSpecName(skill.name);
+  }
+
+  return skill.slug || skillSpecName(skill.name);
+}
+
 function defaultEditorMarkdown(skill: Skill) {
   return buildSkillMarkdown({
-    name: skill.name,
+    name: skillPackageFrontmatterName(skill),
     description: skill.description?.trim() || DEFAULT_SKILL_DESCRIPTION,
   });
 }
@@ -155,8 +167,20 @@ function fallbackEditorFiles(skill: Skill): SkillEditorFile[] {
   ];
 }
 
-function isEditableSkillFile(file: SkillEditorFile) {
-  return file.kind === "markdown" || file.mimeType?.startsWith("text/") || file.contentText !== undefined;
+function isMarkdownFilePath(path: string | null | undefined) {
+  const lower = (path ?? "").toLowerCase();
+  return lower === "skill.md" || lower.endsWith(".md") || lower.endsWith(".mdx");
+}
+
+export function isEditableSkillFile(file: { path?: string | null; kind?: string | null; mimeType?: string | null }) {
+  const mimeType = file.mimeType?.toLowerCase() ?? "";
+  return (
+    file.kind === "markdown" ||
+    mimeType === "text/markdown" ||
+    mimeType === "text/mdx" ||
+    mimeType === "application/mdx" ||
+    isMarkdownFilePath(file.path)
+  );
 }
 
 function sortSkillFiles(files: SkillEditorFile[]) {
@@ -170,7 +194,7 @@ function frontmatterStateFromFiles(skill: Skill, files: SkillEditorFile[]) {
     : {};
 
   return {
-    name: parsed.name || skillSpecName(skill.name),
+    name: skillPackageFrontmatterName(skill),
     summary: parsed.description || skill.description?.trim() || DEFAULT_SKILL_DESCRIPTION,
   };
 }
@@ -1784,10 +1808,24 @@ function SkillEditorWorkspace({
     return () => {
       active = false;
     };
-  }, [skill.id, skill.skillId, skill.name, skill.description, user?.id, user?.refresh_token]);
+  }, [
+    skill.id,
+    skill.skillId,
+    skill.name,
+    skill.description,
+    skill.originalSkillPath,
+    skill.slug,
+    skill.sourceMode,
+    user?.id,
+    user?.refresh_token,
+  ]);
 
   function updateFrontmatterFields(updates: Partial<Pick<typeof frontmatter, "name" | "summary">>) {
-    const nextFrontmatter = { ...frontmatter, ...updates };
+    const nextFrontmatter = {
+      ...frontmatter,
+      ...updates,
+      name: skillPackageFrontmatterName(skill),
+    };
     const primarySkillFile = files.find((file) => isPrimarySkillMarkdownPath(file.path) && isEditableSkillFile(file));
 
     setFrontmatter(nextFrontmatter);
@@ -2101,7 +2139,11 @@ function SkillEditorWorkspace({
             </div>
             <div className="min-h-0 flex-1 overflow-hidden">
               {selectedFileIsEditable ? (
-                <MdxMarkdownEditor markdown={selectedMarkdown} onChange={updateSelectedMarkdown} />
+                <MdxMarkdownEditor
+                  key={selectedFile.id}
+                  markdown={selectedMarkdown}
+                  onChange={updateSelectedMarkdown}
+                />
               ) : (
                 <div className="h-full min-h-72 border border-[var(--ink)] bg-[var(--paper)] p-5 font-editorial-mono text-xs uppercase">
                   Select an editable markdown file.
@@ -2126,10 +2168,8 @@ function SkillEditorWorkspace({
                     <input
                       className={DASHBOARD_INPUT}
                       value={frontmatter.name}
-                      onChange={(event) => {
-                        const nextName = event.currentTarget.value;
-                        updateFrontmatterFields({ name: nextName });
-                      }}
+                      readOnly
+                      aria-readonly="true"
                     />
                   </label>
                   <label className="block text-sm">

@@ -101,7 +101,7 @@ test("marks invalid skill candidates with spec reasons", () => {
   assert.equal(missingName.status, "invalid");
   assert.match(missingName.reason ?? "", /name is required/);
   assert.equal(mismatchedName.status, "invalid");
-  assert.match(mismatchedName.reason ?? "", /must match parent directory/);
+  assert.match(mismatchedName.reason ?? "", /must match package directory `right-directory`/);
 });
 
 test("marks already imported skills by repository id and skill root", () => {

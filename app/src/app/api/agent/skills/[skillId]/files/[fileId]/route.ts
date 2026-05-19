@@ -4,6 +4,7 @@ import { ApiError } from "@/lib/agent-api";
 import { requireAgentAuthor } from "@/lib/agent-author-api";
 import { getErrorPayload, jsonResponse } from "@/lib/route-helpers";
 import { updateSkillFileText } from "@/lib/skills/repository";
+import { SkillFrontmatterValidationError } from "@/lib/skills/skill-frontmatter";
 
 type RouteContext = { params: Promise<{ skillId: string; fileId: string }> };
 
@@ -30,7 +31,11 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
     });
     return jsonResponse({ file }, 200, "PATCH, OPTIONS");
   } catch (error) {
-    const status = error instanceof ApiError ? error.status : 500;
+    const status = error instanceof ApiError
+      ? error.status
+      : error instanceof SkillFrontmatterValidationError
+        ? 400
+        : 500;
     return jsonResponse(getErrorPayload(error), status, "PATCH, OPTIONS");
   }
 }

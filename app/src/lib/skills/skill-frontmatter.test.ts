@@ -2,10 +2,13 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  AGENT_SKILLS_SPEC_URL,
+  assertValidSkillMarkdown,
   buildSkillMarkdown,
   extractSkillMarkdownBody,
   parseSkillMarkdownFrontmatter,
   skillSpecName,
+  validateSkillMarkdown,
 } from "./skill-frontmatter";
 
 test("buildSkillMarkdown creates required frontmatter and keeps the editable body separate", () => {
@@ -58,4 +61,70 @@ test("skillSpecName enforces the Agent Skills frontmatter name shape", () => {
   assert.equal(skillSpecName("  FAQ: Billing + Refunds!  "), "faq-billing-refunds");
   assert.equal(skillSpecName(""), "skill");
   assert.equal(skillSpecName(`${"a".repeat(63)}-suffix`), "a".repeat(63));
+});
+
+test("validateSkillMarkdown enforces required Agent Skills frontmatter", () => {
+  assert.deepEqual(
+    validateSkillMarkdown({
+      markdown: [
+        "---",
+        "name: pdf-processing",
+        "description: Extracts PDF text and tables.",
+        "---",
+        "",
+        "Use when processing PDFs.",
+      ].join("\n"),
+      expectedName: "pdf-processing",
+    }),
+    {
+      valid: true,
+      name: "pdf-processing",
+      description: "Extracts PDF text and tables.",
+    },
+  );
+
+  const missingFrontmatter = validateSkillMarkdown({
+    markdown: "# Missing frontmatter",
+    expectedName: "missing-frontmatter",
+  });
+  assert.equal(missingFrontmatter.valid, false);
+  assert.match(missingFrontmatter.reason, /YAML frontmatter/);
+
+  const missingName = validateSkillMarkdown({
+    markdown: ["---", "description: Missing name.", "---"].join("\n"),
+    expectedName: "missing-name",
+  });
+  assert.equal(missingName.valid, false);
+  assert.match(missingName.reason, /name is required/);
+
+  const mismatchedName = validateSkillMarkdown({
+    markdown: ["---", "name: other-skill", "description: Wrong directory.", "---"].join("\n"),
+    expectedName: "expected-skill",
+  });
+  assert.equal(mismatchedName.valid, false);
+  assert.match(mismatchedName.reason, /expected-skill/);
+
+  const missingDescription = validateSkillMarkdown({
+    markdown: ["---", "name: pdf-processing", "description: ", "---"].join("\n"),
+    expectedName: "pdf-processing",
+  });
+  assert.equal(missingDescription.valid, false);
+  assert.match(missingDescription.reason, /description is required/);
+});
+
+test("assertValidSkillMarkdown returns a descriptive spec-linked error", () => {
+  assert.throws(
+    () =>
+      assertValidSkillMarkdown({
+        markdown: "# Missing frontmatter",
+        expectedName: "missing-frontmatter",
+      }),
+    (error) => {
+      assert.equal(error instanceof Error, true);
+      assert.equal((error as Error).name, "SkillFrontmatterValidationError");
+      assert.match((error as Error).message, /Invalid SKILL\.md/);
+      assert.match((error as Error).message, new RegExp(AGENT_SKILLS_SPEC_URL.replaceAll(".", "\\.")));
+      return true;
+    },
+  );
 });

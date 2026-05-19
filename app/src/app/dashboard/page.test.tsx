@@ -229,6 +229,7 @@ test("dashboard skill detail renders the editor tab UI", async () => {
 
   assert.match(html, /Files/);
   assert.match(html, /Frontmatter/);
+  assert.match(html, /aria-readonly="true"/);
   assert.match(html, /Collapse files/);
   assert.match(html, /Collapse frontmatter/);
   assert.doesNotMatch(html, /Validate skill/);
@@ -252,6 +253,31 @@ test("dashboard skill detail renders the editor tab UI", async () => {
   assert.doesNotMatch(html, /Autosaves to Skillfully/i);
   assert.doesNotMatch(html, /Skillfully feedback and update instructions/i);
   assert.doesNotMatch(html, /Install skill prompt/);
+});
+
+test("dashboard editor only opens markdown files in the markdown editor", async () => {
+  const { isEditableSkillFile } = await import("./page");
+
+  assert.equal(isEditableSkillFile({
+    path: "SKILL.md",
+    kind: "markdown",
+    mimeType: "text/markdown",
+  }), true);
+  assert.equal(isEditableSkillFile({
+    path: "references/directory-list.md",
+    kind: "asset",
+    mimeType: "application/octet-stream",
+  }), true);
+  assert.equal(isEditableSkillFile({
+    path: "references/submission-tracker-template.csv",
+    kind: "text",
+    mimeType: "text/plain",
+  }), false);
+  assert.equal(isEditableSkillFile({
+    path: "evals/evals.json",
+    kind: "json",
+    mimeType: "application/json",
+  }), false);
 });
 
 test("dashboard skill detail renders the analytics tab UI", async () => {

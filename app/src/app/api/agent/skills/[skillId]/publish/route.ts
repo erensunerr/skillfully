@@ -8,6 +8,7 @@ import { createManualDirectoryAdapter } from "@/lib/publishing/adapters/manual-d
 import { publishSkillVersion } from "@/lib/publishing/publish";
 import { getErrorPayload, jsonResponse } from "@/lib/route-helpers";
 import { buildPublishContextForSkill, markDraftPublished, recordPublishResult } from "@/lib/skills/repository";
+import { SkillFrontmatterValidationError } from "@/lib/skills/skill-frontmatter";
 
 type RouteContext = { params: Promise<{ skillId: string }> };
 
@@ -75,7 +76,11 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
 
     return jsonResponse(result, 200, "POST, OPTIONS");
   } catch (error) {
-    const status = error instanceof ApiError ? error.status : 500;
+    const status = error instanceof ApiError
+      ? error.status
+      : error instanceof SkillFrontmatterValidationError
+        ? 400
+        : 500;
     return jsonResponse(getErrorPayload(error), status, "POST, OPTIONS");
   }
 }

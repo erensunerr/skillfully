@@ -8,6 +8,7 @@ import {
   exchangeAgentDeviceCode,
 } from "./agent-device-auth";
 import { appendSkillfullyManagedBlock } from "./skills/managed-block";
+import { buildSkillMarkdown } from "./skills/skill-frontmatter";
 import {
   createSkillDraft,
   listSkillFiles,
@@ -132,7 +133,12 @@ test("three stakeholder flow: human author, author agent, and skill user share a
   });
   assert.equal(owner.userId, "human-author");
 
-  const agentAuthoredContent = appendSkillfullyManagedBlock("# Agent edit\n\n## Workflow\n\n1. Do the shared work.", {
+  const agentEditMarkdown = buildSkillMarkdown({
+    name: "three-stakeholder-test",
+    description: "Tests a shared authoring and usage lifecycle.",
+    body: "# Agent edit\n\n## Workflow\n\n1. Do the shared work.",
+  });
+  const agentAuthoredContent = appendSkillfullyManagedBlock(agentEditMarkdown, {
     skillId: humanCreated.skill.skillId,
     baseUrl: "https://www.skillfully.sh",
   });
@@ -143,7 +149,7 @@ test("three stakeholder flow: human author, author agent, and skill user share a
     fileId: humanCreated.file.id,
     contentText: agentAuthoredContent,
   });
-  assert.equal(updated.contentText, "# Agent edit\n\n## Workflow\n\n1. Do the shared work.");
+  assert.equal(updated.contentText, agentEditMarkdown);
 
   const humanVisibleFiles = await listSkillFiles({
     store: store as never,

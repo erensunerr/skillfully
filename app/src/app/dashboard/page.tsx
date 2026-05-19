@@ -136,9 +136,21 @@ const publishingDestinationRows = [
   ["Hermes Skills Hub", "Generates a submission packet", "Manual directory adapter", "square"],
 ] satisfies Array<[string, string, string, string]>;
 
+function pathSegments(path: string) {
+  return path.split("/").filter(Boolean);
+}
+
+function skillPackageFrontmatterName(skill: Skill) {
+  if (skill.sourceMode === "github_import" && skill.originalSkillPath) {
+    return pathSegments(skill.originalSkillPath).at(-1) || skillSpecName(skill.name);
+  }
+
+  return skill.slug || skillSpecName(skill.name);
+}
+
 function defaultEditorMarkdown(skill: Skill) {
   return buildSkillMarkdown({
-    name: skill.name,
+    name: skillPackageFrontmatterName(skill),
     description: skill.description?.trim() || DEFAULT_SKILL_DESCRIPTION,
   });
 }
@@ -182,7 +194,7 @@ function frontmatterStateFromFiles(skill: Skill, files: SkillEditorFile[]) {
     : {};
 
   return {
-    name: parsed.name || skillSpecName(skill.name),
+    name: skillPackageFrontmatterName(skill),
     summary: parsed.description || skill.description?.trim() || DEFAULT_SKILL_DESCRIPTION,
   };
 }
@@ -1796,10 +1808,24 @@ function SkillEditorWorkspace({
     return () => {
       active = false;
     };
-  }, [skill.id, skill.skillId, skill.name, skill.description, user?.id, user?.refresh_token]);
+  }, [
+    skill.id,
+    skill.skillId,
+    skill.name,
+    skill.description,
+    skill.originalSkillPath,
+    skill.slug,
+    skill.sourceMode,
+    user?.id,
+    user?.refresh_token,
+  ]);
 
   function updateFrontmatterFields(updates: Partial<Pick<typeof frontmatter, "name" | "summary">>) {
-    const nextFrontmatter = { ...frontmatter, ...updates };
+    const nextFrontmatter = {
+      ...frontmatter,
+      ...updates,
+      name: skillPackageFrontmatterName(skill),
+    };
     const primarySkillFile = files.find((file) => isPrimarySkillMarkdownPath(file.path) && isEditableSkillFile(file));
 
     setFrontmatter(nextFrontmatter);
@@ -2142,10 +2168,8 @@ function SkillEditorWorkspace({
                     <input
                       className={DASHBOARD_INPUT}
                       value={frontmatter.name}
-                      onChange={(event) => {
-                        const nextName = event.currentTarget.value;
-                        updateFrontmatterFields({ name: nextName });
-                      }}
+                      readOnly
+                      aria-readonly="true"
                     />
                   </label>
                   <label className="block text-sm">

@@ -1,5 +1,10 @@
 import crypto from "node:crypto";
 
+import {
+  type SkillMarkdownValidation,
+  validateSkillMarkdown as validateAgentSkillMarkdown,
+} from "@/lib/skills/skill-frontmatter";
+
 export const MAX_GITHUB_IMPORT_FILE_BYTES = 100 * 1024 * 1024;
 export const MAX_GITHUB_IMPORT_SKILL_BYTES = 1024 * 1024 * 1024;
 
@@ -45,10 +50,6 @@ export type GitHubSkillCandidate = {
   totalSize: number;
   totalSizeExceedsLimit: boolean;
 };
-
-export type SkillMarkdownValidation =
-  | { valid: true; name: string; description: string }
-  | { valid: false; reason: string; name?: string; description?: string };
 
 type GitHubImportSessionStore = {
   create(entity: "skillImports", id: string, values: Record<string, unknown>): unknown;
@@ -168,39 +169,6 @@ export async function createGitHubImportSession({
   return session;
 }
 
-function stripYamlQuotes(value: string) {
-  const trimmed = value.trim();
-  const quote = trimmed[0];
-  if ((quote === "\"" || quote === "'") && trimmed.endsWith(quote)) {
-    return trimmed.slice(1, -1).trim();
-  }
-  return trimmed;
-}
-
-function parseFrontmatter(markdown: string) {
-  const match = markdown.match(/^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/);
-  if (!match) {
-    return null;
-  }
-
-  const fields: Record<string, string> = {};
-  for (const rawLine of match[1].split(/\r?\n/)) {
-    const line = rawLine.trim();
-    if (!line || line.startsWith("#")) {
-      continue;
-    }
-    const field = line.match(/^([A-Za-z0-9_-]+):\s*(.*)$/);
-    if (field) {
-      fields[field[1]] = stripYamlQuotes(field[2]);
-    }
-  }
-  return fields;
-}
-
-function isValidSkillName(value: string) {
-  return /^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/.test(value) && !value.includes("--");
-}
-
 export function validateSkillMarkdown({
   markdown,
   parentDirectoryName,
@@ -208,42 +176,7 @@ export function validateSkillMarkdown({
   markdown: string;
   parentDirectoryName: string;
 }): SkillMarkdownValidation {
-  const frontmatter = parseFrontmatter(markdown);
-  if (!frontmatter) {
-    return { valid: false, reason: "SKILL.md must include YAML frontmatter" };
-  }
-
-  const name = frontmatter.name?.trim() ?? "";
-  if (!name) {
-    return { valid: false, reason: "name is required" };
-  }
-  if (name.length > 64) {
-    return { valid: false, reason: "name must be 64 characters or fewer", name };
-  }
-  if (!isValidSkillName(name)) {
-    return {
-      valid: false,
-      reason: "name must use lowercase letters, numbers, and hyphens only",
-      name,
-    };
-  }
-  if (name !== parentDirectoryName) {
-    return {
-      valid: false,
-      reason: "name must match parent directory",
-      name,
-    };
-  }
-
-  const description = frontmatter.description?.trim() ?? "";
-  if (!description) {
-    return { valid: false, reason: "description is required", name };
-  }
-  if (description.length > 1024) {
-    return { valid: false, reason: "description must be 1024 characters or fewer", name, description };
-  }
-
-  return { valid: true, name, description };
+  return validateAgentSkillMarkdown({ markdown, expectedName: parentDirectoryName });
 }
 
 function pathSegments(path: string) {

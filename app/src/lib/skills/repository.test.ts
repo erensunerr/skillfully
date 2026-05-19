@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  buildPublishContextForSkill,
   createSkillDraft,
   createSkillFile,
   deleteSkillFile,
@@ -9,6 +10,7 @@ import {
   markDraftPublished,
   updateSkillFileText,
 } from "./repository";
+import { AGENT_SKILLS_SPEC_URL, buildSkillMarkdown } from "./skill-frontmatter";
 
 type Row = Record<string, unknown>;
 type Op =
@@ -146,17 +148,41 @@ test("listSkillFiles and updateSkillFileText enforce ownership and normalized pa
   });
   assert.equal(files.length, 1);
 
+  const editableFile = await createSkillFile({
+    store,
+    now: () => 1700000000050,
+    idGenerator: () => `id_${++counter}`,
+    ownerId: "user-1",
+    skillId: "sk_demo",
+    versionId: created.version.id,
+    path: "docs/original.md",
+    kind: "markdown",
+    contentText: "# Original",
+  });
+
   const updated = await updateSkillFileText({
     store,
     now: () => 1700000000100,
     ownerId: "user-1",
-    fileId: created.file.id,
+    fileId: editableFile.id,
     contentText: "# Updated",
     path: "/docs/updated.md",
   });
 
   assert.equal(updated.path, "docs/updated.md");
   assert.equal(updated.sha256.length, 64);
+  await assert.rejects(
+    () =>
+      updateSkillFileText({
+        store,
+        now: () => 1700000000150,
+        ownerId: "user-1",
+        fileId: created.file.id,
+        contentText: created.file.contentText ?? "",
+        path: "docs/renamed.md",
+      }),
+    /primary skill file cannot be renamed/,
+  );
   await assert.rejects(
     () =>
       createSkillFile({
@@ -235,8 +261,13 @@ test("text file mutations strip Skillfully-owned blocks from editable SKILL.md c
     baseUrl: "https://www.skillfully.sh",
   });
 
+  const editableSkillMarkdown = buildSkillMarkdown({
+    name: "demo",
+    description: "Demo skill",
+    body: "# Editable",
+  });
   const contentWithManagedBlock = [
-    "# Editable",
+    editableSkillMarkdown,
     "",
     "<!-- skillfully:managed:start -->",
     "## Skillfully feedback and updates",
@@ -251,7 +282,7 @@ test("text file mutations strip Skillfully-owned blocks from editable SKILL.md c
     fileId: created.file.id,
     contentText: contentWithManagedBlock,
   });
-  assert.equal(updated.contentText, "# Editable");
+  assert.equal(updated.contentText, editableSkillMarkdown);
 
   const added = await createSkillFile({
     store,
@@ -264,7 +295,117 @@ test("text file mutations strip Skillfully-owned blocks from editable SKILL.md c
     kind: "markdown",
     contentText: contentWithManagedBlock,
   });
-  assert.equal(added.contentText, "# Editable");
+  assert.equal(added.contentText, editableSkillMarkdown);
+});
+
+test("SKILL.md mutations reject invalid Agent Skills frontmatter with the spec link", async () => {
+  const store = new InMemorySkillStore();
+  let counter = 0;
+  const created = await createSkillDraft({
+    store,
+    now: () => 1700000000000,
+    idGenerator: () => `id_${++counter}`,
+    skillIdGenerator: () => "sk_demo",
+    ownerId: "user-1",
+    name: "Demo",
+    description: "Demo skill",
+    baseUrl: "https://www.skillfully.sh",
+  });
+
+  await assert.rejects(
+    () =>
+      updateSkillFileText({
+        store,
+        now: () => 1700000000100,
+        ownerId: "user-1",
+        fileId: created.file.id,
+        contentText: "# Missing frontmatter",
+      }),
+    (error) => {
+      assert.equal(error instanceof Error, true);
+      assert.match((error as Error).message, /Invalid SKILL\.md/);
+      assert.match((error as Error).message, new RegExp(AGENT_SKILLS_SPEC_URL.replaceAll(".", "\\.")));
+      return true;
+    },
+  );
+
+  await assert.rejects(
+    () =>
+      createSkillFile({
+        store,
+        now: () => 1700000000200,
+        idGenerator: () => `id_${++counter}`,
+        ownerId: "user-1",
+        skillId: "sk_demo",
+        versionId: created.version.id,
+        path: "nested/SKILL.md",
+        kind: "markdown",
+        contentText: "# Missing frontmatter",
+      }),
+    /Invalid SKILL\.md/,
+  );
+});
+
+test("imported skills must keep SKILL.md name aligned with the GitHub skill directory", async () => {
+  const store = new InMemorySkillStore();
+  let counter = 0;
+  const created = await createSkillDraft({
+    store,
+    now: () => 1700000000000,
+    idGenerator: () => `id_${++counter}`,
+    skillIdGenerator: () => "sk_imported",
+    ownerId: "user-1",
+    name: "code-review",
+    description: "Reviews code changes.",
+    baseUrl: "https://www.skillfully.sh",
+    sourceMode: "github_import",
+    originalRepoFullName: "octocat/Hello-World",
+    originalRepositoryId: "1296269",
+    originalSkillPath: ".agents/skills/code-review",
+  });
+
+  await assert.rejects(
+    () =>
+      updateSkillFileText({
+        store,
+        now: () => 1700000000100,
+        ownerId: "user-1",
+        fileId: created.file.id,
+        contentText: buildSkillMarkdown({
+          name: "different-skill",
+          description: "Different skill.",
+          body: "Instructions.",
+        }),
+      }),
+    /name must match package directory `code-review`/,
+  );
+});
+
+test("publish context rejects packages with invalid SKILL.md frontmatter", async () => {
+  const store = new InMemorySkillStore();
+  let counter = 0;
+  const created = await createSkillDraft({
+    store,
+    now: () => 1700000000000,
+    idGenerator: () => `id_${++counter}`,
+    skillIdGenerator: () => "sk_demo",
+    ownerId: "user-1",
+    name: "Demo",
+    description: "Demo skill",
+    baseUrl: "https://www.skillfully.sh",
+  });
+
+  store.rows.skillFiles[created.file.id].contentText = "# Broken package";
+
+  await assert.rejects(
+    () =>
+      buildPublishContextForSkill({
+        store,
+        ownerId: "user-1",
+        skillId: "sk_demo",
+      }),
+    /Invalid SKILL\.md/,
+  );
 });
 
 test("markDraftPublished freezes the published version and opens a new editable draft", async () => {
@@ -285,7 +426,11 @@ test("markDraftPublished freezes the published version and opens a new editable 
     now: () => 1700000000100,
     ownerId: "user-1",
     fileId: created.file.id,
-    contentText: "# Published content",
+    contentText: buildSkillMarkdown({
+      name: "demo",
+      description: "Demo skill",
+      body: "# Published content",
+    }),
   });
 
   await markDraftPublished({
@@ -319,5 +464,12 @@ test("markDraftPublished freezes the published version and opens a new editable 
   );
   assert.equal(draftFiles.length, 1);
   assert.equal(draftFiles[0].path, "SKILL.md");
-  assert.equal(draftFiles[0].contentText, "# Published content");
+  assert.equal(
+    draftFiles[0].contentText,
+    buildSkillMarkdown({
+      name: "demo",
+      description: "Demo skill",
+      body: "# Published content",
+    }),
+  );
 });

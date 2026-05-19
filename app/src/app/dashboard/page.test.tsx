@@ -229,6 +229,7 @@ test("dashboard skill detail renders the editor tab UI", async () => {
 
   assert.match(html, /Files/);
   assert.match(html, /Frontmatter/);
+  assert.match(html, /aria-readonly="true"/);
   assert.match(html, /Collapse files/);
   assert.match(html, /Collapse frontmatter/);
   assert.doesNotMatch(html, /Validate skill/);

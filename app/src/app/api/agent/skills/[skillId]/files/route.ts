@@ -8,6 +8,7 @@ import {
   getDraftVersion,
   listSkillFiles,
 } from "@/lib/skills/repository";
+import { SkillFrontmatterValidationError } from "@/lib/skills/skill-frontmatter";
 
 type RouteContext = { params: Promise<{ skillId: string }> };
 
@@ -59,7 +60,11 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
 
     return jsonResponse({ file }, 201, "GET, POST, OPTIONS");
   } catch (error) {
-    const status = error instanceof ApiError ? error.status : 500;
+    const status = error instanceof ApiError
+      ? error.status
+      : error instanceof SkillFrontmatterValidationError
+        ? 400
+        : 500;
     return jsonResponse(getErrorPayload(error), status, "GET, POST, OPTIONS");
   }
 }

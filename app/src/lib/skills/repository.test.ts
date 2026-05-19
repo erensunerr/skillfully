@@ -317,7 +317,7 @@ test("markDraftPublished freezes the published version and opens a new editable 
   assert.equal(skill.visibility, "public");
   assert.match(
     JSON.stringify(publishedVersions[0].manifestJson),
-    /api\/public\/skills\/sk_demo\/manifest/,
+    /api\/skills\/sk_demo\/manifest/,
   );
 
   const draftFiles = Object.values(store.rows.skillFiles).filter(

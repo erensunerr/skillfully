@@ -451,8 +451,8 @@ export function buildFeedbackSnippet(template: string, baseUrl: string, skillId:
   const normalizedBaseUrl = baseUrl.replace(/\/+$/, "");
   return template
     .replaceAll("{{feedbackUrl}}", `${normalizedBaseUrl}/feedback/${skillId}`)
-    .replaceAll("{{manifestUrl}}", `${normalizedBaseUrl}/api/public/skills/${skillId}/manifest`)
-    .replaceAll("{{skillFileUrl}}", `${normalizedBaseUrl}/api/public/skills/${skillId}/files/SKILL.md`);
+    .replaceAll("{{manifestUrl}}", `${normalizedBaseUrl}/api/skills/${skillId}/manifest`)
+    .replaceAll("{{skillFileUrl}}", `${normalizedBaseUrl}/api/skills/${skillId}/files/SKILL.md`);
 }
 
 type FeedbackCursor = { createdAt: number; id: string };

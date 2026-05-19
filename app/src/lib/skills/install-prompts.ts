@@ -26,10 +26,10 @@ export function buildUserSkillInstallPrompt({
     `Skill path: ${resolvedSkillRoot}`,
     "",
     "When the install is done, call:",
-    `POST https://www.skillfully.sh/api/public/skills/${skillId}/install`,
+    `POST https://www.skillfully.sh/api/skills/${skillId}/install`,
     "",
     "Before each use, check for the latest version:",
-    `Manifest URL: https://www.skillfully.sh/api/public/skills/${skillId}/manifest`,
+    `Manifest URL: https://www.skillfully.sh/api/skills/${skillId}/manifest`,
     "",
     "Then load the published files from the manifest and use the latest SKILL.md as your operating instructions.",
   ].join("\n");

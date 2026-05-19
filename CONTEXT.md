@@ -39,6 +39,10 @@ _Avoid_: Semantic version, semver
 An email notification that points a person to a skill whose access has already been granted to that email address.
 _Avoid_: Access request, pending approval
 
+**Access Revocation**:
+Removal of permission that stops Skillfully from serving current or future skill files to that account.
+_Avoid_: Local uninstall, copy deletion
+
 ## Relationships
 
 - A **Skill** can have many **Authors**.
@@ -50,6 +54,7 @@ _Avoid_: Access request, pending approval
 - **Edit Access** can publish a new **Private Release**.
 - **Edit Access** can grant or revoke **Use Access** and **Edit Access** for accounts other than the **Skill Owner**.
 - A **Skill Invite** notifies an account about existing **Use Access** or **Edit Access**.
+- **Access Revocation** stops Skillfully from serving current and future **Private Releases** to the revoked account.
 - A **Skill Version** identifies exactly one released state of a **Skill**.
 
 ## Example Dialogue
@@ -64,3 +69,4 @@ _Avoid_: Access request, pending approval
 - "Invite" can imply a pending accept step; resolved: a **Skill Invite** is notification only, and access is effective once the email address is shared.
 - "Edit" can be mistaken for draft-only access; resolved: **Edit Access** also includes **Use Access**.
 - "Owner" is distinct from general authorship; resolved: the **Skill Owner** is the only account whose access cannot be revoked by editors.
+- "Revoke" cannot imply deleting files already copied outside Skillfully; resolved: **Access Revocation** only stops future Skillfully serving.

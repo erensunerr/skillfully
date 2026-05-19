@@ -90,6 +90,7 @@ _Avoid_: Imported skill, public listing
 - A **Connected Agent** can resolve a human-provided skill name to a **Skill Identifier** before making a mutation.
 - A **Shared Dashboard Skill** is marked as shared or externally owned.
 - A **Shared Dashboard Skill** with **Use Access** exposes install and release access without editor, analytics, or settings surfaces.
+- A **Shared Dashboard Skill** with **Use Access** does not expose the **Share List**.
 - A **Shared Dashboard Skill** with **Edit Access** exposes editor, analytics, settings, publishing, and non-owner sharing surfaces.
 - A **Skill Invite** notifies an account about existing **Use Access** or **Edit Access**.
 - An **Invite Delivery Failure** does not revoke or roll back **Use Access** or **Edit Access**.
@@ -114,6 +115,7 @@ _Avoid_: Imported skill, public listing
 - "Agent access" is not separate from account access; resolved: a **Connected Agent** acts through the authenticated account's permissions.
 - "Skill name" is too ambiguous for mutation APIs; resolved: mutations use the **Skill Identifier** after any name lookup.
 - "Shared dashboard access" does not always mean editing; resolved: **Use Access** shows the skill without editor, analytics, or settings.
+- "Use access" can expose a shared skill without exposing collaborator emails; resolved: only **Edit Access** exposes the **Share List**.
 - "Owner" is distinct from general authorship; resolved: the **Skill Owner** is the only account whose access cannot be revoked by editors.
 - "Revoke" cannot imply deleting files already copied outside Skillfully; resolved: **Access Revocation** only stops future Skillfully serving.
 - "Unauthorized private skill" should not reveal existence; resolved: the **Install Surface** treats inaccessible private skills as missing.

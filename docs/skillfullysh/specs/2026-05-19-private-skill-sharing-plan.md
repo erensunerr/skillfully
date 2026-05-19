@@ -8,6 +8,8 @@
 
 **Tech Stack:** Next.js App Router, React 19, InstantDB schema/perms/admin SDK, Node test runner with `tsx`, Resend, existing Skillfully repository/publishing helpers.
 
+**Completion status:** Implemented and pushed through `40695de`. Instant schema and permissions were pushed successfully after implementation. Full `npm run lint`, `npm test`, `npm run build`, and `git diff --check` passed.
+
 ---
 
 ## Baseline

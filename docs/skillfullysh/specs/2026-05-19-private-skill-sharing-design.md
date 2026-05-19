@@ -1,8 +1,20 @@
 # Private Skill Sharing And Collaboration
 
 **Date:** 2026-05-19
-**Status:** Approved for implementation planning
+**Status:** Implemented and verified
 **Approval basis:** User approved the route-owned access layer, unified install surface, editor-panel sharing UI, agent sharing API, Resend invite notifications, and Instant schema push requirement.
+
+## Implementation Status
+
+Implemented on branch `erensunerr/install-mattpocock-skills` through commit `40695de`.
+
+- Added Instant schema/perms for private sharing and pushed both with `npx instant-cli push schema --yes` and `npx instant-cli push perms --yes`.
+- Added the shared access and sharing service layers used by dashboard, agent, authoring, and install routes.
+- Added unified `/api/skills/[skillId]/manifest`, `/files/[...path]`, and `/install` routes with private auth behavior.
+- Added integer release numbering with `skillVersions.versionNumber` and string-compatible `version` values.
+- Added dashboard shared-skill markers, use-only surface restrictions, and owner/editor share dialog controls.
+- Updated `skills/skillfully/SKILL.md` so connected agents can list visible skills, share by email, and revoke non-owner grants.
+- Verified with `npm run lint`, `npm test`, `npm run build`, and `git diff --check`.
 
 ## Goal
 

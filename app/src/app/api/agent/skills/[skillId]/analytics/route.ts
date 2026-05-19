@@ -1,11 +1,10 @@
 import { NextRequest } from "next/server";
 
-import { adminDb } from "@/lib/adminDb";
 import { ApiError } from "@/lib/agent-api";
 import { requireAgentAuthor } from "@/lib/agent-author-api";
 import { getErrorPayload, jsonResponse } from "@/lib/route-helpers";
+import { requireSkillEditContext } from "@/lib/skills/authoring-access";
 import {
-  getSkillForOwner,
   listDirectorySubmissions,
   listPublishRuns,
 } from "@/lib/skills/repository";
@@ -20,16 +19,13 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
   try {
     const author = await requireAgentAuthor(request);
     const { skillId } = await params;
-    const skill = await getSkillForOwner({ ownerId: author.ownerId, skillId });
-    if (!skill) {
-      return jsonResponse({ error: "skill not found" }, 404, "GET, OPTIONS");
-    }
+    const access = await requireSkillEditContext({ userId: author.ownerId, email: author.email, skillId });
 
-    const rows = await adminDb.query({
+    const rows = await access.store.query({
       feedback: {
         $: {
           where: {
-            ownerId: author.ownerId,
+            ownerId: access.ownerId,
             skillId,
           },
         },
@@ -37,12 +33,12 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
       skillUsageEvents: {
         $: {
           where: {
-            ownerId: author.ownerId,
+            ownerId: access.ownerId,
             skillId,
           },
         },
       },
-    } as never) as { feedback?: Array<Record<string, unknown>>; skillUsageEvents?: Array<Record<string, unknown>> };
+    }) as { feedback?: Array<Record<string, unknown>>; skillUsageEvents?: Array<Record<string, unknown>> };
     const feedback = (rows.feedback ?? []).sort((a, b) => Number(b.createdAt) - Number(a.createdAt));
     const usageEvents = (rows.skillUsageEvents ?? []).sort((a, b) => Number(b.createdAt) - Number(a.createdAt));
     const counts = {
@@ -59,8 +55,8 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
     const uniqueSubjects = new Set(
       usageEvents.map((entry) => entry.subjectHash).filter((value): value is string => typeof value === "string"),
     );
-    const publishRuns = await listPublishRuns({ ownerId: author.ownerId, skillId });
-    const directorySubmissions = await listDirectorySubmissions({ ownerId: author.ownerId, skillId });
+    const publishRuns = await listPublishRuns({ store: access.store, ownerId: access.ownerId, skillId });
+    const directorySubmissions = await listDirectorySubmissions({ store: access.store, ownerId: access.ownerId, skillId });
 
     return jsonResponse(
       {
@@ -113,7 +109,7 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
       "GET, OPTIONS",
     );
   } catch (error) {
-    const status = error instanceof ApiError ? error.status : 500;
+    const status = error instanceof ApiError ? error.status : error instanceof Error && error.message === "skill not found" ? 404 : 500;
     return jsonResponse(getErrorPayload(error), status, "GET, OPTIONS");
   }
 }

@@ -2,7 +2,8 @@ import { NextRequest } from "next/server";
 
 import { getDashboardUser } from "@/lib/dashboard-auth";
 import { jsonResponse } from "@/lib/route-helpers";
-import { defaultSkillStore, listPublishingTargets } from "@/lib/skills/repository";
+import { requireSkillEditContext } from "@/lib/skills/authoring-access";
+import { listPublishingTargets } from "@/lib/skills/repository";
 
 type RouteContext = { params: Promise<{ skillId: string; targetKind: string }> };
 
@@ -16,7 +17,13 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
     return jsonResponse({ error: "unauthorized" }, 401, "PATCH, OPTIONS");
   }
   const { skillId, targetKind } = await params;
-  const targets = await listPublishingTargets({ ownerId: user.id, skillId });
+  let access;
+  try {
+    access = await requireSkillEditContext({ userId: user.id, email: user.email, skillId });
+  } catch {
+    return jsonResponse({ error: "skill not found" }, 404, "PATCH, OPTIONS");
+  }
+  const targets = await listPublishingTargets({ store: access.store, ownerId: access.ownerId, skillId });
   const target = targets.find((entry) => entry.targetKind === targetKind);
   if (!target) {
     return jsonResponse({ error: "target not found" }, 404, "PATCH, OPTIONS");
@@ -48,6 +55,6 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
     updatedAt: Date.now(),
   };
 
-  await defaultSkillStore.transact([defaultSkillStore.update("publishingTargets", target.id, updates)]);
+  await access.store.transact([access.store.update("publishingTargets", target.id, updates)]);
   return jsonResponse({ target: { ...target, ...updates } }, 200, "PATCH, OPTIONS");
 }

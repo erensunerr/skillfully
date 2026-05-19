@@ -6,6 +6,7 @@ import { createGitHubAppAdapter } from "@/lib/publishing/adapters/github-app";
 import { createManualDirectoryAdapter } from "@/lib/publishing/adapters/manual-directory";
 import { publishSkillVersion } from "@/lib/publishing/publish";
 import { jsonResponse } from "@/lib/route-helpers";
+import { requireSkillEditContext } from "@/lib/skills/authoring-access";
 import { buildPublishContextForSkill, markDraftPublished, recordPublishResult } from "@/lib/skills/repository";
 
 type RouteContext = { params: Promise<{ skillId: string }> };
@@ -22,7 +23,8 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
 
   const { skillId } = await params;
   try {
-    const context = await buildPublishContextForSkill({ ownerId: user.id, skillId });
+    const access = await requireSkillEditContext({ userId: user.id, email: user.email, skillId });
+    const context = await buildPublishContextForSkill({ store: access.store, ownerId: access.ownerId, skillId });
     const result = await publishSkillVersion({
       context,
       adapters: [
@@ -33,7 +35,8 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
       ],
       recordResult: async (entry) => {
         await recordPublishResult({
-          ownerId: user.id,
+          store: access.store,
+          ownerId: access.ownerId,
           skillId,
           versionId: context.version.id,
           result: entry,
@@ -43,7 +46,7 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
 
     const published = result.results.some((entry) => entry.status === "published" || entry.status === "submitted");
     if (published) {
-      await markDraftPublished({ ownerId: user.id, skillId, versionId: context.version.id });
+      await markDraftPublished({ store: access.store, ownerId: access.ownerId, skillId, versionId: context.version.id });
       await captureServerEvent({
         distinctId: user.id,
         event: "skill_published",
@@ -78,6 +81,7 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
 
     return jsonResponse(result, 200, "POST, OPTIONS");
   } catch (error) {
-    return jsonResponse({ error: error instanceof Error ? error.message : "unknown error" }, 400, "POST, OPTIONS");
+    const status = error instanceof Error && error.message === "skill not found" ? 404 : 400;
+    return jsonResponse({ error: error instanceof Error ? error.message : "unknown error" }, status, "POST, OPTIONS");
   }
 }

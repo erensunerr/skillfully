@@ -512,6 +512,7 @@ export async function updateSkillFileText({
   store = defaultSkillStore,
   now = () => Date.now(),
   ownerId,
+  skillId,
   fileId,
   contentText,
   path,
@@ -519,6 +520,7 @@ export async function updateSkillFileText({
   store?: SkillStore;
   now?: () => number;
   ownerId: string;
+  skillId?: string;
   fileId: string;
   contentText: string;
   path?: string;
@@ -528,6 +530,7 @@ export async function updateSkillFileText({
       $: {
         where: {
           ownerId,
+          ...(skillId ? { skillId } : {}),
           id: fileId,
         },
       },
@@ -577,10 +580,12 @@ export async function updateSkillFileText({
 export async function deleteSkillFile({
   store = defaultSkillStore,
   ownerId,
+  skillId,
   fileId,
 }: {
   store?: SkillStore;
   ownerId: string;
+  skillId?: string;
   fileId: string;
 }) {
   const rows = await store.query({
@@ -588,6 +593,7 @@ export async function deleteSkillFile({
       $: {
         where: {
           ownerId,
+          ...(skillId ? { skillId } : {}),
           id: fileId,
         },
       },

@@ -75,10 +75,14 @@ test("GitHub import modal renders no-skills state with repository access action"
       {...baseProps}
       state="empty"
       candidates={[]}
+      connectedRepositories={["erensunerr/skillfully-skills", "erensunerr/marketingskills"]}
       warnings={[]}
     />,
   );
 
   assert.match(html, /No skills found/);
-  assert.match(html, /Change repository access/);
+  assert.match(html, /Connected repositories/);
+  assert.match(html, /erensunerr\/skillfully-skills/);
+  assert.match(html, /erensunerr\/marketingskills/);
+  assert.match(html, /Add repositories/);
 });

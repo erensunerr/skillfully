@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { getDashboardUser } from "@/lib/dashboard-auth";
+import { createGitHubImportSession, selectExistingGitHubInstallation } from "@/lib/github-import";
 import { createGitHubInstallState } from "@/lib/github-install-state";
 import { jsonResponse } from "@/lib/route-helpers";
+import { defaultSkillStore } from "@/lib/skills/repository";
 
 function githubInstallUrl(state: string) {
   const configuredUrl = process.env.NEXT_PUBLIC_GITHUB_APP_INSTALL_URL;
@@ -28,6 +30,30 @@ async function createInstallUrl(request: NextRequest) {
   return githubInstallUrl(createGitHubInstallState({ ownerId: user.id }));
 }
 
+async function existingInstallationImportSession(ownerId: string) {
+  const rows = await defaultSkillStore.query({
+    githubInstallations: {
+      $: {
+        where: {
+          ownerId,
+        },
+      },
+    },
+  });
+  const installation = selectExistingGitHubInstallation(rows.githubInstallations ?? [], ownerId);
+  if (!installation) {
+    return null;
+  }
+
+  return createGitHubImportSession({
+    store: defaultSkillStore,
+    ownerId,
+    installationId: installation.installationId,
+    accountLogin: installation.accountLogin,
+    accountType: installation.accountType,
+  });
+}
+
 export async function GET(request: NextRequest) {
   try {
     const installUrl = await createInstallUrl(request);
@@ -42,7 +68,24 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const installUrl = await createInstallUrl(request);
+    const user = await getDashboardUser(request);
+    if (!user) {
+      return jsonResponse({ error: "unauthorized" }, 401, "GET, POST, OPTIONS");
+    }
+
+    const body = await request.json().catch(() => ({})) as { intent?: unknown };
+    if (body.intent !== "configure" && process.env.NEXT_PUBLIC_INSTANT_APP_ID) {
+      const session = await existingInstallationImportSession(user.id);
+      if (session) {
+        return jsonResponse({
+          session_id: session.sessionId,
+          installation_id: session.installationId,
+          account_login: session.accountLogin,
+        }, 200, "GET, POST, OPTIONS");
+      }
+    }
+
+    const installUrl = githubInstallUrl(createGitHubInstallState({ ownerId: user.id }));
     if (!installUrl) {
       return jsonResponse({ error: "unauthorized" }, 401, "GET, POST, OPTIONS");
     }

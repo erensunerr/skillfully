@@ -69,6 +69,21 @@ export type GitHubImportSession = {
   updatedAt: number;
 };
 
+export type ExistingGitHubInstallationRow = {
+  ownerId?: unknown;
+  installationId?: unknown;
+  accountLogin?: unknown;
+  accountType?: unknown;
+  createdAt?: unknown;
+  updatedAt?: unknown;
+};
+
+export type ExistingGitHubInstallation = {
+  installationId: string;
+  accountLogin: string;
+  accountType: string;
+};
+
 function randomSessionId() {
   const chars = "abcdefghijkmnopqrstuvwxyz23456789";
   let out = "gis_";
@@ -76,6 +91,40 @@ function randomSessionId() {
     out += chars[crypto.randomInt(0, chars.length)];
   }
   return out;
+}
+
+function numericTimestamp(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
+export function selectExistingGitHubInstallation(
+  rows: ExistingGitHubInstallationRow[],
+  ownerId: string,
+): ExistingGitHubInstallation | null {
+  const [installation] = rows
+    .filter((row) =>
+      row.ownerId === ownerId &&
+      typeof row.installationId === "string" &&
+      row.installationId.length > 0 &&
+      typeof row.accountLogin === "string" &&
+      row.accountLogin.length > 0,
+    )
+    .sort((left, right) =>
+      (numericTimestamp(right.updatedAt) || numericTimestamp(right.createdAt)) -
+      (numericTimestamp(left.updatedAt) || numericTimestamp(left.createdAt)),
+    );
+
+  if (!installation || typeof installation.installationId !== "string" || typeof installation.accountLogin !== "string") {
+    return null;
+  }
+
+  return {
+    installationId: installation.installationId,
+    accountLogin: installation.accountLogin,
+    accountType: typeof installation.accountType === "string" && installation.accountType
+      ? installation.accountType
+      : "User",
+  };
 }
 
 export async function createGitHubImportSession({

@@ -19,6 +19,7 @@ const BUTTON =
   "border-4 border-black bg-black px-4 py-2 text-sm font-black uppercase text-white transition-all hover:bg-yellow-300 hover:text-black disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-black disabled:hover:text-white";
 const BUTTON_LIGHT =
   "border-4 border-black bg-white px-4 py-2 text-sm font-black uppercase text-black transition-all hover:bg-black hover:text-white";
+const CONNECTED_REPOSITORY_DISPLAY_LIMIT = 50;
 
 function statusLabel(candidate: GitHubImportCandidateView) {
   if (candidate.status === "invalid") {
@@ -49,6 +50,7 @@ function statusClass(candidate: GitHubImportCandidateView) {
 export function GitHubImportModal({
   state,
   candidates,
+  connectedRepositories = [],
   selectedCandidateIds,
   warnings,
   isImporting,
@@ -60,6 +62,7 @@ export function GitHubImportModal({
 }: {
   state: GitHubImportModalState;
   candidates: GitHubImportCandidateView[];
+  connectedRepositories?: string[];
   selectedCandidateIds: Set<string>;
   warnings: string[];
   isImporting: boolean;
@@ -72,6 +75,8 @@ export function GitHubImportModal({
   const selectableCount = candidates.filter((candidate) => candidate.status === "valid").length;
   const selectedCount = candidates.filter((candidate) => selectedCandidateIds.has(candidate.id)).length;
   const isReady = state === "ready" && selectableCount > 0;
+  const visibleConnectedRepositories = connectedRepositories.slice(0, CONNECTED_REPOSITORY_DISPLAY_LIMIT);
+  const hiddenConnectedRepositoryCount = Math.max(0, connectedRepositories.length - visibleConnectedRepositories.length);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/35 px-3 py-6 backdrop-blur-[1px]">
@@ -98,6 +103,24 @@ export function GitHubImportModal({
           >
             Import skills
           </h2>
+
+          {visibleConnectedRepositories.length > 0 ? (
+            <div className="mt-7 border-2 border-black bg-white p-5">
+              <h3 className="font-mono text-sm font-black uppercase">Connected repositories</h3>
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                {visibleConnectedRepositories.map((repository) => (
+                  <p key={repository} className="break-words border border-black bg-[#fffdf8] px-3 py-2 font-mono text-xs">
+                    {repository}
+                  </p>
+                ))}
+              </div>
+              {hiddenConnectedRepositoryCount > 0 ? (
+                <p className="mt-3 font-mono text-xs font-black uppercase">
+                  {hiddenConnectedRepositoryCount} more connected repositories not shown.
+                </p>
+              ) : null}
+            </div>
+          ) : null}
 
           {state === "loading" ? (
             <div className="mt-7 border-2 border-black bg-white p-5">
@@ -189,7 +212,7 @@ export function GitHubImportModal({
 
         <footer className="flex flex-col gap-3 border-t-4 border-black px-6 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-8">
           <button type="button" className={BUTTON_LIGHT} onClick={onChangeRepositoryAccess}>
-            Change repository access
+            Add repositories
           </button>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
             <button type="button" className={BUTTON_LIGHT} onClick={onClose}>

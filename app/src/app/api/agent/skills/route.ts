@@ -11,6 +11,7 @@ import {
   listPublishingTargets,
   listSkillsForOwner,
 } from "@/lib/skills/repository";
+import { listSkillsVisibleToActor } from "@/lib/skills/sharing";
 
 const SKILL_ID_CHARS = "abcdefghijkmnopqrstuvwxyz23456789";
 
@@ -30,11 +31,20 @@ export async function GET(request: NextRequest) {
   try {
     const author = await requireAgentAuthor(request);
     const baseUrl = new URL(request.url).origin;
-    const skills = await listSkillsForOwner({ ownerId: author.ownerId });
+    const skills = await listSkillsVisibleToActor({
+      actorUserId: author.ownerId,
+      actorEmail: author.email,
+    });
 
     return jsonResponse(
       {
-        skills: skills.map((skill) => serializeAgentSkill({ skill, baseUrl })),
+        skills: skills.map((entry) =>
+          serializeAgentSkill({
+            skill: entry.skill,
+            accessLevel: entry.accessLevel,
+            baseUrl,
+          }),
+        ),
       },
       200,
       "GET, POST, OPTIONS",

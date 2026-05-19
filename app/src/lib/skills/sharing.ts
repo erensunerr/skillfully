@@ -17,7 +17,7 @@ import {
   type SkillAccessStore,
   type SkillPermission,
 } from "@/lib/skills/access";
-import { defaultSkillStore } from "@/lib/skills/repository";
+import { defaultSkillStore, type SkillRow } from "@/lib/skills/repository";
 
 type SkillSharingDeps = {
   store: SkillAccessStore;
@@ -54,6 +54,77 @@ export function serializeSkillAccessGrant(grant: SkillAccessGrantRow | SkillAcce
     updated_at: grant.updatedAt,
     revoked_at: grant.revokedAt ?? null,
   };
+}
+
+export type ActorVisibleSkill = {
+  skill: SkillRow;
+  accessLevel: "owner" | "edit" | "use";
+};
+
+export async function listSkillsVisibleToActor({
+  actorUserId,
+  actorEmail,
+}: {
+  actorUserId: string;
+  actorEmail?: string | null;
+}): Promise<ActorVisibleSkill[]> {
+  const config = deps();
+  const ownedRows = await config.store.query({
+    skills: {
+      $: {
+        where: {
+          ownerId: actorUserId,
+        },
+      },
+    },
+  });
+  const owned = (ownedRows.skills ?? []).map((row) => row as SkillRow);
+  const bySkillId = new Map<string, ActorVisibleSkill>();
+  for (const skill of owned) {
+    bySkillId.set(skill.skillId, { skill, accessLevel: "owner" });
+  }
+
+  const normalizedEmail = normalizeAccessEmail(actorEmail);
+  const grantQueries = await Promise.all([
+    config.store.query({
+      skillAccessGrants: {
+        $: {
+          where: {
+            granteeUserId: actorUserId,
+            status: "active",
+          },
+        },
+      },
+    }),
+    normalizedEmail
+      ? config.store.query({
+          skillAccessGrants: {
+            $: {
+              where: {
+                granteeEmail: normalizedEmail,
+                status: "active",
+              },
+            },
+          },
+        })
+      : Promise.resolve({ skillAccessGrants: [] as Record<string, unknown>[] }),
+  ]);
+  const grants = [...(grantQueries[0].skillAccessGrants ?? []), ...(grantQueries[1].skillAccessGrants ?? [])]
+    .map((row) => row as SkillAccessGrantRow)
+    .filter((grant, index, rows) => rows.findIndex((entry) => entry.id === grant.id) === index);
+
+  for (const grant of grants) {
+    if (bySkillId.has(grant.skillId)) {
+      continue;
+    }
+    const skill = await getSkillBySkillId({ store: config.store, skillId: grant.skillId });
+    if (!skill) {
+      continue;
+    }
+    bySkillId.set(skill.skillId, { skill, accessLevel: grant.permission });
+  }
+
+  return [...bySkillId.values()].sort((a, b) => Number(b.skill.createdAt) - Number(a.skill.createdAt));
 }
 
 function notificationResponse(result: SkillInviteEmailResult) {

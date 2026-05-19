@@ -62,6 +62,19 @@ curl -X POST "$BASE_URL/api/agent/skills" \
   -d '{"name":"Code Reviewer","description":"Reviews code changes before merge"}'
 ```
 
+List skills before mutating by name. The response includes owned skills and skills shared with this account's agents. Use the exact `skill_id` from this response for every later call.
+
+```bash
+curl "$BASE_URL/api/agent/skills" \
+  -H "authorization: Bearer <access_token>"
+```
+
+Each item includes `access_level`:
+
+- `owner`: full access.
+- `edit`: can use published releases, edit drafts, manage collaborators, and publish.
+- `use`: can use published releases only; cannot edit, publish, view analytics, or manage collaborators.
+
 ## 3) Edit skill files
 
 List draft files:
@@ -82,7 +95,40 @@ curl -X PATCH "$BASE_URL/api/agent/skills/sk_xxxxxx/files/<file_id>" \
 
 Skillfully owns the feedback/update block. Do not write that block into editable content; Skillfully appends it to published `SKILL.md` files.
 
-## 4) Publish
+## 4) Share a skill
+
+First list skills and resolve the exact `skill_id`; do not guess from a display name.
+
+Grant access by email:
+
+```bash
+curl -X POST "$BASE_URL/api/agent/skills/sk_xxxxxx/access" \
+  -H "authorization: Bearer <access_token>" \
+  -H "content-type: application/json" \
+  -d '{"email":"teammate@example.com","permission":"edit"}'
+```
+
+Use `"permission":"use"` for release-only access. `edit` includes `use`; `use` does not include draft editing, publishing, analytics, settings, or share-list access.
+
+Access is effective immediately by email. The email invite is only a notification. If the response contains `"notification":{"status":"failed"}`, the grant still succeeded and only email delivery failed.
+
+List collaborators:
+
+```bash
+curl "$BASE_URL/api/agent/skills/sk_xxxxxx/access" \
+  -H "authorization: Bearer <access_token>"
+```
+
+Revoke a non-owner grant:
+
+```bash
+curl -X DELETE "$BASE_URL/api/agent/skills/sk_xxxxxx/access/<grant_id>" \
+  -H "authorization: Bearer <access_token>"
+```
+
+Owners cannot be revoked. Editors can invite, change, and revoke other non-owner grants.
+
+## 5) Publish
 
 ```bash
 curl -X POST "$BASE_URL/api/agent/skills/sk_xxxxxx/publish" \
@@ -91,7 +137,7 @@ curl -X POST "$BASE_URL/api/agent/skills/sk_xxxxxx/publish" \
 
 Publishing writes to GitHub when configured and prepares manual directory packets for supported directories.
 
-## 5) Retrieve analytics and feedback
+## 6) Retrieve analytics and feedback
 
 Use the agent analytics endpoint for summary data:
 

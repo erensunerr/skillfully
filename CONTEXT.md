@@ -24,7 +24,7 @@ Permission for an account and its connected agents to install and run a private 
 _Avoid_: View access, read-only edit access
 
 **Edit Access**:
-Permission for an account and its connected agents to change a skill's draft.
+Permission for an account and its connected agents to change a skill's draft and use its private releases.
 _Avoid_: Write access, admin access
 
 **Skill Version**:
@@ -41,6 +41,7 @@ _Avoid_: Access request, pending approval
 - A **Private Skill** can have many authorized accounts.
 - **Use Access** applies to a **Private Release**.
 - **Edit Access** applies to a **Skill** draft.
+- **Edit Access** includes **Use Access**.
 - A **Skill Invite** notifies an account about existing **Use Access** or **Edit Access**.
 - A **Skill Version** identifies exactly one released state of a **Skill**.
 
@@ -54,3 +55,4 @@ _Avoid_: Access request, pending approval
 - "Version" previously suggested semantic versioning; resolved: **Skill Version** is an integer release number.
 - "Share" can mean both **Use Access** and **Edit Access**; resolved: private sharing must state the permission explicitly.
 - "Invite" can imply a pending accept step; resolved: a **Skill Invite** is notification only, and access is effective once the email address is shared.
+- "Edit" can be mistaken for draft-only access; resolved: **Edit Access** also includes **Use Access**.

@@ -15,6 +15,7 @@ import type {
 
 export type AgentAuthor = {
   ownerId: string;
+  email?: string | null;
 };
 
 export async function getAgentAuthor(request: NextRequest): Promise<AgentAuthor | null> {
@@ -25,7 +26,7 @@ export async function getAgentAuthor(request: NextRequest): Promise<AgentAuthor 
 
   try {
     const owner = await resolveTokenOwner(token);
-    return { ownerId: owner.userId };
+    return { ownerId: owner.userId, email: owner.email };
   } catch {
     return null;
   }

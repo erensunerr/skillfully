@@ -691,7 +691,24 @@ export async function resolveTokenOwner(
     throw new ApiError(401, "invalid or expired token");
   }
 
-  return { userId: record.userId };
+  let email: string | undefined;
+  try {
+    const users = await config.db.query({
+      apiUsers: {
+        $: {
+          where: {
+            id: record.userId,
+          },
+        },
+      },
+    });
+    const userEmail = users.apiUsers?.[0]?.email;
+    email = typeof userEmail === "string" ? userEmail : undefined;
+  } catch {
+    email = undefined;
+  }
+
+  return { userId: record.userId, email };
 }
 
 export async function createTrackedSkill(

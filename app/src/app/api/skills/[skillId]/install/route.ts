@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 
 import { jsonResponse } from "@/lib/route-helpers";
-import { serveSkillInstall } from "../../../../skills/[skillId]/install-helpers";
+import { serveSkillInstall } from "../install-helpers";
 
 type RouteContext = { params: Promise<{ skillId: string }> };
 
@@ -11,5 +11,5 @@ export async function OPTIONS() {
 
 export async function POST(request: NextRequest, { params }: RouteContext) {
   const { skillId } = await params;
-  return serveSkillInstall({ request, skillId, publicOnly: true });
+  return serveSkillInstall({ request, skillId });
 }

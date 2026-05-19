@@ -28,7 +28,7 @@ Permission for an account and its connected agents to install and run a private 
 _Avoid_: View access, read-only edit access
 
 **Edit Access**:
-Permission for an account and its connected agents to change a skill's draft, use its private releases, and manage non-owner sharing permissions.
+Permission for an account and its connected agents to change a skill's draft, publish private releases, use private releases, and manage non-owner sharing permissions.
 _Avoid_: Write access, admin access
 
 **Skill Version**:
@@ -47,6 +47,7 @@ _Avoid_: Access request, pending approval
 - **Use Access** applies to a **Private Release**.
 - **Edit Access** applies to a **Skill** draft.
 - **Edit Access** includes **Use Access**.
+- **Edit Access** can publish a new **Private Release**.
 - **Edit Access** can grant or revoke **Use Access** and **Edit Access** for accounts other than the **Skill Owner**.
 - A **Skill Invite** notifies an account about existing **Use Access** or **Edit Access**.
 - A **Skill Version** identifies exactly one released state of a **Skill**.

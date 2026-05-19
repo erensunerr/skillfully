@@ -292,23 +292,38 @@ export async function createSkillDraft({
     updatedAt: currentTime,
   };
 
+  const primaryTarget: PublishingTargetRow = sourceMode === "github_import"
+    ? {
+        id: idGenerator(),
+        ownerId,
+        skillId: generatedSkillId,
+        targetKind: "github",
+        status: "enabled",
+        ...(originalRepoFullName ? { repoFullName: originalRepoFullName } : {}),
+        ...(originalRepositoryId ? { repositoryId: originalRepositoryId } : {}),
+        ...(originalSkillPath ? { skillRoot: originalSkillPath } : {}),
+        baseBranch: repo.baseBranch,
+        autoMerge: false,
+        consentStatus: "pending",
+        createdAt: currentTime,
+        updatedAt: currentTime,
+      }
+    : {
+        id: idGenerator(),
+        ownerId,
+        skillId: generatedSkillId,
+        targetKind: "skillfully",
+        status: "enabled",
+        consentStatus: "granted",
+        configJson: {
+          storage: "skillfully",
+        },
+        createdAt: currentTime,
+        updatedAt: currentTime,
+      };
+
   const targets: PublishingTargetRow[] = [
-    {
-      id: idGenerator(),
-      ownerId,
-      skillId: generatedSkillId,
-      targetKind: "github",
-      status: "enabled",
-      repoFullName: sourceMode === "github_import" && originalRepoFullName ? originalRepoFullName : repo.repoFullName,
-      ...(sourceMode === "github_import" && originalRepositoryId ? { repositoryId: originalRepositoryId } : {}),
-      installationId: sourceMode === "github_import" ? undefined : repo.installationId,
-      skillRoot: sourceMode === "github_import" && originalSkillPath ? originalSkillPath : `skills/${slug}`,
-      baseBranch: repo.baseBranch,
-      autoMerge: sourceMode !== "github_import",
-      consentStatus: sourceMode === "github_import" ? "pending" : "granted",
-      createdAt: currentTime,
-      updatedAt: currentTime,
-    },
+    primaryTarget,
     ...(["lobehub", "clawhub", "hermes"] as const).map((targetKind): PublishingTargetRow => ({
       id: idGenerator(),
       ownerId,
@@ -760,7 +775,9 @@ export async function buildPublishContextForSkill({
   const files = await listSkillFiles({ store, ownerId, skillId, versionId: version.id });
   assertValidSkillPackage({ skill, files });
   const targets = await listPublishingTargets({ store, ownerId, skillId });
-  const githubTarget = targets.find((target) => target.targetKind === "github");
+  const githubTarget = skill.sourceMode === "github_import"
+    ? targets.find((target) => target.targetKind === "github")
+    : null;
 
   return {
     skill: {
@@ -783,11 +800,11 @@ export async function buildPublishContextForSkill({
           : file.contentText,
       storageUrl: file.storageUrl,
     })),
-    defaultGitHubRepo: defaultGitHubRepo(),
+    defaultGitHubRepo: null,
     githubTarget: githubTarget
       ? {
-          repoFullName: githubTarget.repoFullName || defaultGitHubRepo().repoFullName,
-          installationId: githubTarget.installationId || defaultGitHubRepo().installationId,
+          repoFullName: githubTarget.repoFullName || skill.originalRepoFullName || "",
+          installationId: githubTarget.installationId || "",
           skillRoot: githubTarget.skillRoot,
           baseBranch: githubTarget.baseBranch,
           autoMerge: githubTarget.autoMerge,

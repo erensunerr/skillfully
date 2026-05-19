@@ -50,7 +50,16 @@ export function resolveGitHubPublishTarget({
     autoMerge?: boolean | null;
   } | null;
 }): GitHubPublishTarget {
-  if (skill.sourceMode === "github_import" && configuredTarget) {
+  if (skill.sourceMode === "github_import") {
+    if (!configuredTarget) {
+      throw new Error("GitHub publish target is not configured");
+    }
+    if (!configuredTarget.repoFullName) {
+      throw new Error("GitHub repository is not configured");
+    }
+    if (!configuredTarget.installationId) {
+      throw new Error("GitHub App installation is not configured for the source repository");
+    }
     return {
       repoFullName: configuredTarget.repoFullName,
       installationId: configuredTarget.installationId,
@@ -402,7 +411,21 @@ export function createGitHubAppAdapter({
       if (!appId || !privateKey) {
         issues.push({ severity: "error" as const, message: "GitHub App credentials are not configured" });
       }
-      if (!defaultRepo.installationId && !context.githubTarget?.installationId) {
+      if (context.skill.sourceMode === "github_import") {
+        if (!context.githubTarget) {
+          issues.push({ severity: "error" as const, message: "GitHub publish target is not configured" });
+        } else {
+          if (!context.githubTarget.repoFullName) {
+            issues.push({ severity: "error" as const, message: "GitHub repository is not configured" });
+          }
+          if (!context.githubTarget.installationId) {
+            issues.push({
+              severity: "error" as const,
+              message: "GitHub App installation is not configured for the source repository",
+            });
+          }
+        }
+      } else if (!defaultRepo.installationId && !context.githubTarget?.installationId) {
         issues.push({ severity: "error" as const, message: "GitHub App installation is not configured" });
       }
       return issues;

@@ -88,8 +88,12 @@ test("createSkillDraft creates a draft version, default file, and publishing tar
   assert.doesNotMatch(created.file.contentText ?? "", /Skillfully feedback and updates/);
   assert.equal(Object.keys(store.rows.publishingTargets).length, 4);
   assert.equal(
-    Object.values(store.rows.publishingTargets).find((target) => target.targetKind === "github")?.repoFullName,
-    "erensunerr/skillfully-skills",
+    Object.values(store.rows.publishingTargets).find((target) => target.targetKind === "skillfully")?.consentStatus,
+    "granted",
+  );
+  assert.equal(
+    Object.values(store.rows.publishingTargets).find((target) => target.targetKind === "github"),
+    undefined,
   );
 });
 
@@ -124,6 +128,54 @@ test("createSkillDraft stores durable GitHub metadata for imported skills", asyn
   assert.equal(githubTarget?.skillRoot, ".agents/skills/code-review");
   assert.equal(githubTarget?.autoMerge, false);
   assert.equal(githubTarget?.consentStatus, "pending");
+});
+
+test("publish context does not fall back to Skillfully's default GitHub installation for imported skills", async () => {
+  const previousDefaultRepo = process.env.SKILLFULLY_DEFAULT_SKILLS_REPO;
+  const previousDefaultInstallation = process.env.SKILLFULLY_DEFAULT_GITHUB_INSTALLATION_ID;
+  process.env.SKILLFULLY_DEFAULT_SKILLS_REPO = "erensunerr/skillfully-skills";
+  process.env.SKILLFULLY_DEFAULT_GITHUB_INSTALLATION_ID = "internal-installation";
+
+  try {
+    const store = new InMemorySkillStore();
+    let counter = 0;
+    await createSkillDraft({
+      store,
+      now: () => 1700000000000,
+      idGenerator: () => `id_${++counter}`,
+      skillIdGenerator: () => "sk_imported",
+      ownerId: "user-1",
+      name: "code-review",
+      description: "Reviews code changes.",
+      baseUrl: "https://www.skillfully.sh",
+      sourceMode: "github_import",
+      originalRepoFullName: "octocat/Hello-World",
+      originalRepositoryId: "1296269",
+      originalSkillPath: ".agents/skills/code-review",
+    });
+
+    const context = await buildPublishContextForSkill({
+      store,
+      ownerId: "user-1",
+      skillId: "sk_imported",
+    });
+
+    assert.equal(context.defaultGitHubRepo, null);
+    assert.equal(context.githubTarget?.repoFullName, "octocat/Hello-World");
+    assert.equal(context.githubTarget?.installationId, "");
+    assert.equal(context.githubTarget?.skillRoot, ".agents/skills/code-review");
+  } finally {
+    if (previousDefaultRepo === undefined) {
+      delete process.env.SKILLFULLY_DEFAULT_SKILLS_REPO;
+    } else {
+      process.env.SKILLFULLY_DEFAULT_SKILLS_REPO = previousDefaultRepo;
+    }
+    if (previousDefaultInstallation === undefined) {
+      delete process.env.SKILLFULLY_DEFAULT_GITHUB_INSTALLATION_ID;
+    } else {
+      process.env.SKILLFULLY_DEFAULT_GITHUB_INSTALLATION_ID = previousDefaultInstallation;
+    }
+  }
 });
 
 test("listSkillFiles and updateSkillFileText enforce ownership and normalized paths", async () => {

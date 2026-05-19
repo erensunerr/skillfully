@@ -3,9 +3,9 @@ import { NextRequest } from "next/server";
 import { ApiError } from "@/lib/agent-api";
 import { requireAgentAuthor } from "@/lib/agent-author-api";
 import { captureServerEvent } from "@/lib/posthog-server";
-import { createGitHubAppAdapter } from "@/lib/publishing/adapters/github-app";
-import { createManualDirectoryAdapter } from "@/lib/publishing/adapters/manual-directory";
+import { createPublishAdaptersForContext } from "@/lib/publishing/adapters/for-context";
 import { publishSkillVersion } from "@/lib/publishing/publish";
+import { buildPublishResponse } from "@/lib/publishing/publish-response";
 import { getErrorPayload, jsonResponse } from "@/lib/route-helpers";
 import { buildPublishContextForSkill, markDraftPublished, recordPublishResult } from "@/lib/skills/repository";
 import { SkillFrontmatterValidationError } from "@/lib/skills/skill-frontmatter";
@@ -23,12 +23,7 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
     const context = await buildPublishContextForSkill({ ownerId: author.ownerId, skillId });
     const result = await publishSkillVersion({
       context,
-      adapters: [
-        createGitHubAppAdapter(),
-        createManualDirectoryAdapter("lobehub"),
-        createManualDirectoryAdapter("clawhub"),
-        createManualDirectoryAdapter("hermes"),
-      ],
+      adapters: createPublishAdaptersForContext(context),
       recordResult: async (entry) => {
         await recordPublishResult({
           ownerId: author.ownerId,
@@ -74,7 +69,7 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
       });
     }
 
-    return jsonResponse(result, 200, "POST, OPTIONS");
+    return jsonResponse(buildPublishResponse({ context, result }), 200, "POST, OPTIONS");
   } catch (error) {
     const status = error instanceof ApiError
       ? error.status

@@ -3,9 +3,12 @@ import test from "node:test";
 
 import {
   buildGitHubWritePlan,
+  createGitHubAppAdapter,
   resolveGitHubPublishTarget,
 } from "./adapters/github-app";
+import { createPublishAdaptersForContext } from "./adapters/for-context";
 import { createManualDirectoryAdapter } from "./adapters/manual-directory";
+import { createSkillfullyAdapter } from "./adapters/skillfully";
 import { publishSkillVersion } from "./publish";
 import type { PublishAdapter, PublishContext } from "./types";
 
@@ -14,21 +17,38 @@ const defaultRepo = {
   installationId: "internal-installation",
 };
 
-test("resolveGitHubPublishTarget uses the Skillfully-owned repo for managed skills", () => {
-  const target = resolveGitHubPublishTarget({
-    defaultRepo,
+test("createPublishAdaptersForContext keeps Skillfully-managed skills out of GitHub", () => {
+  const adapters = createPublishAdaptersForContext({
     skill: {
       skillId: "sk_demo",
       slug: "demo-skill",
+      name: "demo-skill",
       sourceMode: "managed",
       originalSkillPath: null,
     },
-    configuredTarget: null,
   });
 
-  assert.equal(target.repoFullName, "erensunerr/skillfully-skills");
-  assert.equal(target.installationId, "internal-installation");
-  assert.equal(target.skillRoot, "skills/demo-skill");
+  assert.deepEqual(
+    adapters.map((adapter) => adapter.kind),
+    ["skillfully", "lobehub", "clawhub", "hermes"],
+  );
+});
+
+test("createPublishAdaptersForContext routes GitHub-managed skills to GitHub", () => {
+  const adapters = createPublishAdaptersForContext({
+    skill: {
+      skillId: "sk_imported",
+      slug: "code-review",
+      name: "code-review",
+      sourceMode: "github_import",
+      originalSkillPath: ".agents/skills/code-review",
+    },
+  });
+
+  assert.deepEqual(
+    adapters.map((adapter) => adapter.kind),
+    ["github", "lobehub", "clawhub", "hermes"],
+  );
 });
 
 test("resolveGitHubPublishTarget keeps imported skills in their source repo and path", () => {
@@ -50,6 +70,69 @@ test("resolveGitHubPublishTarget keeps imported skills in their source repo and 
   assert.equal(target.repoFullName, "acme/agent-skills");
   assert.equal(target.installationId, "user-installation");
   assert.equal(target.skillRoot, "skills/Original Skill");
+});
+
+test("GitHub adapter rejects imported skills without a source target", async () => {
+  const adapter = createGitHubAppAdapter({
+    appId: "1",
+    privateKey: "placeholder",
+    defaultRepo,
+  });
+  const issues = await adapter.validate({
+    skill: {
+      skillId: "sk_imported",
+      slug: "code-review",
+      name: "code-review",
+      sourceMode: "github_import",
+      originalSkillPath: ".agents/skills/code-review",
+    },
+    version: { id: "version-1", version: "1.0.0" },
+    files: [],
+    githubTarget: null,
+  });
+
+  assert.match(issues.map((issue) => issue.message).join("\n"), /GitHub publish target is not configured/);
+});
+
+test("GitHub adapter rejects imported skills without the source installation", async () => {
+  const adapter = createGitHubAppAdapter({
+    appId: "1",
+    privateKey: "placeholder",
+    defaultRepo,
+  });
+  const issues = await adapter.validate({
+    skill: {
+      skillId: "sk_imported",
+      slug: "code-review",
+      name: "code-review",
+      sourceMode: "github_import",
+      originalSkillPath: ".agents/skills/code-review",
+    },
+    version: { id: "version-1", version: "1.0.0" },
+    files: [],
+    githubTarget: {
+      repoFullName: "octocat/Hello-World",
+      installationId: "",
+      skillRoot: ".agents/skills/code-review",
+    },
+  });
+
+  assert.match(
+    issues.map((issue) => issue.message).join("\n"),
+    /GitHub App installation is not configured for the source repository/,
+  );
+});
+
+test("skillfully adapter marks Skillfully-hosted publishing as published", async () => {
+  const result = await createSkillfullyAdapter().submit({
+    skill: { skillId: "sk_demo", slug: "demo-skill", name: "demo-skill", sourceMode: "managed" },
+    version: { id: "version-1", version: "1.0.0" },
+    files: [{ path: "SKILL.md", contentText: "# demo", kind: "markdown" }],
+  } as PublishContext);
+
+  assert.equal(result.targetKind, "skillfully");
+  assert.equal(result.status, "published");
+  assert.equal(result.details?.storage, "skillfully");
 });
 
 test("buildGitHubWritePlan writes skill files under the resolved skill root", () => {

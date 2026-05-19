@@ -1,5 +1,5 @@
-const DEFAULT_USER_SKILLS_REPO = "erensunerr/skillfully-skills";
 const SKILLFULLY_REPO = "erensunerr/skillfully";
+const PUBLIC_BASE_URL = "https://www.skillfully.sh";
 
 export function buildSkillfullySkillInstallPrompt() {
   return `Install the skillfully skill from ${SKILLFULLY_REPO} on github.`;
@@ -18,18 +18,32 @@ export function buildUserSkillInstallPrompt({
   repoFullName?: string | null;
   skillRoot?: string | null;
 }) {
-  const resolvedRepoFullName = repoFullName?.trim() || DEFAULT_USER_SKILLS_REPO;
+  const resolvedRepoFullName = repoFullName?.trim();
   const resolvedSkillRoot = skillRoot?.trim() || `skills/${slug || name}`;
+  if (!resolvedRepoFullName) {
+    return [
+      `Install ${name} from Skillfully.`,
+      "",
+      "This skill is stored on Skillfully, not GitHub.",
+      `Manifest URL: ${PUBLIC_BASE_URL}/api/public/skills/${skillId}/manifest`,
+      `SKILL.md URL: ${PUBLIC_BASE_URL}/api/public/skills/${skillId}/files/SKILL.md`,
+      "",
+      "When the install is done, call:",
+      `POST ${PUBLIC_BASE_URL}/api/public/skills/${skillId}/install`,
+      "",
+      "Before each use, check the manifest for the latest version. Then load the published files from the manifest and use the latest SKILL.md as your operating instructions.",
+    ].join("\n");
+  }
 
   return [
     `Install ${name} from ${resolvedRepoFullName} on github.`,
     `Skill path: ${resolvedSkillRoot}`,
     "",
     "When the install is done, call:",
-    `POST https://www.skillfully.sh/api/public/skills/${skillId}/install`,
+    `POST ${PUBLIC_BASE_URL}/api/public/skills/${skillId}/install`,
     "",
     "Before each use, check for the latest version:",
-    `Manifest URL: https://www.skillfully.sh/api/public/skills/${skillId}/manifest`,
+    `Manifest URL: ${PUBLIC_BASE_URL}/api/public/skills/${skillId}/manifest`,
     "",
     "Then load the published files from the manifest and use the latest SKILL.md as your operating instructions.",
   ].join("\n");

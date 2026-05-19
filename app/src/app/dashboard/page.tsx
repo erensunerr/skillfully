@@ -155,8 +155,20 @@ function fallbackEditorFiles(skill: Skill): SkillEditorFile[] {
   ];
 }
 
-function isEditableSkillFile(file: SkillEditorFile) {
-  return file.kind === "markdown" || file.mimeType?.startsWith("text/") || file.contentText !== undefined;
+function isMarkdownFilePath(path: string | null | undefined) {
+  const lower = (path ?? "").toLowerCase();
+  return lower === "skill.md" || lower.endsWith(".md") || lower.endsWith(".mdx");
+}
+
+export function isEditableSkillFile(file: { path?: string | null; kind?: string | null; mimeType?: string | null }) {
+  const mimeType = file.mimeType?.toLowerCase() ?? "";
+  return (
+    file.kind === "markdown" ||
+    mimeType === "text/markdown" ||
+    mimeType === "text/mdx" ||
+    mimeType === "application/mdx" ||
+    isMarkdownFilePath(file.path)
+  );
 }
 
 function sortSkillFiles(files: SkillEditorFile[]) {
@@ -2101,7 +2113,11 @@ function SkillEditorWorkspace({
             </div>
             <div className="min-h-0 flex-1 overflow-hidden">
               {selectedFileIsEditable ? (
-                <MdxMarkdownEditor markdown={selectedMarkdown} onChange={updateSelectedMarkdown} />
+                <MdxMarkdownEditor
+                  key={selectedFile.id}
+                  markdown={selectedMarkdown}
+                  onChange={updateSelectedMarkdown}
+                />
               ) : (
                 <div className="h-full min-h-72 border border-[var(--ink)] bg-[var(--paper)] p-5 font-editorial-mono text-xs uppercase">
                   Select an editable markdown file.

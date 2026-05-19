@@ -58,6 +58,7 @@ Make onboarding GitHub import real: after a signed-in Skillfully user installs t
 - Import every file under the selected skill root, not only `SKILL.md`.
 - Store file paths relative to the skill root. Example: `.agents/skills/code-review/scripts/check.sh` becomes `scripts/check.sh` in Skillfully and publishes back under the original root.
 - Keep `SKILL.md` as text content. Other text files are imported as text files; binary files are uploaded to Skillfully storage and represented as assets.
+- In the dashboard editor, only Markdown/MDX files open in the markdown editor. Imported JSON, CSV, scripts, and other non-markdown files remain part of the skill and publish back to GitHub, but are shown in the assets list instead of being treated as editable markdown.
 - Per GitHub platform limits, skip files larger than 100 MiB and cap imported content at 1 GiB per skill directory. Oversized files are reported in import results.
 - Duplicate detection uses owner id plus `installationId + repositoryId + skillRoot`. Duplicates are not importable.
 - Imported skills use `sourceMode = github_import`, store original repo/root/repository id, and set their GitHub publishing target to the source repo/root with `autoMerge = false`.

@@ -39,6 +39,10 @@ _Avoid_: Semantic version, semver
 An email notification that points a person to a skill whose access has already been granted to that email address.
 _Avoid_: Access request, pending approval
 
+**Invite Delivery Failure**:
+A failed notification attempt that does not change the already-granted skill access.
+_Avoid_: Failed share, rejected invite
+
 **Access Revocation**:
 Removal of permission that stops Skillfully from serving current or future skill files to that account.
 _Avoid_: Local uninstall, copy deletion
@@ -61,6 +65,7 @@ _Avoid_: Public-only endpoint, private-only endpoint
 - **Edit Access** can publish a new **Private Release**.
 - **Edit Access** can grant or revoke **Use Access** and **Edit Access** for accounts other than the **Skill Owner**.
 - A **Skill Invite** notifies an account about existing **Use Access** or **Edit Access**.
+- An **Invite Delivery Failure** does not revoke or roll back **Use Access** or **Edit Access**.
 - **Access Revocation** stops Skillfully from serving current and future **Private Releases** to the revoked account.
 - A **Skill Version** identifies exactly one released state of a **Skill**.
 
@@ -74,6 +79,7 @@ _Avoid_: Public-only endpoint, private-only endpoint
 - "Version" previously suggested semantic versioning; resolved: **Skill Version** is an integer release number.
 - "Share" can mean both **Use Access** and **Edit Access**; resolved: private sharing must state the permission explicitly.
 - "Invite" can imply a pending accept step; resolved: a **Skill Invite** is notification only, and access is effective once the email address is shared.
+- "Email failed" can sound like sharing failed; resolved: **Invite Delivery Failure** only means the notification failed.
 - "Edit" can be mistaken for draft-only access; resolved: **Edit Access** also includes **Use Access**.
 - "Owner" is distinct from general authorship; resolved: the **Skill Owner** is the only account whose access cannot be revoked by editors.
 - "Revoke" cannot imply deleting files already copied outside Skillfully; resolved: **Access Revocation** only stops future Skillfully serving.

@@ -11,6 +11,10 @@ A reusable set of instructions and supporting files that an agent can install an
 A person or authorized agent that can change a skill's draft.
 _Avoid_: Maintainer, collaborator
 
+**Connected Agent**:
+An agent authenticated to act through a Skillfully account.
+_Avoid_: Separate agent user, anonymous bot
+
 **Skill Owner**:
 The account that controls a skill and whose access cannot be revoked by other authors.
 _Avoid_: Original author, administrator
@@ -73,6 +77,8 @@ _Avoid_: Public-only endpoint, private-only endpoint
 - **Edit Access** includes **Use Access**.
 - **Edit Access** can publish a new **Private Release**.
 - **Edit Access** can grant or revoke **Use Access** and **Edit Access** for accounts other than the **Skill Owner**.
+- A **Connected Agent** inherits its account's **Use Access** and **Edit Access**.
+- A **Connected Agent** with **Edit Access** can manage the **Share List** for accounts other than the **Skill Owner**.
 - A **Skill Invite** notifies an account about existing **Use Access** or **Edit Access**.
 - An **Invite Delivery Failure** does not revoke or roll back **Use Access** or **Edit Access**.
 - Changing a **Skill** between public and private does not clear its **Share List**.
@@ -93,6 +99,7 @@ _Avoid_: Public-only endpoint, private-only endpoint
 - "Invite" can imply a pending accept step; resolved: a **Skill Invite** is notification only, and access is effective once the email address is shared.
 - "Email failed" can sound like sharing failed; resolved: **Invite Delivery Failure** only means the notification failed.
 - "Edit" can be mistaken for draft-only access; resolved: **Edit Access** also includes **Use Access**.
+- "Agent access" is not separate from account access; resolved: a **Connected Agent** acts through the authenticated account's permissions.
 - "Owner" is distinct from general authorship; resolved: the **Skill Owner** is the only account whose access cannot be revoked by editors.
 - "Revoke" cannot imply deleting files already copied outside Skillfully; resolved: **Access Revocation** only stops future Skillfully serving.
 - "Unauthorized private skill" should not reveal existence; resolved: the **Install Surface** treats inaccessible private skills as missing.

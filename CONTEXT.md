@@ -90,7 +90,7 @@ _Avoid_: Imported skill, public listing
 - A **Connected Agent** can resolve a human-provided skill name to a **Skill Identifier** before making a mutation.
 - A **Shared Dashboard Skill** is marked as shared or externally owned.
 - A **Shared Dashboard Skill** with **Use Access** exposes install and release access without editor, analytics, or settings surfaces.
-- A **Shared Dashboard Skill** with **Edit Access** exposes authoring surfaces.
+- A **Shared Dashboard Skill** with **Edit Access** exposes editor, analytics, settings, publishing, and non-owner sharing surfaces.
 - A **Skill Invite** notifies an account about existing **Use Access** or **Edit Access**.
 - An **Invite Delivery Failure** does not revoke or roll back **Use Access** or **Edit Access**.
 - Changing a **Skill** between public and private does not clear its **Share List**.

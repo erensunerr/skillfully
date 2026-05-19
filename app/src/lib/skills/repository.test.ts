@@ -82,6 +82,8 @@ test("createSkillDraft creates a draft version, default file, and publishing tar
   assert.equal(created.skill.skillId, "sk_demo");
   assert.equal(created.skill.slug, "customer-support");
   assert.equal(created.version.status, "draft");
+  assert.equal(created.version.version, "1");
+  assert.equal(created.version.versionNumber, 1);
   assert.equal(created.file.path, "SKILL.md");
   assert.doesNotMatch(created.file.contentText ?? "", /Skillfully feedback and updates/);
   assert.equal(Object.keys(store.rows.publishingTargets).length, 4);
@@ -303,6 +305,10 @@ test("markDraftPublished freezes the published version and opens a new editable 
   const draftVersions = versions.filter((version) => version.status === "draft");
   assert.equal(publishedVersions.length, 1);
   assert.equal(draftVersions.length, 1);
+  assert.equal(publishedVersions[0].version, "1");
+  assert.equal(publishedVersions[0].versionNumber, 1);
+  assert.equal(draftVersions[0].version, "2");
+  assert.equal(draftVersions[0].versionNumber, 2);
   assert.notEqual(draftVersions[0].id, created.version.id);
 
   const skill = Object.values(store.rows.skills)[0];

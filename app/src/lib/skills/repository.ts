@@ -60,6 +60,7 @@ export type SkillVersionRow = {
   ownerId: string;
   skillId: string;
   version: string;
+  versionNumber?: number;
   status: string;
   summary?: string;
   manifestJson?: unknown;
@@ -136,13 +137,17 @@ function hashText(value: string) {
   return crypto.createHash("sha256").update(value).digest("hex");
 }
 
-function nextDraftVersionLabel(version: string) {
-  const match = version.match(/^(\d+)\.(\d+)\.(\d+)(.*)$/);
-  if (!match) {
-    return `${version}.1`;
+function releaseVersionNumber(version: Pick<SkillVersionRow, "version" | "versionNumber">) {
+  if (typeof version.versionNumber === "number" && Number.isFinite(version.versionNumber) && version.versionNumber > 0) {
+    return Math.floor(version.versionNumber);
   }
 
-  return `${match[1]}.${match[2]}.${Number(match[3]) + 1}${match[4] || ""}`;
+  const integerVersion = Number.parseInt(version.version, 10);
+  if (/^\d+$/.test(version.version) && Number.isFinite(integerVersion) && integerVersion > 0) {
+    return integerVersion;
+  }
+
+  return 1;
 }
 
 function defaultGitHubRepo() {
@@ -225,7 +230,8 @@ export async function createSkillDraft({
     id: versionId,
     ownerId,
     skillId: generatedSkillId,
-    version: "0.1.0",
+    version: "1",
+    versionNumber: 1,
     status: "draft",
     summary: cleanDescription,
     createdAt: currentTime,
@@ -823,11 +829,12 @@ export async function markDraftPublished({
   }
   const files = await listSkillFiles({ store, ownerId, skillId, versionId });
   const currentTime = now();
+  const currentVersionNumber = releaseVersionNumber(version);
   const manifest = buildSkillManifest({
     skill,
     version: {
       id: versionId,
-      version: version.version,
+      version: String(currentVersionNumber),
       status: "published",
     },
     files: files.map((file) => ({
@@ -840,7 +847,8 @@ export async function markDraftPublished({
     id: nextDraftVersionId,
     ownerId,
     skillId,
-    version: nextDraftVersionLabel(version.version),
+    version: String(currentVersionNumber + 1),
+    versionNumber: currentVersionNumber + 1,
     status: "draft",
     summary: version.summary,
     createdAt: currentTime,
@@ -861,6 +869,8 @@ export async function markDraftPublished({
 
   await store.transact([
     store.update("skillVersions", versionId, {
+      version: String(currentVersionNumber),
+      versionNumber: currentVersionNumber,
       status: "published",
       manifestJson: manifest,
       updatedAt: currentTime,

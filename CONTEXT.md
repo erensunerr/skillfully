@@ -67,6 +67,10 @@ _Avoid_: Public-only endpoint, private-only endpoint
 The canonical skill id used for Skillfully API mutations.
 _Avoid_: Display name, slug, title
 
+**Shared Dashboard Skill**:
+A skill shown in the dashboard because the signed-in account has use or edit access but is not necessarily the owner.
+_Avoid_: Imported skill, public listing
+
 ## Relationships
 
 - A **Skill** can have many **Authors**.
@@ -84,6 +88,9 @@ _Avoid_: Display name, slug, title
 - A **Connected Agent** inherits its account's **Use Access** and **Edit Access**.
 - A **Connected Agent** with **Edit Access** can manage the **Share List** for accounts other than the **Skill Owner**.
 - A **Connected Agent** can resolve a human-provided skill name to a **Skill Identifier** before making a mutation.
+- A **Shared Dashboard Skill** is marked as shared or externally owned.
+- A **Shared Dashboard Skill** with **Use Access** exposes install and release access without editor, analytics, or settings surfaces.
+- A **Shared Dashboard Skill** with **Edit Access** exposes authoring surfaces.
 - A **Skill Invite** notifies an account about existing **Use Access** or **Edit Access**.
 - An **Invite Delivery Failure** does not revoke or roll back **Use Access** or **Edit Access**.
 - Changing a **Skill** between public and private does not clear its **Share List**.
@@ -106,6 +113,7 @@ _Avoid_: Display name, slug, title
 - "Edit" can be mistaken for draft-only access; resolved: **Edit Access** also includes **Use Access**.
 - "Agent access" is not separate from account access; resolved: a **Connected Agent** acts through the authenticated account's permissions.
 - "Skill name" is too ambiguous for mutation APIs; resolved: mutations use the **Skill Identifier** after any name lookup.
+- "Shared dashboard access" does not always mean editing; resolved: **Use Access** shows the skill without editor, analytics, or settings.
 - "Owner" is distinct from general authorship; resolved: the **Skill Owner** is the only account whose access cannot be revoked by editors.
 - "Revoke" cannot imply deleting files already copied outside Skillfully; resolved: **Access Revocation** only stops future Skillfully serving.
 - "Unauthorized private skill" should not reveal existence; resolved: the **Install Surface** treats inaccessible private skills as missing.

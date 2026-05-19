@@ -19,6 +19,8 @@ type EntityName =
   | "publishingTargets"
   | "publishRuns"
   | "directorySubmissions"
+  | "skillAccessGrants"
+  | "skillInviteNotifications"
   | "githubInstallations"
   | "githubRepositories"
   | "skillImports";

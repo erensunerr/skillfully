@@ -51,6 +51,10 @@ _Avoid_: Failed share, rejected invite
 Removal of permission that stops Skillfully from serving current or future skill files to that account.
 _Avoid_: Local uninstall, copy deletion
 
+**Share List**:
+The set of accounts explicitly granted use or edit access to a skill.
+_Avoid_: Public audience, subscriber list
+
 **Install Surface**:
 The place where accounts and agents retrieve skill releases from Skillfully.
 _Avoid_: Public-only endpoint, private-only endpoint
@@ -71,6 +75,7 @@ _Avoid_: Public-only endpoint, private-only endpoint
 - **Edit Access** can grant or revoke **Use Access** and **Edit Access** for accounts other than the **Skill Owner**.
 - A **Skill Invite** notifies an account about existing **Use Access** or **Edit Access**.
 - An **Invite Delivery Failure** does not revoke or roll back **Use Access** or **Edit Access**.
+- Changing a **Skill** between public and private does not clear its **Share List**.
 - **Access Revocation** stops Skillfully from serving current and future **Private Releases** to the revoked account.
 - A **Skill Version** identifies exactly one **Skill Release**.
 
@@ -83,6 +88,7 @@ _Avoid_: Public-only endpoint, private-only endpoint
 
 - "Version" previously suggested semantic versioning; resolved: **Skill Version** is an integer release number.
 - "Publish" can imply separate public and private actions; resolved: publishing creates one **Skill Release**, and access rules decide who can retrieve it.
+- "Public" can sound like sharing no longer matters; resolved: public visibility does not erase the **Share List**.
 - "Share" can mean both **Use Access** and **Edit Access**; resolved: private sharing must state the permission explicitly.
 - "Invite" can imply a pending accept step; resolved: a **Skill Invite** is notification only, and access is effective once the email address is shared.
 - "Email failed" can sound like sharing failed; resolved: **Invite Delivery Failure** only means the notification failed.

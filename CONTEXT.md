@@ -63,6 +63,10 @@ _Avoid_: Public audience, subscriber list
 The place where accounts and agents retrieve skill releases from Skillfully.
 _Avoid_: Public-only endpoint, private-only endpoint
 
+**Skill Identifier**:
+The canonical skill id used for Skillfully API mutations.
+_Avoid_: Display name, slug, title
+
 ## Relationships
 
 - A **Skill** can have many **Authors**.
@@ -79,6 +83,7 @@ _Avoid_: Public-only endpoint, private-only endpoint
 - **Edit Access** can grant or revoke **Use Access** and **Edit Access** for accounts other than the **Skill Owner**.
 - A **Connected Agent** inherits its account's **Use Access** and **Edit Access**.
 - A **Connected Agent** with **Edit Access** can manage the **Share List** for accounts other than the **Skill Owner**.
+- A **Connected Agent** can resolve a human-provided skill name to a **Skill Identifier** before making a mutation.
 - A **Skill Invite** notifies an account about existing **Use Access** or **Edit Access**.
 - An **Invite Delivery Failure** does not revoke or roll back **Use Access** or **Edit Access**.
 - Changing a **Skill** between public and private does not clear its **Share List**.
@@ -100,6 +105,7 @@ _Avoid_: Public-only endpoint, private-only endpoint
 - "Email failed" can sound like sharing failed; resolved: **Invite Delivery Failure** only means the notification failed.
 - "Edit" can be mistaken for draft-only access; resolved: **Edit Access** also includes **Use Access**.
 - "Agent access" is not separate from account access; resolved: a **Connected Agent** acts through the authenticated account's permissions.
+- "Skill name" is too ambiguous for mutation APIs; resolved: mutations use the **Skill Identifier** after any name lookup.
 - "Owner" is distinct from general authorship; resolved: the **Skill Owner** is the only account whose access cannot be revoked by editors.
 - "Revoke" cannot imply deleting files already copied outside Skillfully; resolved: **Access Revocation** only stops future Skillfully serving.
 - "Unauthorized private skill" should not reveal existence; resolved: the **Install Surface** treats inaccessible private skills as missing.

@@ -43,11 +43,17 @@ _Avoid_: Access request, pending approval
 Removal of permission that stops Skillfully from serving current or future skill files to that account.
 _Avoid_: Local uninstall, copy deletion
 
+**Install Surface**:
+The place where accounts and agents retrieve skill releases from Skillfully.
+_Avoid_: Public-only endpoint, private-only endpoint
+
 ## Relationships
 
 - A **Skill** can have many **Authors**.
 - A **Skill** has exactly one **Skill Owner**.
 - A **Private Skill** can have many authorized accounts.
+- The **Install Surface** serves public releases anonymously.
+- The **Install Surface** serves **Private Releases** only to accounts with **Use Access** or **Edit Access**.
 - **Use Access** applies to a **Private Release**.
 - **Edit Access** applies to a **Skill** draft.
 - **Edit Access** includes **Use Access**.
@@ -70,3 +76,4 @@ _Avoid_: Local uninstall, copy deletion
 - "Edit" can be mistaken for draft-only access; resolved: **Edit Access** also includes **Use Access**.
 - "Owner" is distinct from general authorship; resolved: the **Skill Owner** is the only account whose access cannot be revoked by editors.
 - "Revoke" cannot imply deleting files already copied outside Skillfully; resolved: **Access Revocation** only stops future Skillfully serving.
+- "Unauthorized private skill" should not reveal existence; resolved: the **Install Surface** treats inaccessible private skills as missing.

@@ -176,7 +176,7 @@ test("three stakeholder flow: human author, author agent, and skill user share a
     baseUrl: "https://www.skillfully.sh",
   });
   assert.match(skillUserInstructions, /POST https:\/\/www\.skillfully\.sh\/feedback\/sk_threeway/);
-  assert.match(skillUserInstructions, /api\/public\/skills\/sk_threeway\/manifest/);
+  assert.match(skillUserInstructions, /api\/skills\/sk_threeway\/manifest/);
 
   await store.transact([
     store.create("feedback", "feedback-1", {

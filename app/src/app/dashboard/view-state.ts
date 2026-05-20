@@ -2,7 +2,10 @@ export type DashboardScreen = "list" | "create" | "detail";
 
 export type DashboardSkillRef = {
   id: string;
+  accessLevel?: "owner" | "edit" | "use";
 };
+
+export type DashboardSkillTab = "overview" | "editor" | "analytics" | "settings" | "account";
 
 export type DashboardViewState =
   | { kind: "create" }
@@ -75,4 +78,22 @@ export function githubConnectionStatusMessage({
     default:
       return "";
   }
+}
+
+export function canOpenSkillTab<T extends DashboardSkillRef>(
+  skill: T | null | undefined,
+  tab: DashboardSkillTab,
+) {
+  if (!skill || tab === "account" || tab === "overview") {
+    return true;
+  }
+
+  return skill.accessLevel !== "use";
+}
+
+export function resolveDashboardTabForSkill<T extends DashboardSkillRef>(
+  skill: T | null | undefined,
+  tab: DashboardSkillTab,
+) {
+  return canOpenSkillTab(skill, tab) ? tab : "overview";
 }

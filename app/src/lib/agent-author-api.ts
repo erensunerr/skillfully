@@ -15,9 +15,22 @@ import type {
 
 export type AgentAuthor = {
   ownerId: string;
+  email?: string | null;
 };
 
+let testAgentAuthorResolver: ((request: NextRequest) => Promise<AgentAuthor | null> | AgentAuthor | null) | null = null;
+
+export function setAgentAuthorTestResolver(
+  resolver: ((request: NextRequest) => Promise<AgentAuthor | null> | AgentAuthor | null) | null,
+) {
+  testAgentAuthorResolver = resolver;
+}
+
 export async function getAgentAuthor(request: NextRequest): Promise<AgentAuthor | null> {
+  if (testAgentAuthorResolver) {
+    return testAgentAuthorResolver(request);
+  }
+
   const token = getBearerToken(request.headers.get("authorization"));
   if (!token) {
     return null;
@@ -25,7 +38,7 @@ export async function getAgentAuthor(request: NextRequest): Promise<AgentAuthor 
 
   try {
     const owner = await resolveTokenOwner(token);
-    return { ownerId: owner.userId };
+    return { ownerId: owner.userId, email: owner.email };
   } catch {
     return null;
   }
@@ -60,12 +73,14 @@ export function serializeAgentSkill({
   files,
   targets,
   baseUrl,
+  accessLevel = "owner",
 }: {
   skill: SkillRow;
   version?: SkillVersionRow | null;
   files?: SkillFileRow[];
   targets?: PublishingTargetRow[];
   baseUrl: string;
+  accessLevel?: "owner" | "edit" | "use";
 }) {
   return {
     id: skill.id,
@@ -80,6 +95,8 @@ export function serializeAgentSkill({
     original_skill_path: skill.originalSkillPath ?? null,
     current_draft_version_id: skill.currentDraftVersionId,
     published_version_id: skill.publishedVersionId ?? null,
+    access_level: accessLevel,
+    owner_id: skill.ownerId,
     created_at: skill.createdAt,
     updated_at: skill.updatedAt,
     links: buildAgentSkillLinks({ skillId: skill.skillId, baseUrl }),

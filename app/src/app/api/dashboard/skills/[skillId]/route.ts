@@ -1,7 +1,8 @@
 import { NextRequest } from "next/server";
 
 import { getDashboardUser } from "@/lib/dashboard-auth";
-import { defaultSkillStore, getDraftVersion, getSkillForOwner, listPublishingTargets, listSkillFiles } from "@/lib/skills/repository";
+import { requireSkillEditContext } from "@/lib/skills/authoring-access";
+import { getDraftVersion, listPublishingTargets, listSkillFiles } from "@/lib/skills/repository";
 import { jsonResponse } from "@/lib/route-helpers";
 
 type RouteContext = { params: Promise<{ skillId: string }> };
@@ -18,13 +19,16 @@ export async function GET(_request: NextRequest, { params }: RouteContext) {
   }
 
   const { skillId } = await params;
-  const skill = await getSkillForOwner({ ownerId: user.id, skillId });
-  if (!skill) {
+  let access;
+  try {
+    access = await requireSkillEditContext({ userId: user.id, email: user.email, skillId });
+  } catch {
     return jsonResponse({ error: "skill not found" }, 404, "GET, PATCH, OPTIONS");
   }
-  const version = await getDraftVersion({ ownerId: user.id, skillId });
-  const files = version ? await listSkillFiles({ ownerId: user.id, skillId, versionId: version.id }) : [];
-  const targets = await listPublishingTargets({ ownerId: user.id, skillId });
+  const skill = access.skill;
+  const version = await getDraftVersion({ store: access.store, ownerId: access.ownerId, skillId });
+  const files = version ? await listSkillFiles({ store: access.store, ownerId: access.ownerId, skillId, versionId: version.id }) : [];
+  const targets = await listPublishingTargets({ store: access.store, ownerId: access.ownerId, skillId });
 
   return jsonResponse({ skill, version, files, targets }, 200, "GET, PATCH, OPTIONS");
 }
@@ -36,10 +40,13 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
   }
 
   const { skillId } = await params;
-  const skill = await getSkillForOwner({ ownerId: user.id, skillId });
-  if (!skill) {
+  let access;
+  try {
+    access = await requireSkillEditContext({ userId: user.id, email: user.email, skillId });
+  } catch {
     return jsonResponse({ error: "skill not found" }, 404, "GET, PATCH, OPTIONS");
   }
+  const skill = access.skill;
 
   let body: { name?: unknown; description?: unknown; visibility?: unknown };
   try {
@@ -55,6 +62,6 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
     updatedAt: Date.now(),
   };
 
-  await defaultSkillStore.transact([defaultSkillStore.update("skills", skill.id, updates)]);
+  await access.store.transact([access.store.update("skills", skill.id, updates)]);
   return jsonResponse({ skill: { ...skill, ...updates } }, 200, "GET, PATCH, OPTIONS");
 }

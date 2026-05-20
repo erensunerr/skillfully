@@ -4,8 +4,9 @@ import { NextRequest } from "next/server";
 import { adminDb } from "@/lib/adminDb";
 import { getDashboardUser } from "@/lib/dashboard-auth";
 import { jsonResponse } from "@/lib/route-helpers";
+import { requireSkillEditContext } from "@/lib/skills/authoring-access";
 import { normalizeSkillFilePath } from "@/lib/skills/skill-files";
-import { createSkillFile, getDraftVersion, getSkillForOwner, listSkillFiles } from "@/lib/skills/repository";
+import { createSkillFile, getDraftVersion, listSkillFiles } from "@/lib/skills/repository";
 
 type RouteContext = { params: Promise<{ skillId: string }> };
 
@@ -19,12 +20,18 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
     return jsonResponse({ error: "unauthorized" }, 401, "GET, POST, OPTIONS");
   }
   const { skillId } = await params;
-  const version = await getDraftVersion({ ownerId: user.id, skillId });
+  let access;
+  try {
+    access = await requireSkillEditContext({ userId: user.id, email: user.email, skillId });
+  } catch {
+    return jsonResponse({ error: "skill not found" }, 404, "GET, POST, OPTIONS");
+  }
+  const version = await getDraftVersion({ store: access.store, ownerId: access.ownerId, skillId });
   if (!version) {
     return jsonResponse({ error: "draft version not found" }, 404, "GET, POST, OPTIONS");
   }
 
-  const files = await listSkillFiles({ ownerId: user.id, skillId, versionId: version.id });
+  const files = await listSkillFiles({ store: access.store, ownerId: access.ownerId, skillId, versionId: version.id });
   return jsonResponse({ files }, 200, "GET, POST, OPTIONS");
 }
 
@@ -34,9 +41,14 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
     return jsonResponse({ error: "unauthorized" }, 401, "GET, POST, OPTIONS");
   }
   const { skillId } = await params;
-  const skill = await getSkillForOwner({ ownerId: user.id, skillId });
-  const version = await getDraftVersion({ ownerId: user.id, skillId });
-  if (!skill || !version) {
+  let access;
+  try {
+    access = await requireSkillEditContext({ userId: user.id, email: user.email, skillId });
+  } catch {
+    return jsonResponse({ error: "skill not found" }, 404, "GET, POST, OPTIONS");
+  }
+  const version = await getDraftVersion({ store: access.store, ownerId: access.ownerId, skillId });
+  if (!version) {
     return jsonResponse({ error: "skill or draft version not found" }, 404, "GET, POST, OPTIONS");
   }
 
@@ -50,7 +62,7 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
       }
       const requestedPath = normalizeSkillFilePath(String(formData.get("path") || file.name));
       const buffer = Buffer.from(await file.arrayBuffer());
-      const storagePath = `skills/${user.id}/${skillId}/${version.id}/${crypto.randomUUID()}/${requestedPath}`;
+      const storagePath = `skills/${access.ownerId}/${skillId}/${version.id}/${crypto.randomUUID()}/${requestedPath}`;
       const uploaded = await adminDb.storage.uploadFile(storagePath, buffer, {
         contentType: file.type || "application/octet-stream",
       });
@@ -65,7 +77,8 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
       } as never) as { $files?: Array<{ id: string; url?: string }> };
       const storageFile = fileRows.$files?.[0];
       const created = await createSkillFile({
-        ownerId: user.id,
+        store: access.store,
+        ownerId: access.ownerId,
         skillId,
         versionId: version.id,
         path: requestedPath,
@@ -79,7 +92,8 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
 
     const body = await request.json() as { path?: unknown; content_text?: unknown; kind?: unknown; mime_type?: unknown };
     const created = await createSkillFile({
-      ownerId: user.id,
+      store: access.store,
+      ownerId: access.ownerId,
       skillId,
       versionId: version.id,
       path: String(body.path ?? "SKILL.md"),

@@ -11,6 +11,7 @@ function fakeSkill(name = "code-review", id = "skill-1") {
     description: "Reviews code changes for correctness and missing tests.",
     skillId: "sk_test123",
     createdAt: Date.now(),
+    accessLevel: "owner" as const,
   };
 }
 
@@ -278,6 +279,80 @@ test("dashboard editor only opens markdown files in the markdown editor", async 
     kind: "json",
     mimeType: "application/json",
   }), false);
+});
+
+test("dashboard selector marks shared skills", async () => {
+  Object.assign(globalThis, { React });
+  const { SkillSelector } = await import("./page");
+
+  const html = renderToStaticMarkup(
+    <SkillSelector
+      skills={[
+        fakeSkill("owned-skill", "owned") as never,
+        { ...fakeSkill("shared-skill", "shared"), accessLevel: "use", ownerEmail: "owner@example.com" } as never,
+      ]}
+      selectedId="shared"
+      isOpen={true}
+      onToggle={() => undefined}
+      onSelect={() => undefined}
+      onCreateSkill={() => undefined}
+    />,
+  );
+
+  assert.match(html, /shared-skill/);
+  assert.match(html, /Shared/);
+  assert.match(html, /Use only/);
+});
+
+test("use-only shared skill hides editor analytics settings and share controls", async () => {
+  Object.assign(globalThis, { React });
+  const { SkillDetail } = await import("./page");
+
+  const skill = {
+    ...fakeSkill("shared-use", "shared-use"),
+    accessLevel: "use",
+    publishedVersionId: "version-1",
+    status: "published",
+  } as never;
+  const overviewHtml = renderToStaticMarkup(
+    <SkillDetail
+      skill={skill}
+      entries={[] as never}
+      activeTab="overview"
+      onBack={() => undefined}
+    />,
+  );
+  const editorHtml = renderToStaticMarkup(
+    <SkillDetail
+      skill={skill}
+      entries={[] as never}
+      activeTab="editor"
+      onBack={() => undefined}
+    />,
+  );
+
+  assert.match(overviewHtml, /Shared/);
+  assert.match(overviewHtml, /Use only/);
+  assert.doesNotMatch(overviewHtml, /Go to Editor/);
+  assert.doesNotMatch(editorHtml, /Markdown editor/i);
+  assert.doesNotMatch(editorHtml, />Share</);
+});
+
+test("edit shared skill keeps authoring tabs and share button visible", async () => {
+  Object.assign(globalThis, { React });
+  const { SkillDetail } = await import("./page");
+
+  const html = renderToStaticMarkup(
+    <SkillDetail
+      skill={{ ...fakeSkill("shared-edit", "shared-edit"), accessLevel: "edit" } as never}
+      entries={[] as never}
+      activeTab="editor"
+      onBack={() => undefined}
+    />,
+  );
+
+  assert.match(html, /Markdown editor/i);
+  assert.match(html, /Share/);
 });
 
 test("dashboard skill detail renders the analytics tab UI", async () => {

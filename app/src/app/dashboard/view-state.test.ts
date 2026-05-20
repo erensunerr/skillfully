@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  canOpenSkillTab,
   githubConnectionStatusMessage,
+  resolveDashboardTabForSkill,
   resolveDashboardViewState,
   shouldShowOnboardingModalByDefault,
 } from "./view-state";
@@ -53,4 +55,16 @@ test("shows a dashboard message when GitHub redirects without an import session"
     githubConnectionStatusMessage({ status: "installed", hasImportSession: true }),
     "",
   );
+});
+
+test("use-only shared skills are limited to the overview tab", () => {
+  const useOnlySkill = { id: "skill-1", accessLevel: "use" as const };
+  const editSkill = { id: "skill-2", accessLevel: "edit" as const };
+
+  assert.equal(canOpenSkillTab(useOnlySkill, "overview"), true);
+  assert.equal(canOpenSkillTab(useOnlySkill, "editor"), false);
+  assert.equal(canOpenSkillTab(useOnlySkill, "analytics"), false);
+  assert.equal(canOpenSkillTab(useOnlySkill, "settings"), false);
+  assert.equal(canOpenSkillTab(editSkill, "editor"), true);
+  assert.equal(resolveDashboardTabForSkill(useOnlySkill, "settings"), "overview");
 });

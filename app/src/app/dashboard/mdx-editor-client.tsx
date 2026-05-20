@@ -6,6 +6,7 @@ import {
   BoldItalicUnderlineToggles,
   CodeToggle,
   CreateLink,
+  InsertTable,
   ListsToggle,
   Separator,
   headingsPlugin,
@@ -13,6 +14,7 @@ import {
   listsPlugin,
   markdownShortcutPlugin,
   quotePlugin,
+  tablePlugin,
   toolbarPlugin,
   thematicBreakPlugin,
 } from "@mdxeditor/editor";
@@ -41,6 +43,7 @@ export function MdxMarkdownEditor({
               <Separator />
               <ListsToggle />
               <CreateLink />
+              <InsertTable />
             </>
           ),
         }),
@@ -49,6 +52,7 @@ export function MdxMarkdownEditor({
         quotePlugin(),
         thematicBreakPlugin(),
         linkPlugin(),
+        tablePlugin(),
         markdownShortcutPlugin(),
       ]}
     />

@@ -23,6 +23,7 @@ test("createPublishAdaptersForContext keeps Skillfully-managed skills out of Git
       skillId: "sk_demo",
       slug: "demo-skill",
       name: "demo-skill",
+      visibility: "public",
       sourceMode: "managed",
       originalSkillPath: null,
     },
@@ -40,6 +41,7 @@ test("createPublishAdaptersForContext routes GitHub-managed skills to GitHub", (
       skillId: "sk_imported",
       slug: "code-review",
       name: "code-review",
+      visibility: "public",
       sourceMode: "github_import",
       originalSkillPath: ".agents/skills/code-review",
     },
@@ -48,6 +50,24 @@ test("createPublishAdaptersForContext routes GitHub-managed skills to GitHub", (
   assert.deepEqual(
     adapters.map((adapter) => adapter.kind),
     ["github", "lobehub", "clawhub", "hermes"],
+  );
+});
+
+test("createPublishAdaptersForContext publishes private skills through Skillfully only", () => {
+  const adapters = createPublishAdaptersForContext({
+    skill: {
+      skillId: "sk_private",
+      slug: "private-skill",
+      name: "private-skill",
+      visibility: "private",
+      sourceMode: "github_import",
+      originalSkillPath: ".agents/skills/private-skill",
+    },
+  });
+
+  assert.deepEqual(
+    adapters.map((adapter) => adapter.kind),
+    ["skillfully"],
   );
 });
 

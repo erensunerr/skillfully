@@ -155,13 +155,32 @@ const SKILLS_GUIDE_PATH = "/guide/start-with-agent-skills";
 
 const validSkillRouteTabs: SkillRouteTab[] = ["overview", "editor", "analytics", "settings"];
 
-const publishingDestinationRows = [
-  ["skills.sh", "Available after publish", "Public manifest and Skillfully listing", "terminal"],
+const publicPublishingDestinationRows = [
+  ["Skillfully", "Available after publish", "Public manifest and Skillfully listing", "terminal"],
   ["GitHub", "Creates a PR for GitHub-managed skills", "Uses the imported source repository", "github"],
   ["LobeHub Skills", "Generates a submission packet", "Manual directory adapter", "circle"],
   ["ClawHub", "Generates a submission packet", "Manual directory adapter", "triangle"],
   ["Hermes Skills Hub", "Generates a submission packet", "Manual directory adapter", "square"],
 ] satisfies Array<[string, string, string, string]>;
+
+function skillVisibility(skill: Pick<Skill, "visibility">): "private" | "public" {
+  return skill.visibility === "public" ? "public" : "private";
+}
+
+function publishingDestinationRowsForSkill(skill: Pick<Skill, "visibility">) {
+  if (skillVisibility(skill) === "private") {
+    return [
+      [
+        "Skillfully",
+        "Private Skillfully release",
+        "Only people with use or edit access can install published versions",
+        "terminal",
+      ],
+    ] satisfies Array<[string, string, string, string]>;
+  }
+
+  return publicPublishingDestinationRows;
+}
 
 function pathSegments(path: string) {
   return path.split("/").filter(Boolean);
@@ -214,6 +233,14 @@ function sortSkillFiles(files: SkillEditorFile[]) {
   return [...files].sort((a, b) => a.path.localeCompare(b.path));
 }
 
+function markdownFilePathFromInput(value: string) {
+  const cleanPath = value.trim().replace(/^\/+/, "");
+  if (!cleanPath) {
+    return "";
+  }
+  return isMarkdownFilePath(cleanPath) ? cleanPath : `${cleanPath}.md`;
+}
+
 function frontmatterStateFromFiles(skill: Skill, files: SkillEditorFile[]) {
   const primarySkillFile = files.find((file) => isPrimarySkillMarkdownPath(file.path));
   const parsed = primarySkillFile?.contentText
@@ -226,9 +253,21 @@ function frontmatterStateFromFiles(skill: Skill, files: SkillEditorFile[]) {
   };
 }
 
-function skillSettingsPublishingRows(isGitHubImported: boolean) {
+function skillSettingsPublishingRows(isGitHubImported: boolean, visibility: "private" | "public") {
+  if (visibility === "private") {
+    return [
+      [
+        "Skillfully",
+        "Private Skillfully release",
+        "Configured",
+        "terminal",
+        "bg-emerald-700",
+      ],
+    ] satisfies Array<[string, string, string, string, string]>;
+  }
+
   return [
-    ["skills.sh", "Publish on release", "Configured", "terminal", "bg-emerald-700"],
+    ["Skillfully", "Publish to everyone", "Configured", "terminal", "bg-emerald-700"],
     [
       "GitHub",
       isGitHubImported ? "Create PR on publish" : "Only for GitHub-managed skills",
@@ -1517,12 +1556,14 @@ function RecentFeedbackTable({ entries }: { entries: Feedback[] }) {
   );
 }
 
-function PublishingStatus() {
+function PublishingStatus({ skill }: { skill: Skill }) {
+  const destinationRows = publishingDestinationRowsForSkill(skill);
+
   return (
     <section className={`${DASHBOARD_CARD} p-6`}>
       <p className="font-editorial-mono text-xs font-bold uppercase">Publishing & directory status</p>
       <div className="mt-6 grid gap-5 md:grid-cols-2 xl:grid-cols-4">
-        {publishingDestinationRows.map(([name, status, detail, icon], index) => (
+        {destinationRows.map(([name, status, detail, icon], index) => (
           <article key={name} className={`space-y-4 ${index > 0 ? "xl:border-l xl:border-[var(--ink)]/25 xl:pl-6" : ""}`}>
             <TargetIcon name={icon} />
             <div className="font-editorial-sans text-base">{name}</div>
@@ -1541,7 +1582,13 @@ function PublishingStatus() {
 function VersionSnapshot({ skill }: { skill: Skill }) {
   const rows = [
     skill.publishedVersionId
-      ? ["Published version", "Published", "A frozen version is available for public installs"]
+      ? [
+          "Published version",
+          "Published",
+          skillVisibility(skill) === "private"
+            ? "A frozen version is available to people with use or edit access"
+            : "A frozen version is available for public installs",
+        ]
       : null,
     skill.currentDraftVersionId
       ? ["Current draft", "Draft", "Editable files are saved in the draft version"]
@@ -1643,6 +1690,7 @@ function buildPublicInstallPrompt(skill: Skill) {
 export function PublishSkillModal({
   step,
   skillName,
+  visibility,
   installPrompt,
   installPromptCopied,
   isPublishing,
@@ -1657,6 +1705,7 @@ export function PublishSkillModal({
 }: {
   step: PublishModalStep;
   skillName: string;
+  visibility: "private" | "public";
   installPrompt: string;
   installPromptCopied: boolean;
   isPublishing: boolean;
@@ -1669,6 +1718,7 @@ export function PublishSkillModal({
   onContinueToInstallCheck: () => void;
   onFinish: () => void;
 }) {
+  const isPrivateRelease = visibility === "private";
   const requiresMerge = Boolean(pullRequestUrl) || step === "merge";
   const stepTotal = requiresMerge ? 4 : 3;
   const stepIndex =
@@ -1691,7 +1741,7 @@ export function PublishSkillModal({
       >
         <div className="flex items-start justify-between gap-6">
           <div>
-            <p className="font-editorial-mono text-xs font-bold uppercase">Publish step {stepIndex} of 3</p>
+            <p className="font-editorial-mono text-xs font-bold uppercase">Publish step {stepIndex} of {stepTotal}</p>
             <h2 id="publish-skill-title" className="mt-3 font-editorial-sans text-3xl font-bold">
               {step === "confirm"
                 ? "Are you sure?"
@@ -1718,7 +1768,15 @@ export function PublishSkillModal({
         {step === "confirm" ? (
           <>
             <p className="mt-6 text-lg leading-8">
-              This will make <strong>{skillName}</strong> publicly accessible.
+              {isPrivateRelease ? (
+                <>
+                  This publishes a frozen private release of <strong>{skillName}</strong>. Only people with use or edit access can install it.
+                </>
+              ) : (
+                <>
+                  This will make <strong>{skillName}</strong> publicly accessible.
+                </>
+              )}
             </p>
             {isPublishing ? (
               <p className="mt-4 border border-[var(--ink)] bg-[var(--paper)] p-3 font-editorial-mono text-xs font-bold uppercase">
@@ -1788,7 +1846,9 @@ export function PublishSkillModal({
         {step === "published" ? (
           <>
             <p className="mt-6 text-base leading-7">
-              Paste this into Codex or Claude Code to install your skill. You can also share it with friends.
+              {isPrivateRelease
+                ? "Paste this into Codex or Claude Code to install your private skill. Shared users can do the same with their own account."
+                : "Paste this into Codex or Claude Code to install your skill. You can also share it with friends."}
             </p>
             <pre className="mt-5 max-h-56 overflow-auto border border-[var(--ink)] bg-[var(--paper)] p-4 font-editorial-mono text-xs leading-5">
               {installPrompt}
@@ -2152,7 +2212,6 @@ function SkillEditorWorkspace({
   const [dirtyFileIds, setDirtyFileIds] = useState<Set<string>>(() => new Set());
   const [frontmatter, setFrontmatter] = useState({
     ...frontmatterStateFromFiles(skill, fallbackEditorFiles(skill)),
-    version: "0.1.0",
     status: "Draft",
   });
   const [isFilesOpen, setIsFilesOpen] = useState(true);
@@ -2168,6 +2227,8 @@ function SkillEditorWorkspace({
   const [isFileLoading, setIsFileLoading] = useState(false);
   const [isFileSaving, setIsFileSaving] = useState(false);
   const [isUploadingFile, setIsUploadingFile] = useState(false);
+  const [isCreatingMarkdownFile, setIsCreatingMarkdownFile] = useState(false);
+  const [newMarkdownPath, setNewMarkdownPath] = useState("");
   const [deletingFileIds, setDeletingFileIds] = useState<Set<string>>(() => new Set());
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
   const publicInstallPrompt = useMemo(
@@ -2434,9 +2495,87 @@ function SkillEditorWorkspace({
     }
   }
 
-  async function deleteAssetFile(file: SkillEditorFile) {
+  async function createMarkdownFile() {
+    const path = markdownFilePathFromInput(newMarkdownPath);
+    if (!path) {
+      setFileStatus("Enter a markdown file path.");
+      return;
+    }
+    if (files.some((file) => file.path.toLowerCase() === path.toLowerCase())) {
+      setFileStatus(`${path} already exists.`);
+      return;
+    }
+
     if (!user || isUsingLocalPreviewDb) {
-      setFileStatus("Deleting assets requires connected Skillfully storage.");
+      const localFile: SkillEditorFile = {
+        id: `local-${skill.id || skill.skillId}-${path}-${Date.now()}`,
+        path,
+        kind: "markdown",
+        mimeType: "text/markdown",
+        contentText: "",
+      };
+      setFiles((currentFiles) => sortSkillFiles([...currentFiles, localFile]));
+      setSelectedFileId(localFile.id);
+      setNewMarkdownPath("");
+      setFileStatus("Local preview changes are kept in memory.");
+      return;
+    }
+
+    setIsCreatingMarkdownFile(true);
+    setFileStatus(`Creating ${path}...`);
+    try {
+      const payload = await dashboardJson<{ file: SkillEditorFile }>(
+        user,
+        `/api/dashboard/skills/${skill.skillId}/files`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            path,
+            kind: "markdown",
+            mime_type: "text/markdown",
+            content_text: "",
+          }),
+        },
+      );
+      setFiles((currentFiles) => sortSkillFiles([
+        ...currentFiles.filter((currentFile) => currentFile.id !== payload.file.id),
+        payload.file,
+      ]));
+      setSelectedFileId(payload.file.id);
+      setNewMarkdownPath("");
+      setFileStatus(`Created ${payload.file.path}.`);
+    } catch (error) {
+      captureClientException(error);
+      setFileStatus(`Create failed: ${extractErrorMessage(error)}`);
+    } finally {
+      setIsCreatingMarkdownFile(false);
+    }
+  }
+
+  function removeFileFromEditor(file: SkillEditorFile) {
+    setFiles((currentFiles) => {
+      const nextFiles = currentFiles.filter((currentFile) => currentFile.id !== file.id);
+      if (selectedFileId === file.id) {
+        setSelectedFileId(nextFiles.find(isEditableSkillFile)?.id ?? nextFiles[0]?.id ?? "");
+      }
+      return sortSkillFiles(nextFiles);
+    });
+    setDirtyFileIds((current) => {
+      const next = new Set(current);
+      next.delete(file.id);
+      return next;
+    });
+  }
+
+  async function deleteSkillFileEntry(file: SkillEditorFile) {
+    if (isPrimarySkillMarkdownPath(file.path)) {
+      setFileStatus("Root SKILL.md cannot be deleted.");
+      return;
+    }
+
+    if (!user || isUsingLocalPreviewDb) {
+      removeFileFromEditor(file);
+      setFileStatus(`Deleted ${file.path}.`);
       return;
     }
 
@@ -2448,7 +2587,7 @@ function SkillEditorWorkspace({
         `/api/dashboard/skills/${skill.skillId}/files/${file.id}`,
         { method: "DELETE" },
       );
-      setFiles((currentFiles) => currentFiles.filter((currentFile) => currentFile.id !== file.id));
+      removeFileFromEditor(file);
       setFileStatus(`Deleted ${file.path}.`);
     } catch (error) {
       captureClientException(error);
@@ -2547,23 +2686,65 @@ function SkillEditorWorkspace({
 
                 <div className="mt-6">
                   <p className="font-editorial-mono text-xs font-bold uppercase">Markdown files (editable)</p>
+                  <div className="mt-4 border border-[var(--ink)] bg-[var(--paper)] p-3">
+                    <label className="block text-xs font-editorial-mono font-bold uppercase">
+                      New markdown file
+                      <input
+                        className={`${DASHBOARD_INPUT} bg-[var(--white)]`}
+                        placeholder="notes.md"
+                        value={newMarkdownPath}
+                        onChange={(event) => setNewMarkdownPath(event.currentTarget.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") {
+                            event.preventDefault();
+                            void createMarkdownFile();
+                          }
+                        }}
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      className="mt-3 flex w-full items-center justify-center border border-[var(--ink)] bg-[var(--white)] px-3 py-2 font-editorial-mono text-xs font-bold uppercase disabled:cursor-not-allowed disabled:opacity-50"
+                      disabled={isCreatingMarkdownFile}
+                      onClick={() => void createMarkdownFile()}
+                    >
+                      {isCreatingMarkdownFile ? "Creating..." : "Create markdown file"}
+                    </button>
+                  </div>
                   <div className="mt-4 space-y-2">
                     {markdownFiles.map((file) => {
                       const isActive = selectedFile?.id === file.id;
+                      const isPrimaryFile = isPrimarySkillMarkdownPath(file.path);
                       return (
-                        <button
+                        <div
                           key={file.id}
-                          type="button"
-                          className={`flex w-full items-center justify-start px-3 py-3 text-left text-sm ${
+                          className={`flex items-center gap-2 px-3 py-2 text-sm ${
                             isActive ? "bg-[var(--white)] font-semibold" : "hover:bg-[var(--white)]"
                           }`}
-                          onClick={() => setSelectedFileId(file.id)}
                         >
-                          <span className="flex items-center gap-3">
+                          <button
+                            type="button"
+                            className="flex min-w-0 flex-1 items-center gap-3 py-1 text-left"
+                            onClick={() => setSelectedFileId(file.id)}
+                          >
                             <FileGlyph />
-                            {file.path}
-                          </span>
-                        </button>
+                            <span className="min-w-0 truncate">{file.path}</span>
+                          </button>
+                          {isPrimaryFile ? (
+                            <span className="border border-[var(--ink)]/45 px-2 py-1 font-editorial-mono text-[0.62rem] uppercase">
+                              Root
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              className="border border-[var(--ink)] px-2 py-1 font-editorial-mono text-[0.62rem] uppercase disabled:opacity-50"
+                              disabled={deletingFileIds.has(file.id)}
+                              onClick={() => void deleteSkillFileEntry(file)}
+                            >
+                              {deletingFileIds.has(file.id) ? "Deleting" : "Delete"}
+                            </button>
+                          )}
+                        </div>
                       );
                     })}
                     {markdownFiles.length === 0 ? (
@@ -2582,7 +2763,7 @@ function SkillEditorWorkspace({
                           type="button"
                           className="border border-[var(--ink)] px-2 py-1 font-editorial-mono text-[0.62rem] uppercase disabled:opacity-50"
                           disabled={deletingFileIds.has(asset.id)}
-                          onClick={() => void deleteAssetFile(asset)}
+                          onClick={() => void deleteSkillFileEntry(asset)}
                         >
                           {deletingFileIds.has(asset.id) ? "Deleting" : "Delete"}
                         </button>
@@ -2651,17 +2832,6 @@ function SkillEditorWorkspace({
                       onChange={(event) => {
                         const nextSummary = event.currentTarget.value;
                         updateFrontmatterFields({ summary: nextSummary });
-                      }}
-                    />
-                  </label>
-                  <label className="block text-sm">
-                    <span className="block font-editorial-sans">Version</span>
-                    <input
-                      className={DASHBOARD_INPUT}
-                      value={frontmatter.version}
-                      onChange={(event) => {
-                        const nextVersion = event.currentTarget.value;
-                        setFrontmatter((state) => ({ ...state, version: nextVersion }));
                       }}
                     />
                   </label>
@@ -2752,6 +2922,7 @@ function SkillEditorWorkspace({
         <PublishSkillModal
           step={publishStep}
           skillName={skill.name}
+          visibility={skillVisibility(skill)}
           installPrompt={publicInstallPrompt}
           installPromptCopied={installPromptCopied}
           isPublishing={isPublishing}
@@ -3163,14 +3334,104 @@ function AccountTopBar({
   );
 }
 
-export function SkillSettingsWorkspace({ skill }: { skill: Skill }) {
+export function SkillSettingsWorkspace({
+  skill,
+  user,
+  onSkillUpdated,
+  onSkillDeleted,
+}: {
+  skill: Skill;
+  user?: AppUser | null;
+  onSkillUpdated?: (skill: Skill) => void;
+  onSkillDeleted?: (skill: Skill) => void;
+}) {
   const slug = slugifySkillName(skill.name);
   const isGitHubImported = skill.sourceMode === "github_import" && Boolean(skill.originalRepoFullName);
+  const [currentVisibility, setCurrentVisibility] = useState<"private" | "public">(() => skillVisibility(skill));
+  const [settingsStatus, setSettingsStatus] = useState("");
+  const [isVisibilitySaving, setIsVisibilitySaving] = useState(false);
+  const [isDeleteConfirming, setIsDeleteConfirming] = useState(false);
+  const [isDeletingSkill, setIsDeletingSkill] = useState(false);
   const sourceRepo = isGitHubImported ? skill.originalRepoFullName : "Skillfully storage";
-  const sourcePath = isGitHubImported && skill.originalSkillPath ? skill.originalSkillPath : "Public manifest and files";
-  const publishBehavior = isGitHubImported
+  const sourcePath = isGitHubImported && skill.originalSkillPath
+    ? skill.originalSkillPath
+    : currentVisibility === "private"
+      ? "Private manifest and files"
+      : "Public manifest and files";
+  const publishBehavior = currentVisibility === "private"
+    ? "Publish private releases for shared users"
+    : isGitHubImported
     ? "Create pull request on publish"
     : "Publish to Skillfully public manifest and files";
+
+  useEffect(() => {
+    setCurrentVisibility(skillVisibility(skill));
+    setSettingsStatus("");
+    setIsDeleteConfirming(false);
+  }, [skill.id, skill.visibility]);
+
+  async function updateVisibility(nextVisibility: "private" | "public") {
+    if (nextVisibility === currentVisibility || isVisibilitySaving) {
+      return;
+    }
+
+    setCurrentVisibility(nextVisibility);
+    setIsVisibilitySaving(true);
+    setSettingsStatus("Saving visibility...");
+    try {
+      if (!user || isUsingLocalPreviewDb) {
+        const nextSkill = { ...skill, visibility: nextVisibility } as Skill;
+        onSkillUpdated?.(nextSkill);
+        setSettingsStatus("Visibility saved locally.");
+        return;
+      }
+      const payload = await dashboardJson<{ skill: Skill }>(
+        user,
+        `/api/dashboard/skills/${skill.skillId}`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({ visibility: nextVisibility }),
+        },
+      );
+      setCurrentVisibility(skillVisibility(payload.skill));
+      onSkillUpdated?.(payload.skill);
+      setSettingsStatus("Visibility updated.");
+    } catch (error) {
+      captureClientException(error);
+      setCurrentVisibility(skillVisibility(skill));
+      setSettingsStatus(`Visibility update failed: ${extractErrorMessage(error)}`);
+    } finally {
+      setIsVisibilitySaving(false);
+    }
+  }
+
+  async function deleteSkill() {
+    if (!isDeleteConfirming) {
+      setIsDeleteConfirming(true);
+      setSettingsStatus("Click confirm delete to permanently delete this skill.");
+      return;
+    }
+
+    setIsDeletingSkill(true);
+    setSettingsStatus("Deleting skill...");
+    try {
+      if (!user || isUsingLocalPreviewDb) {
+        onSkillDeleted?.(skill);
+        return;
+      }
+      const payload = await dashboardJson<{ skill: Skill; deleted: boolean }>(
+        user,
+        `/api/dashboard/skills/${skill.skillId}`,
+        { method: "DELETE" },
+      );
+      onSkillDeleted?.(payload.skill);
+    } catch (error) {
+      captureClientException(error);
+      setSettingsStatus(`Delete failed: ${extractErrorMessage(error)}`);
+    } finally {
+      setIsDeletingSkill(false);
+    }
+  }
 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-6 px-5 py-8 sm:px-8 lg:px-11 lg:py-12">
@@ -3185,9 +3446,36 @@ export function SkillSettingsWorkspace({ skill }: { skill: Skill }) {
         <SettingsRow label="Skill name" value={skill.name} />
         <SettingsRow label="Slug" value={slug} />
         <SettingsRow
-          label="Archive skill"
-          action={<button type="button" className={DASHBOARD_BUTTON_LIGHT}>Archive</button>}
+          label="Visibility"
+          value={
+            <div className="grid gap-3 sm:grid-cols-2">
+              {(["private", "public"] as const).map((visibilityOption) => {
+                const isSelected = currentVisibility === visibilityOption;
+                return (
+                  <button
+                    key={visibilityOption}
+                    type="button"
+                    className={`flex items-center gap-3 border px-4 py-3 text-left text-sm disabled:cursor-not-allowed disabled:opacity-60 ${
+                      isSelected ? "border-[var(--ink)] bg-[var(--white)]" : "border-[var(--ink)]/45"
+                    }`}
+                    disabled={isVisibilitySaving}
+                    onClick={() => void updateVisibility(visibilityOption)}
+                  >
+                    <span aria-hidden className="flex h-5 w-5 items-center justify-center rounded-full border-2 border-[var(--ink)]">
+                      {isSelected ? <span className="h-2 w-2 rounded-full bg-[var(--ink)]" /> : null}
+                    </span>
+                    <span className="capitalize">{visibilityOption}</span>
+                  </button>
+                );
+              })}
+            </div>
+          }
         />
+        {settingsStatus ? (
+          <p className="border-b border-[var(--ink)]/35 px-5 py-4 font-editorial-mono text-xs font-bold uppercase">
+            {settingsStatus}
+          </p>
+        ) : null}
       </SettingsSection>
 
       <SettingsSection title="02. Source">
@@ -3244,7 +3532,7 @@ export function SkillSettingsWorkspace({ skill }: { skill: Skill }) {
               </tr>
             </thead>
             <tbody>
-              {skillSettingsPublishingRows(isGitHubImported).map(([destination, behavior, status, icon, dot]) => (
+              {skillSettingsPublishingRows(isGitHubImported, currentVisibility).map(([destination, behavior, status, icon, dot]) => (
                 <tr key={destination} className="border-b border-[var(--ink)]/50 last:border-b-0">
                   <td className="py-3">
                     <span className="flex items-center gap-3">
@@ -3264,7 +3552,9 @@ export function SkillSettingsWorkspace({ skill }: { skill: Skill }) {
             </tbody>
           </table>
           <p className="mt-4 text-sm leading-6 text-[var(--ink)]/65">
-            {isGitHubImported
+            {currentVisibility === "private"
+              ? "Private publishes are served by Skillfully only and are visible only to people with use or edit access."
+              : isGitHubImported
               ? "GitHub is the source of truth for this skill; merge the publish PR before installing."
               : "Skillfully is the source of truth for this skill; GitHub is only used for imported skills."}
           </p>
@@ -3277,7 +3567,7 @@ export function SkillSettingsWorkspace({ skill }: { skill: Skill }) {
         <SettingsRow label="Feedback collection" action={<TogglePill />} />
         <SettingsRow
           label="Manifest endpoint"
-          value={<span className="font-editorial-mono">/api/public/skills/{skill.skillId}/manifest</span>}
+          value={<span className="font-editorial-mono">/api/skills/{skill.skillId}/manifest</span>}
           action={<button type="button" aria-label="Copy manifest endpoint" className="border border-[var(--ink)] p-3"><CopyIcon /></button>}
         />
         <SettingsRow
@@ -3292,12 +3582,18 @@ export function SkillSettingsWorkspace({ skill }: { skill: Skill }) {
 
       <SettingsSection title="05. Danger Zone">
         <SettingsRow
-          label="Reset analytics"
-          action={<button type="button" className={DASHBOARD_BUTTON_LIGHT}>Reset analytics</button>}
-        />
-        <SettingsRow
           label="Delete skill"
-          action={<button type="button" className={`${DASHBOARD_BUTTON_LIGHT} font-bold`}>Delete skill</button>}
+          value="Deletes drafts, published versions, sharing grants, usage events, and feedback for this skill."
+          action={
+            <button
+              type="button"
+              className={`${DASHBOARD_BUTTON_LIGHT} font-bold disabled:cursor-not-allowed disabled:opacity-60`}
+              disabled={isDeletingSkill}
+              onClick={() => void deleteSkill()}
+            >
+              {isDeletingSkill ? "Deleting..." : isDeleteConfirming ? "Confirm delete" : "Delete skill"}
+            </button>
+          }
         />
       </SettingsSection>
     </div>
@@ -3449,6 +3745,8 @@ export function SkillDetail({
   activeTab = "overview",
   onTabChange,
   onOpenEditor,
+  onSkillUpdated,
+  onSkillDeleted,
 }: {
   skill: Skill;
   entries: Feedback[];
@@ -3458,6 +3756,8 @@ export function SkillDetail({
   activeTab?: DashboardTab;
   onTabChange?: (tab: DashboardTab) => void;
   onOpenEditor?: () => void;
+  onSkillUpdated?: (skill: Skill) => void;
+  onSkillDeleted?: (skill: Skill) => void;
 }) {
   const [copiedInstallPrompt, setCopiedInstallPrompt] = useState<"skillfully" | "skill" | null>(null);
   const visibleActiveTab = resolveDashboardTabForSkill(skill, activeTab);
@@ -3502,7 +3802,14 @@ export function SkillDetail({
   }
 
   if (visibleActiveTab === "settings") {
-    return <SkillSettingsWorkspace skill={skill} />;
+    return (
+      <SkillSettingsWorkspace
+        skill={skill}
+        user={user}
+        onSkillUpdated={onSkillUpdated}
+        onSkillDeleted={onSkillDeleted}
+      />
+    );
   }
 
   return (
@@ -3599,7 +3906,7 @@ export function SkillDetail({
       </section>
 
       <RecentFeedbackTable entries={entries} />
-      <PublishingStatus />
+      <PublishingStatus skill={skill} />
       <VersionSnapshot skill={skill} />
     </div>
   );
@@ -4315,6 +4622,34 @@ export default function Dashboard({
     createSkill(name, description);
   }
 
+  function handleSkillUpdated(nextSkill: Skill) {
+    setVisibleSkillsFromApi((current) => {
+      const sourceSkills = current ?? skills;
+      return sourceSkills.map((skill) =>
+        skill.id === nextSkill.id || skill.skillId === nextSkill.skillId
+          ? {
+              ...skill,
+              ...nextSkill,
+              accessLevel: skill.accessLevel ?? nextSkill.accessLevel,
+              ownerEmail: skill.ownerEmail ?? nextSkill.ownerEmail,
+            }
+          : skill,
+      );
+    });
+  }
+
+  function handleSkillDeleted(deletedSkill: Skill) {
+    setVisibleSkillsFromApi((current) => {
+      const sourceSkills = current ?? skills;
+      return sourceSkills.filter((skill) => skill.id !== deletedSkill.id && skill.skillId !== deletedSkill.skillId);
+    });
+    setSelectedSkillId(null);
+    setActiveTab("overview");
+    setScreen("list");
+    setErrorMessage("");
+    pushDashboardPath(router, "/dashboard");
+  }
+
   const isEditorSurface = activeTab === "editor" && viewState.kind === "detail";
 
   return (
@@ -4395,6 +4730,8 @@ export default function Dashboard({
               user={user}
               activeTab={activeTab}
               onTabChange={openDashboardTab}
+              onSkillUpdated={handleSkillUpdated}
+              onSkillDeleted={handleSkillDeleted}
               onBack={() => {
                 setSelectedSkillId(null);
                 setActiveTab("overview");

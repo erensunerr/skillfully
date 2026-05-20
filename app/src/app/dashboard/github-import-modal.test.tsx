@@ -47,7 +47,7 @@ test("GitHub import modal renders unchecked valid candidates and disabled invali
           skillName: "bad-skill",
           skillRoot: "skills/bad-skill",
           status: "invalid",
-          reason: "name is required",
+          reason: "SKILL.md frontmatter is not valid YAML: mapping values are not allowed here.",
         },
         {
           id: "existing-1",
@@ -62,8 +62,8 @@ test("GitHub import modal renders unchecked valid candidates and disabled invali
   );
 
   assert.match(html, /octocat\/Hello-World - code-review/);
-  assert.match(html, /Invalid/);
-  assert.match(html, /name is required/);
+  assert.match(html, /Format error/);
+  assert.match(html, /frontmatter is not valid YAML/);
   assert.match(html, /Already imported/);
   assert.match(html, /repository tree is too large/);
   assert.match(html, /Import selected/);

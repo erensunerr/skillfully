@@ -23,6 +23,9 @@ const CONNECTED_REPOSITORY_DISPLAY_LIMIT = 50;
 
 function statusLabel(candidate: GitHubImportCandidateView) {
   if (candidate.status === "invalid") {
+    if (/yaml|frontmatter/i.test(candidate.reason ?? "")) {
+      return "Format error";
+    }
     return "Invalid";
   }
   if (candidate.status === "already_imported") {
@@ -151,10 +154,13 @@ export function GitHubImportModal({
             <div className="mt-7 space-y-3">
               {candidates.map((candidate) => {
                 const disabled = candidate.status !== "valid" || isImporting;
+                const rowTone = candidate.status === "invalid"
+                  ? "border-red-700 bg-red-50"
+                  : "border-black bg-white";
                 return (
                   <label
                     key={candidate.id}
-                    className={`grid gap-4 border-2 border-black bg-white p-4 sm:grid-cols-[auto_1fr] ${
+                    className={`grid gap-4 border-2 p-4 sm:grid-cols-[auto_1fr] ${rowTone} ${
                       disabled ? "opacity-75" : ""
                     }`}
                   >

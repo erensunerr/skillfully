@@ -104,6 +104,38 @@ test("marks invalid skill candidates with spec reasons", () => {
   assert.match(mismatchedName.reason ?? "", /must match package directory `right-directory`/);
 });
 
+test("keeps malformed SKILL.md frontmatter as per-skill format errors", () => {
+  const candidates = discoverGitHubSkillCandidates({
+    repository,
+    tree: [
+      { path: "skills/good-skill/SKILL.md", type: "blob", size: 92 },
+      { path: "skills/bad-format/SKILL.md", type: "blob", size: 82 },
+    ],
+    skillMarkdownByPath: {
+      "skills/good-skill/SKILL.md": [
+        "---",
+        "name: good-skill",
+        "description: Valid skill. Use when checking imports.",
+        "---",
+      ].join("\n"),
+      "skills/bad-format/SKILL.md": [
+        "---",
+        "name: bad-format",
+        "description: Use when: checking imports",
+        "---",
+      ].join("\n"),
+    },
+    existingImports: [],
+  });
+
+  assert.equal(candidates.length, 2);
+  assert.equal(candidates[0].status, "invalid");
+  assert.equal(candidates[0].skillName, "bad-format");
+  assert.match(candidates[0].reason ?? "", /frontmatter is not valid YAML/i);
+  assert.equal(candidates[1].status, "valid");
+  assert.equal(candidates[1].skillName, "good-skill");
+});
+
 test("marks already imported skills by repository id and skill root", () => {
   const [candidate] = discoverGitHubSkillCandidates({
     repository,

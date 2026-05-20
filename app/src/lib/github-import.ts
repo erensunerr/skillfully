@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import matter from "gray-matter";
 
 import {
   type SkillMarkdownValidation,
@@ -176,6 +177,19 @@ export function validateSkillMarkdown({
   markdown: string;
   parentDirectoryName: string;
 }): SkillMarkdownValidation {
+  if (markdown.match(/^---\r?\n/)) {
+    try {
+      matter(markdown);
+    } catch (error) {
+      return {
+        valid: false,
+        reason: `SKILL.md frontmatter is not valid YAML: ${
+          error instanceof Error ? error.message : "invalid YAML"
+        }`,
+      };
+    }
+  }
+
   return validateAgentSkillMarkdown({ markdown, expectedName: parentDirectoryName });
 }
 

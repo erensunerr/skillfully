@@ -10,6 +10,7 @@ function fakeSkill(name = "code-review", id = "skill-1") {
     name,
     description: "Reviews code changes for correctness and missing tests.",
     skillId: "sk_test123",
+    visibility: "private",
     createdAt: Date.now(),
     accessLevel: "owner" as const,
   };
@@ -185,9 +186,10 @@ test("dashboard skill detail renders the operational overview UI", async () => {
   assert.match(html, /Feedback sentiment/i);
   assert.match(html, /Recent feedback/i);
   assert.match(html, /Publishing &amp; directory status/i);
-  assert.match(html, /LobeHub Skills/i);
-  assert.match(html, /ClawHub/i);
-  assert.match(html, /Hermes Skills Hub/i);
+  assert.match(html, /Private Skillfully release/i);
+  assert.doesNotMatch(html, /LobeHub Skills/i);
+  assert.doesNotMatch(html, /ClawHub/i);
+  assert.doesNotMatch(html, /Hermes Skills Hub/i);
   assert.doesNotMatch(html, /agentskills\.io/i);
   assert.match(html, /Version snapshot/i);
   assert.match(html, /No published versions yet/i);
@@ -235,6 +237,8 @@ test("dashboard skill detail renders the editor tab UI", async () => {
   assert.match(html, /Collapse frontmatter/);
   assert.doesNotMatch(html, /Validate skill/);
   assert.match(html, /Upload file/);
+  assert.match(html, /New markdown file/i);
+  assert.match(html, /Create markdown file/i);
   assert.match(html, /Markdown files \(editable\)/i);
   assert.match(html, /SKILL\.md/);
   assert.match(html, /No assets uploaded/);
@@ -246,6 +250,8 @@ test("dashboard skill detail renders the editor tab UI", async () => {
   assert.match(html, /SKILL\.md present/);
   assert.match(html, /Version history/);
   assert.match(html, /Version history appears after the first publish/);
+  assert.doesNotMatch(html, />Version<\/span>/);
+  assert.doesNotMatch(html, /0\.1\.0/);
   assert.doesNotMatch(html, /Publishing destinations/);
   assert.match(html, /Change publishing options/i);
   assert.match(html, /Publish version/);
@@ -443,24 +449,30 @@ test("dashboard skill detail renders the skill settings UI", async () => {
   assert.match(html, /01\. General/i);
   assert.match(html, /Skill name/i);
   assert.match(html, /Slug/i);
+  assert.match(html, /Visibility/i);
+  assert.match(html, /Private/i);
+  assert.match(html, /Public/i);
+  assert.doesNotMatch(html, /Archive skill/i);
   assert.match(html, /02\. Source/i);
   assert.match(html, /Managed in GitHub/i);
   assert.match(html, /Skillfully storage/i);
-  assert.match(html, /Public manifest and files/i);
-  assert.match(html, /Only for GitHub-managed skills/i);
-  assert.match(html, /Not used/i);
-  assert.match(html, /Skillfully is the source of truth for this skill/i);
+  assert.match(html, /Private manifest and files/i);
+  assert.doesNotMatch(html, /Only for GitHub-managed skills/i);
+  assert.doesNotMatch(html, /Not used/i);
+  assert.match(html, /Private publishes are served by Skillfully only/i);
   assert.match(html, /03\. Publishing/i);
-  assert.match(html, /LobeHub Skills/i);
-  assert.match(html, /ClawHub/i);
-  assert.match(html, /Hermes Skills Hub/i);
+  assert.match(html, /Private Skillfully release/i);
+  assert.doesNotMatch(html, /LobeHub Skills/i);
+  assert.doesNotMatch(html, /ClawHub/i);
+  assert.doesNotMatch(html, /Hermes Skills Hub/i);
   assert.doesNotMatch(html, /agentskills\.io/i);
   assert.match(html, /04\. Tracking/i);
   assert.match(html, /Manifest endpoint/i);
-  assert.match(html, /\/api\/public\/skills\/sk_test123\/manifest/i);
+  assert.match(html, /\/api\/skills\/sk_test123\/manifest/i);
   assert.match(html, /\/feedback\/sk_test123/i);
   assert.doesNotMatch(html, /\/api\/install/i);
   assert.match(html, /05\. Danger zone/i);
+  assert.doesNotMatch(html, /Reset analytics/i);
   assert.match(html, /Delete skill/i);
 });
 
@@ -473,6 +485,7 @@ test("dashboard settings show imported skills as managed in GitHub", async () =>
       activeTab="settings"
       skill={{
         ...fakeSkill(),
+        visibility: "public",
         sourceMode: "github_import",
         originalRepoFullName: "octocat/Hello-World",
         originalSkillPath: ".agents/skills/code-review",
@@ -488,6 +501,50 @@ test("dashboard settings show imported skills as managed in GitHub", async () =>
   assert.match(html, /Create pull request on publish/i);
   assert.match(html, /Create PR on publish/i);
   assert.match(html, /GitHub is the source of truth for this skill/i);
+});
+
+test("publish modal explains public and private release scope", async () => {
+  Object.assign(globalThis, { React });
+  const { PublishSkillModal } = await import("./page");
+
+  const privateHtml = renderToStaticMarkup(
+    <PublishSkillModal
+      step="confirm"
+      skillName="private-skill"
+      visibility="private"
+      installPrompt="install"
+      installPromptCopied={false}
+      isPublishing={false}
+      publishError=""
+      onCancel={() => undefined}
+      onConfirm={() => undefined}
+      onCopyInstallPrompt={() => undefined}
+      onContinueAfterMerge={() => undefined}
+      onContinueToInstallCheck={() => undefined}
+      onFinish={() => undefined}
+    />,
+  );
+  const publicHtml = renderToStaticMarkup(
+    <PublishSkillModal
+      step="confirm"
+      skillName="public-skill"
+      visibility="public"
+      installPrompt="install"
+      installPromptCopied={false}
+      isPublishing={false}
+      publishError=""
+      onCancel={() => undefined}
+      onConfirm={() => undefined}
+      onCopyInstallPrompt={() => undefined}
+      onContinueAfterMerge={() => undefined}
+      onContinueToInstallCheck={() => undefined}
+      onFinish={() => undefined}
+    />,
+  );
+
+  assert.match(privateHtml, /people with use or edit access/i);
+  assert.doesNotMatch(privateHtml, /publicly accessible/i);
+  assert.match(publicHtml, /publicly accessible/i);
 });
 
 test("dashboard renders the account settings UI", async () => {
@@ -554,6 +611,7 @@ test("publish modal renders a busy state while publishing", async () => {
     <PublishSkillModal
       step="confirm"
       skillName="code-review"
+      visibility="public"
       installPrompt="Install prompt"
       installPromptCopied={false}
       isPublishing={true}
@@ -581,6 +639,7 @@ test("publish modal tells GitHub-managed users to merge the PR before install", 
     <PublishSkillModal
       step="merge"
       skillName="code-review"
+      visibility="public"
       installPrompt="Install prompt"
       installPromptCopied={false}
       isPublishing={false}

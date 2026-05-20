@@ -4,6 +4,10 @@ import { createManualDirectoryAdapter } from "./manual-directory";
 import { createSkillfullyAdapter } from "./skillfully";
 
 export function createPublishAdaptersForContext(context: Pick<PublishContext, "skill">): PublishAdapter[] {
+  if (context.skill.visibility !== "public") {
+    return [createSkillfullyAdapter()];
+  }
+
   const primaryAdapter = context.skill.sourceMode === "github_import"
     ? createGitHubAppAdapter()
     : createSkillfullyAdapter();

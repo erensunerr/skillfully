@@ -14,6 +14,7 @@ export type PublishContext = {
     skillId: string;
     slug: string;
     name: string;
+    visibility?: string | null;
     sourceMode?: string | null;
     originalSkillPath?: string | null;
   };

@@ -24,8 +24,10 @@ type EntityName =
   | "publishingTargets"
   | "publishRuns"
   | "directorySubmissions"
+  | "skillUsageEvents"
   | "skillAccessGrants"
   | "skillInviteNotifications"
+  | "feedback"
   | "githubInstallations"
   | "githubRepositories"
   | "skillImports";
@@ -438,11 +440,73 @@ export async function updateSkillMetadata({
     visibility: visibility === undefined || visibility === null ? skill.visibility : String(visibility),
     updatedAt: now(),
   };
+  if (updates.visibility !== "private" && updates.visibility !== "public") {
+    throw new Error("visibility must be private or public");
+  }
   await store.transact([store.update("skills", skill.id, updates)]);
   return {
     ...skill,
     ...updates,
   };
+}
+
+async function deleteRowsBySkill({
+  store,
+  entity,
+  ownerId,
+  skillId,
+}: {
+  store: SkillStore;
+  entity: EntityName;
+  ownerId: string;
+  skillId: string;
+}) {
+  const rows = await store.query({
+    [entity]: {
+      $: {
+        where: {
+          ownerId,
+          skillId,
+        },
+      },
+    },
+  });
+  return (rows[entity] ?? []).map((row) => store.delete(entity, String(row.id)));
+}
+
+export async function deleteSkillDraft({
+  store = defaultSkillStore,
+  ownerId,
+  skillId,
+}: {
+  store?: SkillStore;
+  ownerId: string;
+  skillId: string;
+}) {
+  const skill = await getSkillForOwner({ store, ownerId, skillId });
+  if (!skill) {
+    throw new Error("skill not found");
+  }
+
+  const relatedEntities: EntityName[] = [
+    "skillFiles",
+    "skillVersions",
+    "publishingTargets",
+    "publishRuns",
+    "directorySubmissions",
+    "skillUsageEvents",
+    "skillAccessGrants",
+    "skillInviteNotifications",
+    "feedback",
+  ];
+  const relatedDeletes = await Promise.all(
+    relatedEntities.map((entity) => deleteRowsBySkill({ store, entity, ownerId, skillId })),
+  );
+  await store.transact([
+    ...relatedDeletes.flat(),
+    store.delete("skills", skill.id),
+  ]);
+  return skill;
 }
 
 export async function getDraftVersion({
@@ -798,6 +862,7 @@ export async function buildPublishContextForSkill({
       skillId: skill.skillId,
       slug: skill.slug || skillSlug(skill.name),
       name: skill.name,
+      visibility: skill.visibility,
       sourceMode: skill.sourceMode,
       originalSkillPath: skill.originalSkillPath,
     },
@@ -967,7 +1032,6 @@ export async function markDraftPublished({
     ...nextDraftFiles.map((file) => store.create("skillFiles", file.id, withoutId(file))),
     store.update("skills", skill.id, {
       status: "published",
-      visibility: "public",
       publishedVersionId: versionId,
       currentDraftVersionId: nextDraftVersionId,
       updatedAt: currentTime,

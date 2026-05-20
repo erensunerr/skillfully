@@ -5,6 +5,7 @@ import {
   buildPublishContextForSkill,
   createSkillDraft,
   createSkillFile,
+  deleteSkillDraft,
   deleteSkillFile,
   listSkillFiles,
   markDraftPublished,
@@ -26,6 +27,10 @@ class InMemorySkillStore {
     publishingTargets: {},
     publishRuns: {},
     directorySubmissions: {},
+    skillAccessGrants: {},
+    skillInviteNotifications: {},
+    skillUsageEvents: {},
+    feedback: {},
   };
 
   create(entity: string, id: string, values: Row) {
@@ -511,7 +516,7 @@ test("markDraftPublished freezes the published version and opens a new editable 
   const skill = Object.values(store.rows.skills)[0];
   assert.equal(skill.publishedVersionId, created.version.id);
   assert.equal(skill.currentDraftVersionId, draftVersions[0].id);
-  assert.equal(skill.visibility, "public");
+  assert.equal(skill.visibility, "private");
   assert.match(
     JSON.stringify(publishedVersions[0].manifestJson),
     /api\/skills\/sk_demo\/manifest/,
@@ -530,4 +535,81 @@ test("markDraftPublished freezes the published version and opens a new editable 
       body: "# Published content",
     }),
   );
+});
+
+test("deleteSkillDraft removes the skill and owned records", async () => {
+  const store = new InMemorySkillStore();
+  let counter = 0;
+  const created = await createSkillDraft({
+    store,
+    now: () => 1700000000000,
+    idGenerator: () => `id_${++counter}`,
+    skillIdGenerator: () => "sk_delete_me",
+    ownerId: "user-1",
+    name: "Delete Me",
+    description: "Temporary skill",
+    baseUrl: "https://www.skillfully.sh",
+  });
+  const extraFile = await createSkillFile({
+    store,
+    now: () => 1700000000100,
+    idGenerator: () => `id_${++counter}`,
+    ownerId: "user-1",
+    skillId: "sk_delete_me",
+    versionId: created.version.id,
+    path: "notes.md",
+    kind: "markdown",
+    contentText: "# Notes",
+  });
+  store.rows.skillAccessGrants.grant_1 = {
+    ownerId: "user-1",
+    skillId: "sk_delete_me",
+    granteeEmail: "collaborator@example.com",
+    permission: "edit",
+    status: "active",
+    createdByUserId: "user-1",
+    createdAt: 1700000000200,
+    updatedAt: 1700000000200,
+  };
+  store.rows.skillInviteNotifications.invite_1 = {
+    ownerId: "user-1",
+    skillId: "sk_delete_me",
+    grantId: "grant_1",
+    toEmail: "collaborator@example.com",
+    fromUserId: "user-1",
+    deliveryStatus: "sent",
+    createdAt: 1700000000200,
+    updatedAt: 1700000000200,
+  };
+  store.rows.skillUsageEvents.usage_1 = {
+    ownerId: "user-1",
+    skillId: "sk_delete_me",
+    eventKind: "manifest_checked",
+    dayKey: "2026-05-20",
+    createdAt: 1700000000300,
+  };
+  store.rows.feedback.feedback_1 = {
+    ownerId: "user-1",
+    skillId: "sk_delete_me",
+    rating: "positive",
+    feedback: "Useful.",
+    createdAt: 1700000000400,
+  };
+
+  const deleted = await deleteSkillDraft({
+    store,
+    ownerId: "user-1",
+    skillId: "sk_delete_me",
+  });
+
+  assert.equal(deleted.skillId, "sk_delete_me");
+  assert.equal(store.rows.skills[created.skill.id], undefined);
+  assert.equal(store.rows.skillVersions[created.version.id], undefined);
+  assert.equal(store.rows.skillFiles[created.file.id], undefined);
+  assert.equal(store.rows.skillFiles[extraFile.id], undefined);
+  assert.equal(Object.values(store.rows.publishingTargets).some((row) => row.skillId === "sk_delete_me"), false);
+  assert.equal(Object.values(store.rows.skillAccessGrants).some((row) => row.skillId === "sk_delete_me"), false);
+  assert.equal(Object.values(store.rows.skillInviteNotifications).some((row) => row.skillId === "sk_delete_me"), false);
+  assert.equal(Object.values(store.rows.skillUsageEvents).some((row) => row.skillId === "sk_delete_me"), false);
+  assert.equal(Object.values(store.rows.feedback).some((row) => row.skillId === "sk_delete_me"), false);
 });

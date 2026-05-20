@@ -7,6 +7,7 @@ import { createPublishAdaptersForContext } from "@/lib/publishing/adapters/for-c
 import { publishSkillVersion } from "@/lib/publishing/publish";
 import { buildPublishResponse } from "@/lib/publishing/publish-response";
 import { getErrorPayload, jsonResponse } from "@/lib/route-helpers";
+import { requireSkillEditContext } from "@/lib/skills/authoring-access";
 import { buildPublishContextForSkill, markDraftPublished, recordPublishResult } from "@/lib/skills/repository";
 import { SkillFrontmatterValidationError } from "@/lib/skills/skill-frontmatter";
 
@@ -20,13 +21,15 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
   try {
     const author = await requireAgentAuthor(request);
     const { skillId } = await params;
-    const context = await buildPublishContextForSkill({ ownerId: author.ownerId, skillId });
+    const access = await requireSkillEditContext({ userId: author.ownerId, email: author.email, skillId });
+    const context = await buildPublishContextForSkill({ store: access.store, ownerId: access.ownerId, skillId });
     const result = await publishSkillVersion({
       context,
       adapters: createPublishAdaptersForContext(context),
       recordResult: async (entry) => {
         await recordPublishResult({
-          ownerId: author.ownerId,
+          store: access.store,
+          ownerId: access.ownerId,
           skillId,
           versionId: context.version.id,
           result: entry,
@@ -36,7 +39,7 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
 
     const published = result.results.some((entry) => entry.status === "published" || entry.status === "submitted");
     if (published) {
-      await markDraftPublished({ ownerId: author.ownerId, skillId, versionId: context.version.id });
+      await markDraftPublished({ store: access.store, ownerId: access.ownerId, skillId, versionId: context.version.id });
       await captureServerEvent({
         distinctId: author.ownerId,
         event: "skill_published",
@@ -75,7 +78,9 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
       ? error.status
       : error instanceof SkillFrontmatterValidationError
         ? 400
-        : 500;
+        : error instanceof Error && error.message === "skill not found"
+          ? 404
+          : 500;
     return jsonResponse(getErrorPayload(error), status, "POST, OPTIONS");
   }
 }

@@ -3,9 +3,9 @@ import { NextRequest } from "next/server";
 import { ApiError } from "@/lib/agent-api";
 import { requireAgentAuthor, serializeAgentSkill } from "@/lib/agent-author-api";
 import { getErrorPayload, jsonResponse } from "@/lib/route-helpers";
+import { requireSkillEditContext } from "@/lib/skills/authoring-access";
 import {
   getDraftVersion,
-  getSkillForOwner,
   listPublishingTargets,
   listSkillFiles,
   updateSkillMetadata,
@@ -21,15 +21,13 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
   try {
     const author = await requireAgentAuthor(request);
     const { skillId } = await params;
-    const skill = await getSkillForOwner({ ownerId: author.ownerId, skillId });
-    if (!skill) {
-      return jsonResponse({ error: "skill not found" }, 404, "GET, PATCH, OPTIONS");
-    }
-    const version = await getDraftVersion({ ownerId: author.ownerId, skillId });
+    const access = await requireSkillEditContext({ userId: author.ownerId, email: author.email, skillId });
+    const skill = access.skill;
+    const version = await getDraftVersion({ store: access.store, ownerId: access.ownerId, skillId });
     const files = version
-      ? await listSkillFiles({ ownerId: author.ownerId, skillId, versionId: version.id })
+      ? await listSkillFiles({ store: access.store, ownerId: access.ownerId, skillId, versionId: version.id })
       : [];
-    const targets = await listPublishingTargets({ ownerId: author.ownerId, skillId });
+    const targets = await listPublishingTargets({ store: access.store, ownerId: access.ownerId, skillId });
 
     return jsonResponse(
       {
@@ -54,6 +52,7 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
   try {
     const author = await requireAgentAuthor(request);
     const { skillId } = await params;
+    const access = await requireSkillEditContext({ userId: author.ownerId, email: author.email, skillId });
     let body: { name?: unknown; description?: unknown; visibility?: unknown };
     try {
       body = await request.json();
@@ -62,17 +61,18 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
     }
 
     const skill = await updateSkillMetadata({
-      ownerId: author.ownerId,
+      store: access.store,
+      ownerId: access.ownerId,
       skillId,
       name: body.name === undefined ? undefined : String(body.name),
       description: body.description === undefined ? undefined : String(body.description),
       visibility: body.visibility === undefined ? undefined : String(body.visibility),
     });
-    const version = await getDraftVersion({ ownerId: author.ownerId, skillId });
+    const version = await getDraftVersion({ store: access.store, ownerId: access.ownerId, skillId });
     const files = version
-      ? await listSkillFiles({ ownerId: author.ownerId, skillId, versionId: version.id })
+      ? await listSkillFiles({ store: access.store, ownerId: access.ownerId, skillId, versionId: version.id })
       : [];
-    const targets = await listPublishingTargets({ ownerId: author.ownerId, skillId });
+    const targets = await listPublishingTargets({ store: access.store, ownerId: access.ownerId, skillId });
 
     return jsonResponse(
       {
@@ -88,7 +88,7 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
       "GET, PATCH, OPTIONS",
     );
   } catch (error) {
-    const status = error instanceof ApiError ? error.status : 500;
+    const status = error instanceof ApiError ? error.status : error instanceof Error && error.message === "skill not found" ? 404 : 500;
     return jsonResponse(getErrorPayload(error), status, "GET, PATCH, OPTIONS");
   }
 }

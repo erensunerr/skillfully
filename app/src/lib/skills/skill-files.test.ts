@@ -97,7 +97,7 @@ test("buildSkillManifest includes text files, assets, version metadata, and hash
   assert.equal(manifest.skill_id, "sk_demo");
   assert.equal(manifest.slug, "demo-skill");
   assert.equal(manifest.feedback_url, "https://www.skillfully.sh/feedback/sk_demo");
-  assert.equal(manifest.manifest_url, "https://www.skillfully.sh/api/public/skills/sk_demo/manifest");
+  assert.equal(manifest.manifest_url, "https://www.skillfully.sh/api/skills/sk_demo/manifest");
   assert.equal(manifest.version, "1.0.0");
   assert.equal(manifest.files.length, 2);
   assert.equal(manifest.files[0].path, "SKILL.md");
@@ -119,7 +119,7 @@ test("managed block appends feedback and update instructions without changing ed
   assert.match(updated, /<!-- skillfully:managed:start -->/);
   assert.match(updated, /Skillfully feedback and updates/);
   assert.match(updated, /https:\/\/www\.skillfully\.sh\/feedback\/sk_demo/);
-  assert.match(updated, /https:\/\/www\.skillfully\.sh\/api\/public\/skills\/sk_demo\/manifest/);
+  assert.match(updated, /https:\/\/www\.skillfully\.sh\/api\/skills\/sk_demo\/manifest/);
   assert.equal(stripSkillfullyManagedBlock(updated), original);
 });
 

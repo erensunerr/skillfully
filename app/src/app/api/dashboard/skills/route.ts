@@ -5,6 +5,7 @@ import { getDashboardUser } from "@/lib/dashboard-auth";
 import { captureServerEvent } from "@/lib/posthog-server";
 import { jsonResponse } from "@/lib/route-helpers";
 import { createSkillDraft, listSkillsForOwner } from "@/lib/skills/repository";
+import { listSkillsVisibleToActor } from "@/lib/skills/sharing";
 
 const SKILL_ID_CHARS = "abcdefghijkmnopqrstuvwxyz23456789";
 
@@ -18,6 +19,29 @@ function randomSkillId() {
 
 export async function OPTIONS() {
   return jsonResponse({}, 200, "GET, POST, OPTIONS");
+}
+
+export async function GET(request: NextRequest) {
+  const user = await getDashboardUser(request);
+  if (!user) {
+    return jsonResponse({ error: "unauthorized" }, 401, "GET, POST, OPTIONS");
+  }
+
+  const entries = await listSkillsVisibleToActor({
+    actorUserId: user.id,
+    actorEmail: user.email,
+  });
+
+  return jsonResponse(
+    {
+      skills: entries.map(({ skill, accessLevel }) => ({
+        ...skill,
+        accessLevel,
+      })),
+    },
+    200,
+    "GET, POST, OPTIONS",
+  );
 }
 
 export async function POST(request: NextRequest) {

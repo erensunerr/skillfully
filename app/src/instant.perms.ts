@@ -115,6 +115,22 @@ const rules = {
       delete: "false",
     },
   },
+  skillAccessGrants: {
+    allow: {
+      view: "false",
+      create: "false",
+      update: "false",
+      delete: "false",
+    },
+  },
+  skillInviteNotifications: {
+    allow: {
+      view: "false",
+      create: "false",
+      update: "false",
+      delete: "false",
+    },
+  },
   githubInstallations: {
     allow: {
       view: "data.ownerId == auth.id",

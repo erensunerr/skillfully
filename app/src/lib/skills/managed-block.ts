@@ -17,7 +17,7 @@ export function skillfullyFeedbackUrl({ skillId, baseUrl }: SkillfullyManagedBlo
 }
 
 export function skillfullyManifestUrl({ skillId, baseUrl }: SkillfullyManagedBlockOptions) {
-  return `${normalizeSkillfullyBaseUrl(baseUrl)}/api/public/skills/${skillId}/manifest`;
+  return `${normalizeSkillfullyBaseUrl(baseUrl)}/api/skills/${skillId}/manifest`;
 }
 
 export function skillfullyFileUrl({
@@ -26,7 +26,7 @@ export function skillfullyFileUrl({
   baseUrl,
 }: SkillfullyManagedBlockOptions & { path: string }) {
   const normalizedPath = path.split("/").map(encodeURIComponent).join("/");
-  return `${normalizeSkillfullyBaseUrl(baseUrl)}/api/public/skills/${skillId}/files/${normalizedPath}`;
+  return `${normalizeSkillfullyBaseUrl(baseUrl)}/api/skills/${skillId}/files/${normalizedPath}`;
 }
 
 export function isPrimarySkillMarkdownPath(path: string) {

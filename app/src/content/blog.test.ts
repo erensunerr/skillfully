@@ -4,11 +4,12 @@ import { test } from "node:test";
 import { __internal, blogArticles, getBlogArticle, getNextArticle } from "./blog";
 
 test("blog content loads from markdown files", () => {
-  assert.ok(blogArticles.length >= 4);
-  assert.equal(blogArticles[0]?.slug, "agent-skills-vs-prompts");
-  assert.equal(blogArticles[1]?.slug, "what-is-an-agent-skill");
-  assert.equal(blogArticles[2]?.slug, "how-to-write-better-agent-skills");
-  assert.equal(blogArticles[3]?.slug, "measuring-agent-skill-quality");
+  assert.ok(blogArticles.length >= 5);
+  assert.equal(blogArticles[0]?.slug, "how-to-write-an-agent-skill");
+  assert.equal(blogArticles[1]?.slug, "agent-skills-vs-prompts");
+  assert.equal(blogArticles[2]?.slug, "what-is-an-agent-skill");
+  assert.equal(blogArticles[3]?.slug, "how-to-write-better-agent-skills");
+  assert.equal(blogArticles[4]?.slug, "measuring-agent-skill-quality");
 });
 
 test("blog article includes rendered sections and markdown body", () => {
@@ -33,8 +34,18 @@ test("published dates are normalized for display", () => {
 });
 
 test("next article resolution still works", () => {
-  const article = getBlogArticle("how-to-write-better-agent-skills");
+  const latestArticle = getBlogArticle("how-to-write-an-agent-skill");
+  assert.ok(latestArticle);
+  const latestNext = getNextArticle(latestArticle!);
+  assert.equal(latestNext?.slug, "agent-skills-vs-prompts");
+
+  const article = getBlogArticle("what-is-an-agent-skill");
   assert.ok(article);
   const next = getNextArticle(article!);
-  assert.equal(next?.slug, "measuring-agent-skill-quality");
+  assert.equal(next?.slug, "agent-skills-vs-prompts");
+
+  const comparisonArticle = getBlogArticle("agent-skills-vs-prompts");
+  assert.ok(comparisonArticle);
+  const comparisonNext = getNextArticle(comparisonArticle!);
+  assert.equal(comparisonNext?.slug, "how-to-write-better-agent-skills");
 });

@@ -8,6 +8,10 @@ import { LandingAuthLink, LandingPageView } from "./landing-analytics";
 const marqueeCopy =
   "NOW ONBOARDING DESIGN PARTNERS BUILDING AGENT SKILLS FOR CLAUDE, CURSOR, GOOSE, AND LOCAL AGENTS.";
 
+const bookingHref = "#book-onboarding";
+const bookingFormSrc =
+  "https://calendar.google.com/calendar/appointments/schedules/AcZssZ19NLGr7INpECubuQkgtYZUS_au3B49ybotOBKBqtdtCXHp1a7jwawkzlNqgZvlRs5F8gcQofg1?gv=true";
+
 const featureCards = [
   {
     number: "01",
@@ -152,6 +156,22 @@ function MarqueeBand() {
   );
 }
 
+function BookingCtaLink({
+  surface,
+  className,
+  children = "Book onboarding",
+}: {
+  surface: string;
+  className: string;
+  children?: ReactNode;
+}) {
+  return (
+    <Link href={bookingHref} className={className} data-booking-surface={surface}>
+      {children}
+    </Link>
+  );
+}
+
 function DashboardPreview() {
   const metrics = [
     ["Total skills", "0", "Create or import a skill"],
@@ -165,11 +185,11 @@ function DashboardPreview() {
       <div className="flex items-center justify-between border-b border-[var(--ink)] px-4 py-3">
         <BrandMark />
         <LandingAuthLink
-          intent="sign_up"
-          surface="dashboard_preview_new_skill"
+          intent="sign_in"
+          surface="dashboard_preview"
           className="editorial-button editorial-button-dark px-3 py-2 text-[0.62rem]"
         >
-          New skill
+          Open dashboard
         </LandingAuthLink>
       </div>
 
@@ -454,17 +474,50 @@ function Header() {
 
       <div className="flex items-center justify-end gap-4 font-editorial-mono text-[0.72rem]">
         <LandingAuthLink intent="sign_in" surface="header" className="hidden py-2 hover:underline sm:inline">
-          Sign in
+          Log in
         </LandingAuthLink>
-        <LandingAuthLink
-          intent="sign_up"
+        <BookingCtaLink
           surface="header"
           className="editorial-button editorial-button-dark min-w-20 px-5 py-3 text-[0.72rem]"
         >
-          Sign up
-        </LandingAuthLink>
+          Book onboarding
+        </BookingCtaLink>
       </div>
     </header>
+  );
+}
+
+function BookingSection() {
+  return (
+    <section
+      id="book-onboarding"
+      className="grid scroll-mt-4 border-b border-[var(--ink)] bg-[var(--white)] lg:grid-cols-[0.42fr_1fr]"
+    >
+      <div className="border-b border-[var(--ink)] px-6 py-12 sm:px-10 lg:border-b-0 lg:border-r lg:px-12">
+        <div className="inline-flex max-w-max border border-[var(--ink)] bg-[var(--paper)] px-3 py-2 font-editorial-mono text-[0.68rem] font-bold uppercase">
+          Concierge onboarding
+        </div>
+        <h2 className="mt-7 max-w-[12ch] font-editorial-sans text-4xl font-medium leading-none sm:text-5xl">
+          Book concierge onboarding
+        </h2>
+        <p className="mt-7 max-w-[29rem] font-editorial-mono text-sm leading-7">
+          Work directly with Skillfully to set up your first skill, connect the feedback loop,
+          and decide what to publish next.
+        </p>
+      </div>
+      <div className="bg-[var(--paper)] p-4 sm:p-8">
+        <div className="overflow-hidden border border-[var(--ink)] bg-[var(--white)] shadow-[8px_8px_0_rgba(8,8,8,0.12)]">
+          <iframe
+            src={bookingFormSrc}
+            title="Book Skillfully onboarding"
+            style={{ border: 0 }}
+            width="100%"
+            height="600"
+            frameBorder="0"
+          />
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -494,19 +547,18 @@ export default function LandingPage() {
             </h1>
 
             <p className="mt-8 max-w-[39rem] font-editorial-mono text-sm leading-7">
-              Create, publish, monitor, and improve agent skills from one workspace.
-              Skillfully gives every skill a feedback loop, so authors can see what agents
-              use, where they fail, and what to improve next.
+              Publish, monitor, and improve agent skills with a guided setup. Skillfully gives
+              every skill a feedback loop, so authors can see what agents use, where they fail,
+              and what to improve next.
             </p>
 
             <div className="mt-9 flex flex-col gap-3 sm:flex-row">
-              <LandingAuthLink
-                intent="sign_up"
+              <BookingCtaLink
                 surface="hero"
                 className="editorial-button editorial-button-dark min-h-12 px-8 py-4 text-[0.72rem]"
               >
-                Sign up
-              </LandingAuthLink>
+                Book onboarding
+              </BookingCtaLink>
               <Link
                 href="/guide"
                 className="editorial-button min-h-12 bg-[var(--paper)] px-8 py-4 text-[0.72rem] hover:bg-[var(--white)]"
@@ -524,6 +576,7 @@ export default function LandingPage() {
         </section>
 
         <MarqueeBand />
+        <BookingSection />
 
         <section className="grid border-b border-[var(--ink)] lg:grid-cols-[0.58fr_1fr]">
           <div className="border-b border-[var(--ink)] px-6 py-12 sm:px-10 lg:border-b-0 lg:border-r lg:px-12">
@@ -647,16 +700,15 @@ export default function LandingPage() {
               Stop guessing how your agent skills perform
             </h2>
             <p className="mt-7 max-w-xl font-editorial-mono text-[0.74rem] leading-6">
-              Create your first Skillfully workspace and start improving your skills from
-              real usage and real feedback.
+              Bring your first skill to an onboarding session and leave with a concrete feedback
+              loop for real usage and real improvement.
             </p>
-            <LandingAuthLink
-              intent="sign_up"
+            <BookingCtaLink
               surface="footer_cta"
               className="editorial-button editorial-button-light mt-9 min-h-12 px-10 py-4 text-[0.72rem]"
             >
-              Sign up
-            </LandingAuthLink>
+              Book onboarding
+            </BookingCtaLink>
             <p className="mt-9 font-editorial-mono text-[0.68rem] uppercase">
               Now onboarding early skill authors and design partners.
             </p>
@@ -672,7 +724,7 @@ export default function LandingPage() {
             <Link href="/guide">Skills Guide</Link>
             <Link href="/blog">Blog</Link>
             <LandingAuthLink intent="sign_in" surface="footer">
-              Sign in
+              Log in
             </LandingAuthLink>
             <Link href="/dashboard">Privacy</Link>
             <Link href="/dashboard">Terms</Link>

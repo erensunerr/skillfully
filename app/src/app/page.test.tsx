@@ -15,10 +15,12 @@ test("landing page renders the refreshed editorial messaging", async () => {
   assert.match(html, /Understand why agents fail/);
   assert.match(html, /A feedback loop for every agent skill/);
   assert.match(html, /Common questions/);
-  assert.match(html, /Book concierge onboarding/);
   assert.match(html, /Book onboarding/);
-  assert.match(html, /#book-onboarding/);
-  assert.match(html, /calendar\.google\.com\/calendar\/appointments\/schedules\/AcZssZ19NLGr7INpECubuQkgtYZUS_au3B49ybotOBKBqtdtCXHp1a7jwawkzlNqgZvlRs5F8gcQofg1\?gv=true/);
+  assert.match(html, /data-booking-surface="header"/);
+  assert.match(html, /data-booking-surface="hero"/);
+  assert.match(html, /data-booking-surface="footer_cta"/);
+  assert.doesNotMatch(html, /id="book-onboarding"/);
+  assert.doesNotMatch(html, /calendar\.google\.com\/calendar\/appointments\/schedules/);
   assert.match(html, /\/dashboard/);
   assert.match(html, /data-auth-intent="sign_in"/);
   assert.doesNotMatch(html, /data-auth-intent="sign_up"/);
@@ -34,4 +36,18 @@ test("landing page renders the refreshed editorial messaging", async () => {
   assert.match(html, /data-dot-spotlight-area="footer-cta"/);
   assert.match(html, /data-dot-spotlight-layer="overlay"/);
   assert.doesNotMatch(html, new RegExp(`/${["do", "cs"].join("")}`));
+});
+
+test("booking modal renders the appointment scheduler when opened", async () => {
+  Object.assign(globalThis, { React });
+  const { BOOKING_FORM_SRC, BookingModalCta } = await import("./booking-modal");
+  const html = renderToStaticMarkup(
+    <BookingModalCta surface="test" className="editorial-button" initialOpen>
+      Book onboarding
+    </BookingModalCta>,
+  );
+
+  assert.match(html, /role="dialog"/);
+  assert.match(html, /Book concierge onboarding/);
+  assert.match(html, new RegExp(BOOKING_FORM_SRC.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
 });

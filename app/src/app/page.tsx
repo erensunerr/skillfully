@@ -1,16 +1,13 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 
+import { BookingModalCta } from "./booking-modal";
 import { CtaDotSpotlight } from "./cta-dot-spotlight";
 import { SchematicGraphic } from "./hero-schematic";
 import { LandingAuthLink, LandingPageView } from "./landing-analytics";
 
 const marqueeCopy =
   "NOW ONBOARDING DESIGN PARTNERS BUILDING AGENT SKILLS FOR CLAUDE, CURSOR, GOOSE, AND LOCAL AGENTS.";
-
-const bookingHref = "#book-onboarding";
-const bookingFormSrc =
-  "https://calendar.google.com/calendar/appointments/schedules/AcZssZ19NLGr7INpECubuQkgtYZUS_au3B49ybotOBKBqtdtCXHp1a7jwawkzlNqgZvlRs5F8gcQofg1?gv=true";
 
 const featureCards = [
   {
@@ -153,22 +150,6 @@ function MarqueeBand() {
         </div>
       </div>
     </section>
-  );
-}
-
-function BookingCtaLink({
-  surface,
-  className,
-  children = "Book onboarding",
-}: {
-  surface: string;
-  className: string;
-  children?: ReactNode;
-}) {
-  return (
-    <Link href={bookingHref} className={className} data-booking-surface={surface}>
-      {children}
-    </Link>
   );
 }
 
@@ -476,48 +457,14 @@ function Header() {
         <LandingAuthLink intent="sign_in" surface="header" className="hidden py-2 hover:underline sm:inline">
           Log in
         </LandingAuthLink>
-        <BookingCtaLink
+        <BookingModalCta
           surface="header"
           className="editorial-button editorial-button-dark min-w-20 px-5 py-3 text-[0.72rem]"
         >
           Book onboarding
-        </BookingCtaLink>
+        </BookingModalCta>
       </div>
     </header>
-  );
-}
-
-function BookingSection() {
-  return (
-    <section
-      id="book-onboarding"
-      className="grid scroll-mt-4 border-b border-[var(--ink)] bg-[var(--white)] lg:grid-cols-[0.42fr_1fr]"
-    >
-      <div className="border-b border-[var(--ink)] px-6 py-12 sm:px-10 lg:border-b-0 lg:border-r lg:px-12">
-        <div className="inline-flex max-w-max border border-[var(--ink)] bg-[var(--paper)] px-3 py-2 font-editorial-mono text-[0.68rem] font-bold uppercase">
-          Concierge onboarding
-        </div>
-        <h2 className="mt-7 max-w-[12ch] font-editorial-sans text-4xl font-medium leading-none sm:text-5xl">
-          Book concierge onboarding
-        </h2>
-        <p className="mt-7 max-w-[29rem] font-editorial-mono text-sm leading-7">
-          Work directly with Skillfully to set up your first skill, connect the feedback loop,
-          and decide what to publish next.
-        </p>
-      </div>
-      <div className="bg-[var(--paper)] p-4 sm:p-8">
-        <div className="overflow-hidden border border-[var(--ink)] bg-[var(--white)] shadow-[8px_8px_0_rgba(8,8,8,0.12)]">
-          <iframe
-            src={bookingFormSrc}
-            title="Book Skillfully onboarding"
-            style={{ border: 0 }}
-            width="100%"
-            height="600"
-            frameBorder="0"
-          />
-        </div>
-      </div>
-    </section>
   );
 }
 
@@ -553,12 +500,12 @@ export default function LandingPage() {
             </p>
 
             <div className="mt-9 flex flex-col gap-3 sm:flex-row">
-              <BookingCtaLink
+              <BookingModalCta
                 surface="hero"
                 className="editorial-button editorial-button-dark min-h-12 px-8 py-4 text-[0.72rem]"
               >
                 Book onboarding
-              </BookingCtaLink>
+              </BookingModalCta>
               <Link
                 href="/guide"
                 className="editorial-button min-h-12 bg-[var(--paper)] px-8 py-4 text-[0.72rem] hover:bg-[var(--white)]"
@@ -576,7 +523,6 @@ export default function LandingPage() {
         </section>
 
         <MarqueeBand />
-        <BookingSection />
 
         <section className="grid border-b border-[var(--ink)] lg:grid-cols-[0.58fr_1fr]">
           <div className="border-b border-[var(--ink)] px-6 py-12 sm:px-10 lg:border-b-0 lg:border-r lg:px-12">
@@ -703,12 +649,12 @@ export default function LandingPage() {
               Bring your first skill to an onboarding session and leave with a concrete feedback
               loop for real usage and real improvement.
             </p>
-            <BookingCtaLink
+            <BookingModalCta
               surface="footer_cta"
               className="editorial-button editorial-button-light mt-9 min-h-12 px-10 py-4 text-[0.72rem]"
             >
               Book onboarding
-            </BookingCtaLink>
+            </BookingModalCta>
             <p className="mt-9 font-editorial-mono text-[0.68rem] uppercase">
               Now onboarding early skill authors and design partners.
             </p>

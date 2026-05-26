@@ -42,10 +42,10 @@ test("next article resolution still works", () => {
   const article = getBlogArticle("what-is-an-agent-skill");
   assert.ok(article);
   const next = getNextArticle(article!);
-  assert.equal(next?.slug, "agent-skills-vs-prompts");
+  assert.equal(next?.slug, "how-to-write-better-agent-skills");
 
   const comparisonArticle = getBlogArticle("agent-skills-vs-prompts");
   assert.ok(comparisonArticle);
   const comparisonNext = getNextArticle(comparisonArticle!);
-  assert.equal(comparisonNext?.slug, "how-to-write-better-agent-skills");
+  assert.equal(comparisonNext?.slug, "what-is-an-agent-skill");
 });

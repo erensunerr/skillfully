@@ -31,7 +31,7 @@ Make the public landing page book-onboarding first. Visitors should see `Book on
 - Use client-side modal buttons for booking CTAs.
 - Embed the scheduler with the provided Google Calendar Appointment Scheduling iframe URL inside the modal.
 - Keep the iframe responsive with `width="100%"`, `height="600"`, `frameBorder="0"`, and a descriptive `title`.
-- Preserve landing analytics for login links and capture booking CTA/modal events separately, including `meeting_booking_clicked` on booking CTA clicks.
+- Preserve landing analytics for login links. Use `meeting_booking_clicked` as the canonical booking CTA click event and keep modal-close analytics separate.
 
 ## Verification
 

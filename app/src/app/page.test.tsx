@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -52,4 +53,11 @@ test("booking modal renders the appointment scheduler when opened", async () => 
   assert.doesNotMatch(html, />Concierge onboarding</);
   assert.match(html, /aria-label="Close onboarding booking"/);
   assert.match(html, new RegExp(BOOKING_FORM_SRC.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+});
+
+test("booking click analytics has one canonical event", async () => {
+  const source = await readFile(new URL("./booking-modal.tsx", import.meta.url), "utf8");
+
+  assert.match(source, /meeting_booking_clicked/);
+  assert.doesNotMatch(source, /landing_booking_cta_clicked/);
 });

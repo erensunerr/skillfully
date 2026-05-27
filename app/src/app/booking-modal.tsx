@@ -58,7 +58,6 @@ export function BookingModalCta({
   }, [closeModal, isOpen]);
 
   function openModal() {
-    captureClientEvent("landing_booking_cta_clicked", { surface });
     captureClientEvent("meeting_booking_clicked", { surface });
     setIsOpen(true);
   }

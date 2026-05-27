@@ -48,6 +48,7 @@ The product funnel is tracked with explicit PostHog events:
 
 - `landing_page_viewed`: anonymous visitor reached the landing page.
 - `landing_auth_cta_clicked`: visitor clicked a landing `sign_in` or `sign_up` CTA. Properties include `intent` and `surface`.
+- `meeting_booking_clicked`: visitor clicked a concierge onboarding booking CTA. Properties include `surface`.
 - `auth_email_submitted`: dashboard auth form received a valid email.
 - `auth_code_entered`: verification code field became non-empty.
 - `auth_code_pasted`: verification code field received a paste event.

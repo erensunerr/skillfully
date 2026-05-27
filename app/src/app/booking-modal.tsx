@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode, useEffect, useId, useState } from "react";
+import { type MouseEvent, type ReactNode, useCallback, useEffect, useId, useRef, useState } from "react";
 
 import { captureClientEvent } from "@/lib/client-analytics";
 
@@ -20,18 +20,31 @@ export function BookingModalCta({
 }) {
   const [isOpen, setIsOpen] = useState(initialOpen);
   const titleId = useId();
+  const closeButtonRef = useRef<HTMLButtonElement | null>(null);
+  const previousActiveElementRef = useRef<HTMLElement | null>(null);
+
+  const closeModal = useCallback(
+    (reason: "backdrop" | "button" | "escape" = "button") => {
+      captureClientEvent("landing_booking_modal_closed", { surface, reason });
+      setIsOpen(false);
+    },
+    [surface],
+  );
 
   useEffect(() => {
     if (!isOpen) {
       return;
     }
 
+    previousActiveElementRef.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
+    closeButtonRef.current?.focus();
 
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
-        setIsOpen(false);
+        closeModal("escape");
       }
     }
 
@@ -39,17 +52,21 @@ export function BookingModalCta({
     return () => {
       document.body.style.overflow = previousOverflow;
       window.removeEventListener("keydown", onKeyDown);
+      previousActiveElementRef.current?.focus();
+      previousActiveElementRef.current = null;
     };
-  }, [isOpen]);
+  }, [closeModal, isOpen]);
 
   function openModal() {
     captureClientEvent("landing_booking_cta_clicked", { surface });
+    captureClientEvent("meeting_booking_clicked", { surface });
     setIsOpen(true);
   }
 
-  function closeModal() {
-    captureClientEvent("landing_booking_modal_closed", { surface });
-    setIsOpen(false);
+  function closeOnBackdrop(event: MouseEvent<HTMLDivElement>) {
+    if (event.target === event.currentTarget) {
+      closeModal("backdrop");
+    }
   }
 
   return (
@@ -65,7 +82,10 @@ export function BookingModalCta({
       </button>
 
       {isOpen ? (
-        <div className="fixed inset-0 z-50 bg-[rgba(8,8,8,0.74)] px-4 py-5 sm:px-8 sm:py-8">
+        <div
+          className="fixed inset-0 z-50 bg-[rgba(8,8,8,0.74)] px-4 py-5 sm:px-8 sm:py-8"
+          onMouseDown={closeOnBackdrop}
+        >
           <div
             role="dialog"
             aria-modal="true"
@@ -79,10 +99,11 @@ export function BookingModalCta({
                 </h2>
               </div>
               <button
+                ref={closeButtonRef}
                 type="button"
                 aria-label="Close onboarding booking"
                 className="relative h-10 w-10 shrink-0 border border-[var(--ink)] bg-[var(--paper)] text-[var(--ink)] hover:bg-[var(--ink)] hover:text-[var(--paper)]"
-                onClick={closeModal}
+                onClick={() => closeModal("button")}
               >
                 <span
                   aria-hidden="true"

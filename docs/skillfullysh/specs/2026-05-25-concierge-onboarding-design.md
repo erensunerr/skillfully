@@ -23,6 +23,7 @@ Make the public landing page book-onboarding first. Visitors should see `Book on
 - Dashboard preview: avoid suggesting self-serve signup; use login/open-dashboard language.
 - Footer CTA: invite users to book onboarding instead of creating a workspace.
 - Booking modal: show the Google Calendar appointment scheduler only after a booking CTA is clicked.
+- Booking modal behavior: move focus to the close button on open, restore the previous focused element on close, and close through the same close handler for button, Escape, and backdrop dismissal.
 - Landing flow: do not add a booking section between existing landing sections.
 
 ## Implementation Notes
@@ -30,7 +31,7 @@ Make the public landing page book-onboarding first. Visitors should see `Book on
 - Use client-side modal buttons for booking CTAs.
 - Embed the scheduler with the provided Google Calendar Appointment Scheduling iframe URL inside the modal.
 - Keep the iframe responsive with `width="100%"`, `height="600"`, `frameBorder="0"`, and a descriptive `title`.
-- Preserve landing analytics for login links and capture booking CTA/modal events separately.
+- Preserve landing analytics for login links and capture booking CTA/modal events separately, including `meeting_booking_clicked` on booking CTA clicks.
 
 ## Verification
 

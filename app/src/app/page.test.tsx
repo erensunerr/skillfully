@@ -50,6 +50,6 @@ test("booking modal renders the appointment scheduler when opened", async () => 
   assert.match(html, /role="dialog"/);
   assert.match(html, /Book concierge onboarding/);
   assert.doesNotMatch(html, />Concierge onboarding</);
-  assert.match(html, /aria-hidden="true" class="absolute left-1\/2 top-1\/2 h-0\.5 w-4/);
+  assert.match(html, /aria-label="Close onboarding booking"/);
   assert.match(html, new RegExp(BOOKING_FORM_SRC.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
 });

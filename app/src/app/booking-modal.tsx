@@ -74,20 +74,24 @@ export function BookingModalCta({
           >
             <div className="flex items-start justify-between gap-4 border-b border-[var(--ink)] bg-[var(--white)] px-5 py-4">
               <div>
-                <p className="font-editorial-mono text-[0.68rem] font-bold uppercase">
-                  Concierge onboarding
-                </p>
-                <h2 id={titleId} className="mt-2 font-editorial-sans text-2xl font-bold">
+                <h2 id={titleId} className="font-editorial-sans text-2xl font-bold">
                   Book concierge onboarding
                 </h2>
               </div>
               <button
                 type="button"
                 aria-label="Close onboarding booking"
-                className="grid h-10 w-10 shrink-0 place-items-center border border-[var(--ink)] bg-[var(--paper)] font-editorial-sans text-2xl leading-none hover:bg-[var(--ink)] hover:text-[var(--paper)]"
+                className="relative h-10 w-10 shrink-0 border border-[var(--ink)] bg-[var(--paper)] text-[var(--ink)] hover:bg-[var(--ink)] hover:text-[var(--paper)]"
                 onClick={closeModal}
               >
-                x
+                <span
+                  aria-hidden="true"
+                  className="absolute left-1/2 top-1/2 h-0.5 w-4 -translate-x-1/2 -translate-y-1/2 rotate-45 bg-current"
+                />
+                <span
+                  aria-hidden="true"
+                  className="absolute left-1/2 top-1/2 h-0.5 w-4 -translate-x-1/2 -translate-y-1/2 -rotate-45 bg-current"
+                />
               </button>
             </div>
             <div className="min-h-0 flex-1 bg-[var(--white)]">

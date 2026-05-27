@@ -5,7 +5,7 @@ import Link from "next/link";
 
 import { captureClientEvent } from "@/lib/client-analytics";
 
-type LandingAuthIntent = "sign_in" | "sign_up";
+type LandingAuthIntent = "sign_in";
 
 export function LandingPageView() {
   useEffect(() => {

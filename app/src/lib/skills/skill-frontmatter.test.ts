@@ -57,6 +57,44 @@ test("extractSkillMarkdownBody hides frontmatter from an empty skill", () => {
   assert.equal(extractSkillMarkdownBody(markdown), "");
 });
 
+test("extractSkillMarkdownBody preserves horizontal rules and fenced code blocks", () => {
+  const markdown = [
+    "---",
+    "name: video",
+    "description: AI video workflow.",
+    "---",
+    "",
+    "# AI Video Prompting Guide",
+    "",
+    "---",
+    "",
+    "A strong video prompt follows this formula:",
+    "",
+    "```",
+    "[Subject] + [Action] + [Camera movement]",
+    "```",
+    "",
+    "## Camera Movement Vocabulary",
+  ].join("\n");
+
+  assert.equal(
+    extractSkillMarkdownBody(markdown),
+    [
+      "# AI Video Prompting Guide",
+      "",
+      "---",
+      "",
+      "A strong video prompt follows this formula:",
+      "",
+      "```",
+      "[Subject] + [Action] + [Camera movement]",
+      "```",
+      "",
+      "## Camera Movement Vocabulary",
+    ].join("\n"),
+  );
+});
+
 test("skillSpecName enforces the Agent Skills frontmatter name shape", () => {
   assert.equal(skillSpecName("  FAQ: Billing + Refunds!  "), "faq-billing-refunds");
   assert.equal(skillSpecName(""), "skill");

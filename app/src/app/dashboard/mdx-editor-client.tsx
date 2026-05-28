@@ -6,9 +6,12 @@ import {
   BoldItalicUnderlineToggles,
   CodeToggle,
   CreateLink,
+  InsertCodeBlock,
   InsertTable,
   ListsToggle,
   Separator,
+  codeBlockPlugin,
+  codeMirrorPlugin,
   headingsPlugin,
   linkPlugin,
   listsPlugin,
@@ -18,6 +21,24 @@ import {
   toolbarPlugin,
   thematicBreakPlugin,
 } from "@mdxeditor/editor";
+
+export const CODE_BLOCK_LANGUAGES = {
+  bash: "Bash",
+  css: "CSS",
+  html: "HTML",
+  javascript: "JavaScript",
+  js: "JavaScript",
+  json: "JSON",
+  jsx: "JSX",
+  markdown: "Markdown",
+  md: "Markdown",
+  shell: "Shell",
+  sh: "Shell",
+  ts: "TypeScript",
+  tsx: "TSX",
+  typescript: "TypeScript",
+  txt: "Plain text",
+} satisfies Record<string, string>;
 
 export function MdxMarkdownEditor({
   markdown,
@@ -40,6 +61,7 @@ export function MdxMarkdownEditor({
               <Separator />
               <BoldItalicUnderlineToggles />
               <CodeToggle />
+              <InsertCodeBlock />
               <Separator />
               <ListsToggle />
               <CreateLink />
@@ -53,6 +75,8 @@ export function MdxMarkdownEditor({
         thematicBreakPlugin(),
         linkPlugin(),
         tablePlugin(),
+        codeBlockPlugin({ defaultCodeBlockLanguage: "txt" }),
+        codeMirrorPlugin({ codeBlockLanguages: CODE_BLOCK_LANGUAGES }),
         markdownShortcutPlugin(),
       ]}
     />

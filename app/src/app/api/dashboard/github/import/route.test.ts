@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { cachedDiscoveryForSession, listInstallationRepositories } from "./route";
+import {
+  cachedDiscoveryForSession,
+  discoveryWarningFromError,
+  listInstallationRepositories,
+} from "./route";
 
 function repositoryPage(page: number, count: number) {
   return {
@@ -68,4 +72,46 @@ test("cachedDiscoveryForSession serves stored candidates without rediscovery", (
   assert.equal(cached?.candidates[0].skillName, "code-review");
   assert.deepEqual(cached?.repositories, ["octocat/Hello-World"]);
   assert.deepEqual(cached?.warnings, ["octocat/Hello-World: repository tree is too large to check completely"]);
+});
+
+test("cachedDiscoveryForSession serves failed sessions with candidate-level errors", () => {
+  const cached = cachedDiscoveryForSession({
+    id: "row-1",
+    ownerId: "user-1",
+    sessionId: "gis_session",
+    installationId: "installation-1",
+    status: "failed",
+    candidatesJson: [
+      {
+        id: "candidate-1",
+        repositoryId: "1296269",
+        repoFullName: "octocat/Hello-World",
+        branch: "main",
+        skillRoot: "skills/steps",
+        skillName: "steps",
+        status: "invalid",
+        reason: "Validation failed for steps: Attributes are missing in your schema",
+        files: [],
+        oversizedFiles: [],
+        totalSize: 0,
+        totalSizeExceedsLimit: false,
+      },
+    ],
+    warningsJson: [],
+    repositoriesJson: ["octocat/Hello-World"],
+    repositoriesChecked: 1,
+  });
+
+  assert.equal(cached?.candidates[0].status, "invalid");
+  assert.match(cached?.candidates[0].reason ?? "", /Attributes are missing/);
+});
+
+test("discoveryWarningFromError preserves schema validation messages as non-fatal warnings", () => {
+  assert.equal(
+    discoveryWarningFromError(
+      "octocat/Hello-World",
+      new Error("Validation failed for steps: Attributes are missing in your schema"),
+    ),
+    "octocat/Hello-World: Validation failed for steps: Attributes are missing in your schema",
+  );
 });

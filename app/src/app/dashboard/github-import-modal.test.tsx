@@ -61,12 +61,15 @@ test("GitHub import modal renders unchecked valid candidates and disabled invali
     />,
   );
 
-  assert.match(html, /octocat\/Hello-World - code-review/);
+  assert.match(html, /octocat\/Hello-World\/code-review/);
+  assert.match(html, /octocat\/Hello-World\/bad-skill/);
   assert.match(html, /Format error/);
   assert.match(html, /frontmatter is not valid YAML/);
   assert.match(html, /Already imported/);
   assert.match(html, /repository tree is too large/);
   assert.match(html, /Import selected/);
+  assert.match(html, /cursor-pointer/);
+  assert.match(html, /disabled:cursor-not-allowed/);
 });
 
 test("GitHub import modal renders no-skills state with repository access action", () => {

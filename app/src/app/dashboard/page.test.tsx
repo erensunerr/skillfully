@@ -287,6 +287,54 @@ test("dashboard editor only opens markdown files in the markdown editor", async 
   }), false);
 });
 
+test("dashboard markdown editor enables fenced code block support", async () => {
+  const { CODE_BLOCK_LANGUAGES } = await import("./mdx-editor-client");
+
+  assert.equal(CODE_BLOCK_LANGUAGES.typescript, "TypeScript");
+  assert.equal(CODE_BLOCK_LANGUAGES.tsx, "TSX");
+  assert.equal(CODE_BLOCK_LANGUAGES.bash, "Bash");
+  assert.equal(CODE_BLOCK_LANGUAGES.json, "JSON");
+});
+
+test("GitHub import failures attach to matching candidate rows", async () => {
+  const { applyGitHubImportFailuresToCandidates } = await import("./page");
+
+  const result = applyGitHubImportFailuresToCandidates({
+    candidates: [
+      {
+        id: "candidate-steps",
+        repoFullName: "octocat/Hello-World",
+        skillName: "steps",
+        skillRoot: "skills/steps",
+        status: "valid",
+      },
+      {
+        id: "candidate-code-review",
+        repoFullName: "octocat/Hello-World",
+        skillName: "code-review",
+        skillRoot: "skills/code-review",
+        status: "valid",
+      },
+    ],
+    selectedCandidateIds: new Set(["candidate-steps", "candidate-code-review"]),
+    failures: [
+      {
+        candidate_id: "candidate-steps",
+        name: "steps",
+        error: "Validation failed for steps: Attributes are missing in your schema",
+      },
+    ],
+  });
+
+  assert.equal(result.candidates[0].status, "invalid");
+  assert.equal(
+    result.candidates[0].reason,
+    "Validation failed for steps: Attributes are missing in your schema",
+  );
+  assert.equal(result.candidates[1].status, "valid");
+  assert.deepEqual([...result.selectedCandidateIds], ["candidate-code-review"]);
+});
+
 test("dashboard selector marks shared skills", async () => {
   Object.assign(globalThis, { React });
   const { SkillSelector } = await import("./page");

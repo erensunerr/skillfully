@@ -7,6 +7,10 @@ import {
   MAX_GITHUB_IMPORT_FILE_BYTES,
   MAX_GITHUB_IMPORT_SKILL_BYTES,
   discoverGitHubSkillCandidates,
+  filterGitHubSkillCandidateDiscoveryWarnings,
+  markGitHubSkillCandidateDiscoveryFailures,
+  markGitHubSkillCandidatesExistingImportCheckFailed,
+  markGitHubSkillCandidateImportResults,
   type ExistingGitHubImport,
   type GitHubSkillCandidate,
   type GitHubTreeEntry,
@@ -134,6 +138,14 @@ function joinedFailureMessage(failures: Array<{ error: string }>) {
   return failures.map((failure) => truncateMessage(failure.error)).join(" | ");
 }
 
+function errorMessage(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback;
+}
+
+export function discoveryWarningFromError(scope: string, error: unknown) {
+  return `${scope}: ${errorMessage(error, "discovery step failed")}`;
+}
+
 export async function listInstallationRepositories(token: string) {
   const repositories: GitHubRepositoryResponse[] = [];
   const warnings: string[] = [];
@@ -235,7 +247,7 @@ export function cachedDiscoveryForSession(session: ImportSessionRow) {
   // Discovery can touch every repository in the installation. Cache the result
   // on the server-created session so refreshes and imports do not repeatedly
   // walk the same GitHub trees unless the caller explicitly asks to refresh.
-  if (session.status !== "discovered" && session.status !== "imported") {
+  if (session.status !== "discovered" && session.status !== "imported" && session.status !== "failed") {
     return null;
   }
   if (!Array.isArray(session.candidatesJson)) {
@@ -279,18 +291,37 @@ async function discoverCandidatesForSession({
 
   const { repositories, warnings: repositoryWarnings } = await listInstallationRepositories(token);
   const repositoryNames = repositories.map((repository) => repository.full_name).filter(Boolean);
-  const existingImports = await getExistingGitHubImports(ownerId);
+  let existingImports: ExistingGitHubImport[] = [];
+  let existingImportsVerified = true;
   const candidates: GitHubSkillCandidate[] = [];
   const warnings: string[] = [...repositoryWarnings];
+  try {
+    existingImports = await getExistingGitHubImports(ownerId);
+  } catch (error) {
+    existingImportsVerified = false;
+    warnings.push(discoveryWarningFromError("Existing GitHub imports", error));
+  }
 
   for (const repository of repositories) {
-    const repositoryWarning = await upsertGitHubRepository({ ownerId, installationId: session.installationId, repository });
-    if (repositoryWarning) {
-      warnings.push(repositoryWarning);
-    }
     const repoFullName = repository.full_name;
     const defaultBranch = repository.default_branch || "main";
-    const { owner, repo } = splitRepoFullName(repoFullName);
+    try {
+      const repositoryWarning = await upsertGitHubRepository({ ownerId, installationId: session.installationId, repository });
+      if (repositoryWarning) {
+        warnings.push(repositoryWarning);
+      }
+    } catch (error) {
+      warnings.push(discoveryWarningFromError(repoFullName, error));
+    }
+
+    let owner: string;
+    let repo: string;
+    try {
+      ({ owner, repo } = splitRepoFullName(repoFullName));
+    } catch (error) {
+      warnings.push(discoveryWarningFromError(repoFullName, error));
+      continue;
+    }
 
     let tree: GitHubTreeResponse;
     try {
@@ -299,7 +330,7 @@ async function discoverCandidatesForSession({
         `/repos/${owner}/${repo}/git/trees/${encodeURIComponent(defaultBranch)}?recursive=1`,
       );
     } catch (error) {
-      warnings.push(`${repoFullName}: ${error instanceof Error ? error.message : "could not read repository"}`);
+      warnings.push(discoveryWarningFromError(repoFullName, error));
       continue;
     }
 
@@ -319,7 +350,7 @@ async function discoverCandidatesForSession({
       try {
         skillMarkdownByPath[entry.path] = (await githubRawFile(token, repoFullName, entry.path, defaultBranch)).toString("utf8");
       } catch (error) {
-        warnings.push(`${repoFullName}/${entry.path}: ${error instanceof Error ? error.message : "could not read SKILL.md"}`);
+        warnings.push(discoveryWarningFromError(`${repoFullName}/${entry.path}`, error));
       }
     }
 
@@ -337,18 +368,48 @@ async function discoverCandidatesForSession({
     );
   }
 
-  await updateImportSession(session, {
-    status: "discovered",
-    discoveredCount: candidates.filter((candidate) => candidate.status === "valid").length,
-    repositoriesChecked: repositories.length,
-    // The UI shows repository scope from Skillfully after discovery; users only
-    // leave for GitHub when they explicitly choose to add repositories.
-    repositoriesJson: repositoryNames,
-    candidatesJson: candidates,
-    warningsJson: warnings,
+  const candidatesWithExistingImportState = existingImportsVerified
+    ? candidates
+    : markGitHubSkillCandidatesExistingImportCheckFailed(candidates);
+  const nextCandidates = markGitHubSkillCandidateDiscoveryFailures({
+    candidates: candidatesWithExistingImportState,
+    errors: warnings,
+  });
+  const nextWarnings = filterGitHubSkillCandidateDiscoveryWarnings({
+    candidates: nextCandidates,
+    warnings,
   });
 
-  return { candidates, warnings, repositories: repositoryNames, repositoriesChecked: repositories.length };
+  try {
+    await updateImportSession(session, {
+      status: "discovered",
+      discoveredCount: nextCandidates.filter((candidate) => candidate.status === "valid").length,
+      repositoriesChecked: repositories.length,
+      // The UI shows repository scope from Skillfully after discovery; users only
+      // leave for GitHub when they explicitly choose to add repositories.
+      repositoriesJson: repositoryNames,
+      candidatesJson: nextCandidates,
+      warningsJson: nextWarnings,
+    });
+  } catch (error) {
+    const cacheWarnings = [...nextWarnings, discoveryWarningFromError("GitHub import session cache", error)];
+    // Re-run filtering in case the cache error itself names a specific skill.
+    const cacheCandidates = markGitHubSkillCandidateDiscoveryFailures({
+      candidates: nextCandidates,
+      errors: cacheWarnings,
+    });
+    return {
+      candidates: cacheCandidates,
+      warnings: filterGitHubSkillCandidateDiscoveryWarnings({
+        candidates: cacheCandidates,
+        warnings: cacheWarnings,
+      }),
+      repositories: repositoryNames,
+      repositoriesChecked: repositories.length,
+    };
+  }
+
+  return { candidates: nextCandidates, warnings: nextWarnings, repositories: repositoryNames, repositoriesChecked: repositories.length };
 }
 
 function importableFiles(candidate: GitHubSkillCandidate) {
@@ -476,8 +537,17 @@ export async function POST(request: NextRequest) {
     }
 
     const existingSkillCount = (await listSkillsForOwner({ ownerId: user.id })).length;
-    const imported = [];
-    const failures = [];
+    const imported: Array<{
+      candidate_id: string;
+      skill_id: string;
+      entity_id: string;
+      name: string;
+      repo_full_name: string;
+      repository_id: string;
+      skill_root: string;
+      skipped_files: number;
+    }> = [];
+    const failures: Array<{ candidate_id: string; name: string; error: string }> = [];
 
     for (const candidate of selectedCandidates) {
       try {
@@ -528,6 +598,7 @@ export async function POST(request: NextRequest) {
           },
         });
         imported.push({
+          candidate_id: candidate.id,
           skill_id: created.skill.skillId,
           entity_id: created.skill.id,
           name: created.skill.name,
@@ -545,9 +616,18 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    const nextCandidates = markGitHubSkillCandidateImportResults({
+      candidates,
+      imported,
+      failures,
+    });
+
     await updateImportSession(session, {
       status: imported.length > 0 ? "imported" : "failed",
       importedCount: imported.length,
+      // After a submit, discoveredCount tracks the remaining importable rows.
+      discoveredCount: nextCandidates.filter((candidate) => candidate.status === "valid").length,
+      candidatesJson: nextCandidates,
       ...(failures.length > 0 ? { error: joinedFailureMessage(failures) } : {}),
       ...(imported.length > 0 ? { completedAt: Date.now() } : {}),
     });
@@ -577,6 +657,7 @@ export async function POST(request: NextRequest) {
     return jsonResponse({
       imported,
       failures,
+      candidates: nextCandidates,
       ...(imported.length === 0
         ? { error: joinedFailureMessage(failures) || "No skills were imported." }
         : {}),

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  assertAuthorizedGitHubPublishingTarget,
   buildPublishContextForSkill,
   createSkillDraft,
   createSkillFile,
@@ -183,6 +184,151 @@ test("publish context does not fall back to Skillfully's default GitHub installa
       process.env.SKILLFULLY_DEFAULT_GITHUB_INSTALLATION_ID = previousDefaultInstallation;
     }
   }
+});
+
+test("publish context rejects GitHub targets bound to another account installation", async () => {
+  const store = new InMemorySkillStore();
+  let counter = 0;
+  await createSkillDraft({
+    store,
+    now: () => 1700000000000,
+    idGenerator: () => `id_${++counter}`,
+    skillIdGenerator: () => "sk_imported",
+    ownerId: "user-1",
+    name: "code-review",
+    description: "Reviews code changes.",
+    baseUrl: "https://www.skillfully.sh",
+    sourceMode: "github_import",
+    originalRepoFullName: "octocat/Hello-World",
+    originalRepositoryId: "1296269",
+    originalSkillPath: ".agents/skills/code-review",
+  });
+  await store.transact([
+    store.create("githubInstallations", "installation-owned", {
+      ownerId: "user-1",
+      installationId: "installation-1",
+      accountLogin: "octocat",
+      accountType: "User",
+    }),
+    store.create("githubRepositories", "repo-owned", {
+      ownerId: "user-1",
+      installationId: "installation-1",
+      repositoryId: "1296269",
+      repoFullName: "octocat/Hello-World",
+      defaultBranch: "main",
+      selected: true,
+    }),
+  ]);
+  const githubTarget = Object.entries(store.rows.publishingTargets).find(
+    ([, target]) => target.targetKind === "github",
+  );
+  assert.ok(githubTarget);
+  await store.transact([
+    store.update("publishingTargets", githubTarget[0], {
+      repoFullName: "victim/private-repo",
+      repositoryId: "987654",
+      installationId: "victim-installation",
+      consentStatus: "granted",
+    }),
+  ]);
+
+  await assert.rejects(
+    () =>
+      buildPublishContextForSkill({
+        store,
+        ownerId: "user-1",
+        skillId: "sk_imported",
+      }),
+    /GitHub App installation is not connected to this account/,
+  );
+});
+
+test("publish context includes only owner-authorized GitHub targets", async () => {
+  const store = new InMemorySkillStore();
+  let counter = 0;
+  await createSkillDraft({
+    store,
+    now: () => 1700000000000,
+    idGenerator: () => `id_${++counter}`,
+    skillIdGenerator: () => "sk_imported",
+    ownerId: "user-1",
+    name: "code-review",
+    description: "Reviews code changes.",
+    baseUrl: "https://www.skillfully.sh",
+    sourceMode: "github_import",
+    originalRepoFullName: "octocat/Hello-World",
+    originalRepositoryId: "1296269",
+    originalSkillPath: ".agents/skills/code-review",
+  });
+  await store.transact([
+    store.create("githubInstallations", "installation-owned", {
+      ownerId: "user-1",
+      installationId: "installation-1",
+      accountLogin: "octocat",
+      accountType: "User",
+    }),
+    store.create("githubRepositories", "repo-owned", {
+      ownerId: "user-1",
+      installationId: "installation-1",
+      repositoryId: "1296269",
+      repoFullName: "octocat/Hello-World",
+      defaultBranch: "main",
+      selected: true,
+    }),
+  ]);
+  const githubTarget = Object.entries(store.rows.publishingTargets).find(
+    ([, target]) => target.targetKind === "github",
+  );
+  assert.ok(githubTarget);
+  await store.transact([
+    store.update("publishingTargets", githubTarget[0], {
+      repoFullName: "octocat/Hello-World",
+      repositoryId: "1296269",
+      installationId: "installation-1",
+      consentStatus: "granted",
+    }),
+  ]);
+
+  const context = await buildPublishContextForSkill({
+    store,
+    ownerId: "user-1",
+    skillId: "sk_imported",
+  });
+
+  assert.equal(context.githubTarget?.repoFullName, "octocat/Hello-World");
+  assert.equal(context.githubTarget?.installationId, "installation-1");
+  assert.equal((context.githubTarget as Record<string, unknown> | null | undefined)?.consentStatus, "granted");
+});
+
+test("GitHub publishing target authorization rejects repos outside the owner installation", async () => {
+  const store = new InMemorySkillStore();
+  await store.transact([
+    store.create("githubInstallations", "installation-owned", {
+      ownerId: "user-1",
+      installationId: "installation-1",
+      accountLogin: "octocat",
+      accountType: "User",
+    }),
+    store.create("githubRepositories", "repo-owned", {
+      ownerId: "user-1",
+      installationId: "installation-1",
+      repositoryId: "1296269",
+      repoFullName: "octocat/Hello-World",
+      defaultBranch: "main",
+      selected: true,
+    }),
+  ]);
+
+  await assert.rejects(
+    () =>
+      assertAuthorizedGitHubPublishingTarget({
+        store,
+        ownerId: "user-1",
+        installationId: "installation-1",
+        repoFullName: "victim/private-repo",
+      }),
+    /GitHub repository is not available for this installation/,
+  );
 });
 
 test("listSkillFiles and updateSkillFileText enforce ownership and normalized paths", async () => {

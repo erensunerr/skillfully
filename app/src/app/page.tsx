@@ -5,6 +5,7 @@ import { BookingModalCta } from "./booking-modal";
 import { CtaDotSpotlight } from "./cta-dot-spotlight";
 import { SchematicGraphic } from "./hero-schematic";
 import { LandingAuthLink, LandingPageView } from "./landing-analytics";
+import { BrandMark, PublicHeader } from "./public-header";
 
 const marqueeCopy =
   "NOW ONBOARDING DESIGN PARTNERS BUILDING AGENT SKILLS FOR CLAUDE, CURSOR, GOOSE, AND LOCAL AGENTS.";
@@ -103,26 +104,6 @@ const faqs = [
       "Skillfully gives you a continuous feedback layer between those conversations, so you can see patterns across real skill usage.",
   },
 ] satisfies Array<{ question: string; answer: string }>;
-
-function BrandMark({ light = false }: { light?: boolean }) {
-  return (
-    <div className="flex items-center gap-2 font-editorial-sans text-base font-bold uppercase">
-      <span
-        aria-hidden
-        className={`relative h-5 w-5 shrink-0 rounded-full border-[5px] ${
-          light ? "border-[var(--paper)]" : "border-[var(--ink)]"
-        }`}
-      >
-        <span
-          className={`absolute left-1/2 top-1/2 h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full ${
-            light ? "bg-[var(--paper)]" : "bg-[var(--ink)]"
-          }`}
-        />
-      </span>
-      <span>Skillfully</span>
-    </div>
-  );
-}
 
 function RegistrationMark({
   className = "",
@@ -437,37 +418,6 @@ function PersonaCard({
   );
 }
 
-function Header() {
-  return (
-    <header className="grid min-h-16 grid-cols-[1fr_auto] items-center gap-4 border-b border-[var(--ink)] bg-[var(--paper)] px-5 py-3 sm:grid-cols-[1fr_auto_1fr] lg:px-8">
-      <Link href="/" aria-label="Skillfully home">
-        <BrandMark />
-      </Link>
-
-      <nav className="order-3 col-span-2 flex items-center justify-center gap-10 font-editorial-mono text-[0.72rem] sm:order-none sm:col-span-1">
-        <Link href="/guide" className="py-2 hover:underline">
-          Skills Guide
-        </Link>
-        <Link href="/blog" className="py-2 hover:underline">
-          Blog
-        </Link>
-      </nav>
-
-      <div className="flex items-center justify-end gap-4 font-editorial-mono text-[0.72rem]">
-        <LandingAuthLink intent="sign_in" surface="header" className="hidden py-2 hover:underline sm:inline">
-          Log in
-        </LandingAuthLink>
-        <BookingModalCta
-          surface="header"
-          className="editorial-button editorial-button-dark min-w-20 px-5 py-3 text-[0.72rem]"
-        >
-          Book onboarding
-        </BookingModalCta>
-      </div>
-    </header>
-  );
-}
-
 export default function LandingPage() {
   return (
     <main className="min-h-screen bg-[var(--paper)] text-[var(--ink)]">
@@ -475,7 +425,7 @@ export default function LandingPage() {
       <div aria-hidden className="marketing-noise" />
 
       <div className="relative mx-auto max-w-[1440px] overflow-hidden border-x border-[var(--ink)] bg-[var(--paper)]">
-        <Header />
+        <PublicHeader />
 
         <section className="grid border-b border-[var(--ink)] lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
           <div className="flex min-h-[36rem] flex-col justify-center border-b border-[var(--ink)] px-6 py-10 sm:px-10 lg:border-b-0 lg:border-r lg:px-16 xl:px-20">

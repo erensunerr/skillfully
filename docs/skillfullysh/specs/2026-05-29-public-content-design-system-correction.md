@@ -15,6 +15,7 @@ Make public guide and blog surfaces feel like the same product as the landing pa
 - Strengthen header hierarchy through consistent brand, centered primary navigation, right-side auth/onboarding actions, uppercase mono nav labels, and 44px minimum hit areas.
 - Remove the bright blue guide/blog visual system.
 - Replace blue and pale-blue article treatments with Skillfully ink, paper, white, borders, and mono labels.
+- Use a slightly darker paper-gray state for guide page-selector selected/hover states and article section minimap hover/focus states, keeping text ink-readable instead of inverted black.
 - Raise public nav, footer, read, guide-step, and table-of-contents links to at least 44px where they are primary interactive targets.
 
 ## Non-Goals
@@ -32,4 +33,5 @@ cd app && node --import tsx src/app/blog/\[slug\]/page.test.tsx
 cd app && node --import tsx src/app/guide/\[slug\]/page.test.tsx
 cd app && npm test
 cd app && npm run lint
+cd app && npm run build
 ```

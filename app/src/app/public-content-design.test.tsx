@@ -4,6 +4,8 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 const blueSystemPattern = /#0b66ff|#f3f5f9|#f1f4f8|#d8dce4/;
+const hardInvertedNavigationPattern =
+  /bg-\[var\(--ink\)\] text-\[var\(--paper\)\]|hover:bg-\[var\(--ink\)\] hover:text-\[var\(--paper\)\]|focus-visible:bg-\[var\(--ink\)\] focus-visible:text-\[var\(--paper\)\]/;
 
 function assertUsesLandingHeader(html: string) {
   assert.match(html, /aria-label="Skillfully home"/);
@@ -40,4 +42,10 @@ test("public content pages use the landing header and monochrome design system",
   assert.doesNotMatch(blogIndexHtml, />Dashboard</);
   assert.doesNotMatch(blogArticleHtml, />Dashboard</);
   assert.doesNotMatch(guideArticleHtml, />Dashboard</);
+
+  assert.doesNotMatch(blogArticleHtml, hardInvertedNavigationPattern);
+  assert.doesNotMatch(guideArticleHtml, hardInvertedNavigationPattern);
+  assert.match(blogArticleHtml, /hover:bg-\[var\(--paper-muted\)\]/);
+  assert.match(guideArticleHtml, /bg-\[var\(--paper-muted\)\]/);
+  assert.match(guideArticleHtml, /hover:bg-\[var\(--paper-muted\)\]/);
 });

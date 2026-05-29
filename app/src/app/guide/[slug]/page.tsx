@@ -80,10 +80,11 @@ export default async function GuideArticlePage({ params }: GuideArticleRouteProp
                 <Link
                   key={candidate.slug}
                   href={`/guide/${candidate.slug}`}
+                  aria-current={candidate.slug === article.slug ? "page" : undefined}
                   className={`inline-flex min-h-11 items-center border px-4 py-3 font-editorial-mono text-xs font-bold uppercase focus-visible:outline-none ${
                     candidate.slug === article.slug
-                      ? "border-[var(--ink)] bg-[var(--ink)] text-[var(--paper)]"
-                      : "border-transparent hover:border-[var(--ink)] focus-visible:border-[var(--ink)]"
+                      ? "border-[var(--ink)] bg-[var(--paper-muted)] text-[var(--ink)]"
+                      : "border-transparent hover:border-[var(--ink)] hover:bg-[var(--paper-muted)] focus-visible:border-[var(--ink)] focus-visible:bg-[var(--paper-muted)]"
                   }`}
                 >
                   {candidate.number}
@@ -126,7 +127,7 @@ export default async function GuideArticlePage({ params }: GuideArticleRouteProp
                   <li key={section.id}>
                     <a
                       href={`#${section.id}`}
-                      className="block min-h-11 border border-[var(--ink)] bg-[var(--white)] px-3 py-3 hover:bg-[var(--ink)] hover:text-[var(--paper)] focus-visible:bg-[var(--ink)] focus-visible:text-[var(--paper)] focus-visible:outline-none"
+                      className="block min-h-11 border border-[var(--ink)] bg-[var(--white)] px-3 py-3 text-[var(--ink)] hover:bg-[var(--paper-muted)] focus-visible:bg-[var(--paper-muted)] focus-visible:outline-none"
                     >
                       {section.title}
                     </a>

@@ -145,7 +145,7 @@ export default async function BlogArticlePage({ params }: BlogArticleRouteProps)
                   <li key={section.id}>
                     <a
                       href={`#${section.id}`}
-                      className="block min-h-11 border border-[var(--ink)] bg-[var(--white)] px-3 py-3 hover:bg-[var(--ink)] hover:text-[var(--paper)] focus-visible:bg-[var(--ink)] focus-visible:text-[var(--paper)] focus-visible:outline-none"
+                      className="block min-h-11 border border-[var(--ink)] bg-[var(--white)] px-3 py-3 text-[var(--ink)] hover:bg-[var(--paper-muted)] focus-visible:bg-[var(--paper-muted)] focus-visible:outline-none"
                     >
                       {section.title}
                     </a>

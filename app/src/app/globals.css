@@ -2,6 +2,7 @@
 
 :root {
   --paper: #e3e3e3;
+  --paper-muted: #d6d6d6;
   --ink: #080808;
   --white: #ffffff;
   --gray: #8a8a8a;
@@ -9,6 +10,7 @@
 
 :root[data-theme="dark"] {
   --paper: #0f0f0f;
+  --paper-muted: #242424;
   --ink: #f4f4ef;
   --white: #181818;
   --gray: #9d9d9d;
@@ -17,6 +19,7 @@
 @media (prefers-color-scheme: dark) {
   :root[data-theme="system"] {
     --paper: #0f0f0f;
+    --paper-muted: #242424;
     --ink: #f4f4ef;
     --white: #181818;
     --gray: #9d9d9d;

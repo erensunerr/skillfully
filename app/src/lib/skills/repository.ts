@@ -112,6 +112,73 @@ export type PublishingTargetRow = {
   updatedAt: number;
 };
 
+const GITHUB_REPO_FULL_NAME_PATTERN = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
+const GITHUB_INSTALLATION_ID_PATTERN = /^[A-Za-z0-9_-]+$/;
+
+function normalizeGitHubRepoFullName(value: string) {
+  const normalized = value.trim();
+  if (!GITHUB_REPO_FULL_NAME_PATTERN.test(normalized)) {
+    throw new Error("invalid GitHub repository");
+  }
+  return normalized;
+}
+
+function normalizeGitHubInstallationId(value: string) {
+  const normalized = value.trim();
+  if (!normalized || !GITHUB_INSTALLATION_ID_PATTERN.test(normalized)) {
+    throw new Error("invalid GitHub App installation");
+  }
+  return normalized;
+}
+
+export async function assertAuthorizedGitHubPublishingTarget({
+  store = defaultSkillStore,
+  ownerId,
+  installationId,
+  repoFullName,
+}: {
+  store?: SkillStore;
+  ownerId: string;
+  installationId: string;
+  repoFullName: string;
+}) {
+  const normalizedInstallationId = normalizeGitHubInstallationId(installationId);
+  const normalizedRepoFullName = normalizeGitHubRepoFullName(repoFullName);
+  const rows = await store.query({
+    githubInstallations: {
+      $: {
+        where: {
+          ownerId,
+          installationId: normalizedInstallationId,
+        },
+      },
+    },
+    githubRepositories: {
+      $: {
+        where: {
+          ownerId,
+          installationId: normalizedInstallationId,
+          repoFullName: normalizedRepoFullName,
+        },
+      },
+    },
+  });
+  if ((rows.githubInstallations ?? []).length === 0) {
+    throw new Error("GitHub App installation is not connected to this account");
+  }
+  const repository = (rows.githubRepositories ?? []).find((row) => row.selected !== false);
+  if (!repository) {
+    throw new Error("GitHub repository is not available for this installation");
+  }
+
+  return {
+    installationId: normalizedInstallationId,
+    repoFullName: normalizedRepoFullName,
+    repositoryId: typeof repository.repositoryId === "string" ? repository.repositoryId : undefined,
+    defaultBranch: typeof repository.defaultBranch === "string" ? repository.defaultBranch : undefined,
+  };
+}
+
 function makeAdminStore(): SkillStore {
   const tx = adminDb.tx as unknown as Record<EntityName, Record<string, {
     create: (values: Row) => unknown;
@@ -856,6 +923,16 @@ export async function buildPublishContextForSkill({
   const githubTarget = skill.sourceMode === "github_import"
     ? targets.find((target) => target.targetKind === "github")
     : null;
+  const githubRepoFullName = githubTarget?.repoFullName || skill.originalRepoFullName || "";
+  const githubInstallationId = githubTarget?.installationId || "";
+  if (githubTarget && githubRepoFullName && githubInstallationId) {
+    await assertAuthorizedGitHubPublishingTarget({
+      store,
+      ownerId,
+      installationId: githubInstallationId,
+      repoFullName: githubRepoFullName,
+    });
+  }
 
   return {
     skill: {
@@ -882,11 +959,12 @@ export async function buildPublishContextForSkill({
     defaultGitHubRepo: null,
     githubTarget: githubTarget
       ? {
-          repoFullName: githubTarget.repoFullName || skill.originalRepoFullName || "",
-          installationId: githubTarget.installationId || "",
+          repoFullName: githubRepoFullName,
+          installationId: githubInstallationId,
           skillRoot: githubTarget.skillRoot,
           baseBranch: githubTarget.baseBranch,
           autoMerge: githubTarget.autoMerge,
+          consentStatus: githubTarget.consentStatus,
         }
       : null,
   };

@@ -1,6 +1,6 @@
 # Skillfullysh Memories TOC
 
-- Updated: 2026-05-25 Concierge onboarding modal, focus handling, booking PostHog event, and Google Calendar appointment embed
+- Updated: 2026-05-29 GitHub publishing target authorization fix
 - [2026-04-13 Memory](./2026-04-13-memory.md)
 - [2026-04-25 Memory](./2026-04-25-memory.md)
 - [2026-04-26 Memory](./2026-04-26-memory.md)
@@ -12,3 +12,5 @@
 - [2026-05-19 Memory](./2026-05-19-memory.md)
 - [2026-05-20 Memory](./2026-05-20-memory.md)
 - [2026-05-25 Memory](./2026-05-25-memory.md)
+- [2026-05-28 Memory](./2026-05-28-memory.md)
+- [2026-05-29 Memory](./2026-05-29-memory.md)

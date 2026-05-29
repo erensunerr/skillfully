@@ -52,6 +52,20 @@ export type GitHubSkillCandidate = {
   totalSizeExceedsLimit: boolean;
 };
 
+export type GitHubSkillCandidateImportSuccess = {
+  candidate_id?: string;
+  skill_id?: string;
+};
+
+export type GitHubSkillCandidateImportFailure = {
+  candidate_id?: string;
+  name?: string;
+  error: string;
+};
+
+export const EXISTING_GITHUB_IMPORTS_UNAVAILABLE_REASON =
+  "Could not verify existing GitHub imports. Refresh GitHub import and try again.";
+
 type GitHubImportSessionStore = {
   create(entity: "skillImports", id: string, values: Record<string, unknown>): unknown;
   transact(ops: unknown[]): Promise<void>;
@@ -247,6 +261,173 @@ function compareSkillFiles(a: GitHubSkillCandidateFile, b: GitHubSkillCandidateF
     return 1;
   }
   return a.relativePath.localeCompare(b.relativePath);
+}
+
+function importFailureForCandidate(
+  candidate: GitHubSkillCandidate,
+  failures: GitHubSkillCandidateImportFailure[],
+) {
+  return failures.find((failure) => failure.candidate_id === candidate.id);
+}
+
+function importSuccessForCandidate(
+  candidate: GitHubSkillCandidate,
+  imported: GitHubSkillCandidateImportSuccess[],
+) {
+  return imported.find((success) => success.candidate_id === candidate.id);
+}
+
+type ValidationFailureMatch = {
+  scope: string | null;
+  skillName: string;
+  reason: string;
+};
+
+function validationFailureFromWarning(value: string): ValidationFailureMatch | null {
+  const match = value.match(/^(?:(.*?):\s*)?Validation failed for ([^:\s]+):\s*(.+)$/);
+  if (!match) {
+    return null;
+  }
+
+  return {
+    scope: match[1] ?? null,
+    skillName: match[2],
+    reason: `Validation failed for ${match[2]}: ${match[3]}`,
+  };
+}
+
+function skillNameCounts(candidates: GitHubSkillCandidate[]) {
+  const counts = new Map<string, number>();
+  for (const candidate of candidates) {
+    counts.set(candidate.skillName, (counts.get(candidate.skillName) ?? 0) + 1);
+  }
+  return counts;
+}
+
+function validationFailureMatchesCandidate({
+  candidate,
+  failure,
+  counts,
+}: {
+  candidate: GitHubSkillCandidate;
+  failure: ValidationFailureMatch;
+  counts: Map<string, number>;
+}) {
+  if (failure.skillName !== candidate.skillName) {
+    return false;
+  }
+  if (failure.scope?.includes(candidate.repoFullName)) {
+    return true;
+  }
+  return (counts.get(failure.skillName) ?? 0) === 1;
+}
+
+export function markGitHubSkillCandidateDiscoveryFailures({
+  candidates,
+  errors,
+}: {
+  candidates: GitHubSkillCandidate[];
+  errors: string[];
+}) {
+  const parsedFailures: ValidationFailureMatch[] = [];
+  for (const error of errors) {
+    const failure = validationFailureFromWarning(error);
+    if (failure) {
+      parsedFailures.push(failure);
+    }
+  }
+
+  if (parsedFailures.length === 0) {
+    return candidates;
+  }
+
+  const counts = skillNameCounts(candidates);
+  return candidates.map((candidate): GitHubSkillCandidate => {
+    const failure = parsedFailures.find((parsedFailure) =>
+      validationFailureMatchesCandidate({ candidate, failure: parsedFailure, counts }),
+    );
+    if (!failure) {
+      return candidate;
+    }
+
+    return {
+      ...candidate,
+      status: "invalid",
+      reason: failure.reason,
+    };
+  });
+}
+
+export function filterGitHubSkillCandidateDiscoveryWarnings({
+  candidates,
+  warnings,
+}: {
+  candidates: GitHubSkillCandidate[];
+  warnings: string[];
+}) {
+  const counts = skillNameCounts(candidates);
+
+  return warnings.filter((warning) => {
+    const failure = validationFailureFromWarning(warning);
+    if (!failure) {
+      return true;
+    }
+
+    return !candidates.some(
+      (candidate) =>
+        candidate.status === "invalid" &&
+        candidate.reason === failure.reason &&
+        validationFailureMatchesCandidate({ candidate, failure, counts }),
+    );
+  });
+}
+
+export function markGitHubSkillCandidatesExistingImportCheckFailed(
+  candidates: GitHubSkillCandidate[],
+) {
+  return candidates.map((candidate): GitHubSkillCandidate => {
+    if (candidate.status !== "valid") {
+      return candidate;
+    }
+
+    return {
+      ...candidate,
+      status: "invalid",
+      reason: EXISTING_GITHUB_IMPORTS_UNAVAILABLE_REASON,
+    };
+  });
+}
+
+export function markGitHubSkillCandidateImportResults({
+  candidates,
+  imported,
+  failures,
+}: {
+  candidates: GitHubSkillCandidate[];
+  imported: GitHubSkillCandidateImportSuccess[];
+  failures: GitHubSkillCandidateImportFailure[];
+}) {
+  return candidates.map((candidate): GitHubSkillCandidate => {
+    const failure = importFailureForCandidate(candidate, failures);
+    if (failure) {
+      return {
+        ...candidate,
+        status: "invalid",
+        reason: failure.error,
+      };
+    }
+
+    const success = importSuccessForCandidate(candidate, imported);
+    if (success) {
+      return {
+        ...candidate,
+        status: "already_imported",
+        ...(success.skill_id ? { existingSkillId: success.skill_id } : {}),
+      };
+    }
+
+    return candidate;
+  });
 }
 
 export function discoverGitHubSkillCandidates({

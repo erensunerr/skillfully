@@ -111,12 +111,16 @@ type GitHubImportCandidatesResponse = {
 };
 type GitHubImportSubmitResponse = {
   imported: Array<{
+    candidate_id?: string;
     skill_id: string;
     entity_id?: string;
     name: string;
   }>;
-  failures?: Array<{ name?: string; error: string }>;
+  failures?: GitHubImportFailureView[];
+  candidates?: GitHubImportCandidateView[];
+  error?: string;
 };
+type GitHubImportFailureView = { candidate_id?: string; name?: string; error: string };
 type GitHubInstallStartResponse = {
   install_url?: string;
   session_id?: string;
@@ -142,6 +146,44 @@ type SkillAccessGrantView = {
   updated_at: number;
   revoked_at: number | null;
 };
+
+export function applyGitHubImportFailuresToCandidates({
+  candidates,
+  selectedCandidateIds,
+  failures,
+}: {
+  candidates: GitHubImportCandidateView[];
+  selectedCandidateIds: Set<string>;
+  failures: GitHubImportFailureView[];
+}) {
+  const nextCandidates = candidates.map((candidate) => {
+    const failure = failures.find((entry) =>
+      entry.candidate_id === candidate.id ||
+      (!entry.candidate_id && entry.name === candidate.skillName),
+    );
+    if (!failure) {
+      return candidate;
+    }
+
+    return {
+      ...candidate,
+      status: "invalid" as const,
+      reason: failure.error,
+    };
+  });
+  const validCandidateIds = new Set(
+    nextCandidates
+      .filter((candidate) => candidate.status === "valid")
+      .map((candidate) => candidate.id),
+  );
+
+  return {
+    candidates: nextCandidates,
+    selectedCandidateIds: new Set(
+      [...selectedCandidateIds].filter((candidateId) => validCandidateIds.has(candidateId)),
+    ),
+  };
+}
 
 const DASHBOARD_CARD = "border border-[var(--ink)] bg-[var(--paper)] text-[var(--ink)]";
 const DASHBOARD_PANEL = "border border-[var(--ink)] bg-[var(--white)] text-[var(--ink)]";
@@ -4472,16 +4514,37 @@ export default function Dashboard({
     setIsGitHubImporting(true);
     setGitHubImportError("");
     try {
-      const payload = await dashboardJson<GitHubImportSubmitResponse>(user, "/api/dashboard/github/import", {
+      const headers = new Headers(dashboardAuthHeaders(user, "application/json"));
+      const response = await fetch("/api/dashboard/github/import", {
         method: "POST",
+        headers,
         body: JSON.stringify({
           session_id: githubImportSessionId,
           candidate_ids: Array.from(selectedGitHubImportIds),
         }),
       });
+      const payload = (await response.json()) as GitHubImportSubmitResponse;
+
+      if (payload.failures?.length) {
+        const result = applyGitHubImportFailuresToCandidates({
+          candidates: payload.candidates ?? githubImportCandidates,
+          selectedCandidateIds: selectedGitHubImportIds,
+          failures: payload.failures,
+        });
+        setGitHubImportCandidates(result.candidates);
+        setSelectedGitHubImportIds(result.selectedCandidateIds);
+        setGitHubImportState(result.candidates.length > 0 ? "ready" : "empty");
+        setGitHubImportError("");
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error(payload.error || `Request failed: ${response.status}`);
+      }
+
       const firstImported = payload.imported[0];
       if (!firstImported) {
-        setGitHubImportError(payload.failures?.map((failure) => failure.error).join(" | ") || "No skills were imported.");
+        setGitHubImportError("No skills were imported.");
         return;
       }
 

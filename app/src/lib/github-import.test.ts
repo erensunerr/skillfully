@@ -2,9 +2,14 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  EXISTING_GITHUB_IMPORTS_UNAVAILABLE_REASON,
   MAX_GITHUB_IMPORT_FILE_BYTES,
   createGitHubImportSession,
   discoverGitHubSkillCandidates,
+  filterGitHubSkillCandidateDiscoveryWarnings,
+  markGitHubSkillCandidateDiscoveryFailures,
+  markGitHubSkillCandidatesExistingImportCheckFailed,
+  markGitHubSkillCandidateImportResults,
   relativeSkillFilePath,
   selectExistingGitHubInstallation,
   validateSkillMarkdown,
@@ -159,6 +164,292 @@ test("marks already imported skills by repository id and skill root", () => {
 
   assert.equal(candidate.status, "already_imported");
   assert.equal(candidate.existingSkillId, "sk_existing");
+});
+
+test("marks import failures on individual GitHub skill candidates", () => {
+  const candidates = discoverGitHubSkillCandidates({
+    repository,
+    tree: [
+      { path: "skills/steps/SKILL.md", type: "blob", size: 92 },
+      { path: "skills/code-review/SKILL.md", type: "blob", size: 92 },
+    ],
+    skillMarkdownByPath: {
+      "skills/steps/SKILL.md": [
+        "---",
+        "name: steps",
+        "description: Runs ordered steps. Use when checking workflows.",
+        "---",
+      ].join("\n"),
+      "skills/code-review/SKILL.md": [
+        "---",
+        "name: code-review",
+        "description: Reviews code. Use when checking a change.",
+        "---",
+      ].join("\n"),
+    },
+    existingImports: [],
+  });
+
+  const nextCandidates = markGitHubSkillCandidateImportResults({
+    candidates,
+    imported: [],
+    failures: [
+      {
+        candidate_id: candidates[1].id,
+        name: "code-review",
+        error: "Validation failed for code-review: Attributes are missing in your schema",
+      },
+    ],
+  });
+
+  assert.equal(nextCandidates[0].status, "valid");
+  assert.equal(nextCandidates[1].status, "invalid");
+  assert.equal(nextCandidates[1].reason, "Validation failed for code-review: Attributes are missing in your schema");
+});
+
+test("does not match import failures by ambiguous skill name without a candidate id", () => {
+  const candidates = discoverGitHubSkillCandidates({
+    repository,
+    tree: [
+      { path: "skills/steps/SKILL.md", type: "blob", size: 92 },
+      { path: "skills/code-review/SKILL.md", type: "blob", size: 92 },
+    ],
+    skillMarkdownByPath: {
+      "skills/steps/SKILL.md": [
+        "---",
+        "name: steps",
+        "description: Runs ordered steps. Use when checking workflows.",
+        "---",
+      ].join("\n"),
+      "skills/code-review/SKILL.md": [
+        "---",
+        "name: code-review",
+        "description: Reviews code. Use when checking a change.",
+        "---",
+      ].join("\n"),
+    },
+    existingImports: [],
+  });
+
+  const nextCandidates = markGitHubSkillCandidateImportResults({
+    candidates,
+    imported: [],
+    failures: [
+      {
+        name: "steps",
+        error: "Validation failed for steps: Attributes are missing in your schema",
+      },
+    ],
+  });
+
+  assert.equal(nextCandidates[0].status, "valid");
+  assert.equal(nextCandidates[1].status, "valid");
+});
+
+test("marks discovery validation failures on matching skill candidates", () => {
+  const candidates = discoverGitHubSkillCandidates({
+    repository,
+    tree: [
+      { path: "skills/steps/SKILL.md", type: "blob", size: 92 },
+      { path: "skills/code-review/SKILL.md", type: "blob", size: 92 },
+    ],
+    skillMarkdownByPath: {
+      "skills/steps/SKILL.md": [
+        "---",
+        "name: steps",
+        "description: Runs ordered steps. Use when checking workflows.",
+        "---",
+      ].join("\n"),
+      "skills/code-review/SKILL.md": [
+        "---",
+        "name: code-review",
+        "description: Reviews code. Use when checking a change.",
+        "---",
+      ].join("\n"),
+    },
+    existingImports: [],
+  });
+
+  const nextCandidates = markGitHubSkillCandidateDiscoveryFailures({
+    candidates,
+    errors: ["GitHub import session cache: Validation failed for steps: Attributes are missing in your schema"],
+  });
+
+  assert.equal(nextCandidates[0].skillName, "code-review");
+  assert.equal(nextCandidates[0].status, "valid");
+  assert.equal(nextCandidates[1].skillName, "steps");
+  assert.equal(nextCandidates[1].status, "invalid");
+  assert.equal(nextCandidates[1].reason, "Validation failed for steps: Attributes are missing in your schema");
+});
+
+test("scopes discovery validation failures to the matching repository", () => {
+  const firstRepo = {
+    repositoryId: "1",
+    repoFullName: "octocat/first",
+    defaultBranch: "main",
+  };
+  const secondRepo = {
+    repositoryId: "2",
+    repoFullName: "octocat/second",
+    defaultBranch: "main",
+  };
+  const skillMarkdownByPath = {
+    "skills/steps/SKILL.md": [
+      "---",
+      "name: steps",
+      "description: Runs ordered steps. Use when checking workflows.",
+      "---",
+    ].join("\n"),
+  };
+  const candidates = [
+    ...discoverGitHubSkillCandidates({
+      repository: firstRepo,
+      tree: [{ path: "skills/steps/SKILL.md", type: "blob", size: 92 }],
+      skillMarkdownByPath,
+      existingImports: [],
+    }),
+    ...discoverGitHubSkillCandidates({
+      repository: secondRepo,
+      tree: [{ path: "skills/steps/SKILL.md", type: "blob", size: 92 }],
+      skillMarkdownByPath,
+      existingImports: [],
+    }),
+  ];
+  const warnings = [
+    "octocat/second: Validation failed for steps: Attributes are missing in your schema",
+  ];
+
+  const nextCandidates = markGitHubSkillCandidateDiscoveryFailures({ candidates, errors: warnings });
+  const nextWarnings = filterGitHubSkillCandidateDiscoveryWarnings({
+    candidates: nextCandidates,
+    warnings,
+  });
+
+  assert.equal(nextCandidates[0].repoFullName, "octocat/first");
+  assert.equal(nextCandidates[0].status, "valid");
+  assert.equal(nextCandidates[1].repoFullName, "octocat/second");
+  assert.equal(nextCandidates[1].status, "invalid");
+  assert.equal(nextCandidates[1].reason, "Validation failed for steps: Attributes are missing in your schema");
+  assert.deepEqual(nextWarnings, []);
+});
+
+test("leaves unscoped discovery validation failures global when skill names are duplicated", () => {
+  const firstRepo = {
+    repositoryId: "1",
+    repoFullName: "octocat/first",
+    defaultBranch: "main",
+  };
+  const secondRepo = {
+    repositoryId: "2",
+    repoFullName: "octocat/second",
+    defaultBranch: "main",
+  };
+  const skillMarkdownByPath = {
+    "skills/steps/SKILL.md": [
+      "---",
+      "name: steps",
+      "description: Runs ordered steps. Use when checking workflows.",
+      "---",
+    ].join("\n"),
+  };
+  const candidates = [
+    ...discoverGitHubSkillCandidates({
+      repository: firstRepo,
+      tree: [{ path: "skills/steps/SKILL.md", type: "blob", size: 92 }],
+      skillMarkdownByPath,
+      existingImports: [],
+    }),
+    ...discoverGitHubSkillCandidates({
+      repository: secondRepo,
+      tree: [{ path: "skills/steps/SKILL.md", type: "blob", size: 92 }],
+      skillMarkdownByPath,
+      existingImports: [],
+    }),
+  ];
+  const warnings = [
+    "GitHub import session cache: Validation failed for steps: Attributes are missing in your schema",
+  ];
+
+  const nextCandidates = markGitHubSkillCandidateDiscoveryFailures({ candidates, errors: warnings });
+  const nextWarnings = filterGitHubSkillCandidateDiscoveryWarnings({
+    candidates: nextCandidates,
+    warnings,
+  });
+
+  assert.equal(nextCandidates[0].status, "valid");
+  assert.equal(nextCandidates[1].status, "valid");
+  assert.deepEqual(nextWarnings, warnings);
+});
+
+test("filters discovery validation warnings that are shown on matching candidates", () => {
+  const candidates = discoverGitHubSkillCandidates({
+    repository,
+    tree: [
+      { path: "skills/steps/SKILL.md", type: "blob", size: 92 },
+      { path: "skills/code-review/SKILL.md", type: "blob", size: 92 },
+    ],
+    skillMarkdownByPath: {
+      "skills/steps/SKILL.md": [
+        "---",
+        "name: steps",
+        "description: Runs ordered steps. Use when checking workflows.",
+        "---",
+      ].join("\n"),
+      "skills/code-review/SKILL.md": [
+        "---",
+        "name: code-review",
+        "description: Reviews code. Use when checking a change.",
+        "---",
+      ].join("\n"),
+    },
+    existingImports: [],
+  });
+  const warnings = [
+    "GitHub import session cache: Validation failed for steps: Attributes are missing in your schema",
+    "octocat/Hello-World: repository tree is too large to check completely",
+  ];
+
+  const nextCandidates = markGitHubSkillCandidateDiscoveryFailures({ candidates, errors: warnings });
+  const nextWarnings = filterGitHubSkillCandidateDiscoveryWarnings({
+    candidates: nextCandidates,
+    warnings,
+  });
+
+  assert.deepEqual(nextWarnings, ["octocat/Hello-World: repository tree is too large to check completely"]);
+});
+
+test("marks valid candidates invalid when existing GitHub imports cannot be checked", () => {
+  const candidates = discoverGitHubSkillCandidates({
+    repository,
+    tree: [
+      { path: "skills/steps/SKILL.md", type: "blob", size: 92 },
+      { path: "skills/broken/SKILL.md", type: "blob", size: 82 },
+    ],
+    skillMarkdownByPath: {
+      "skills/steps/SKILL.md": [
+        "---",
+        "name: steps",
+        "description: Runs ordered steps. Use when checking workflows.",
+        "---",
+      ].join("\n"),
+      "skills/broken/SKILL.md": [
+        "---",
+        "name: broken",
+        "description: ",
+        "---",
+      ].join("\n"),
+    },
+    existingImports: [],
+  });
+
+  const nextCandidates = markGitHubSkillCandidatesExistingImportCheckFailed(candidates);
+
+  assert.equal(nextCandidates[0].skillName, "broken");
+  assert.equal(nextCandidates[0].status, "invalid");
+  assert.match(nextCandidates[0].reason ?? "", /description is required/);
+  assert.equal(nextCandidates[1].skillName, "steps");
+  assert.equal(nextCandidates[1].status, "invalid");
+  assert.equal(nextCandidates[1].reason, EXISTING_GITHUB_IMPORTS_UNAVAILABLE_REASON);
 });
 
 test("validates Agent Skills frontmatter strictly", () => {

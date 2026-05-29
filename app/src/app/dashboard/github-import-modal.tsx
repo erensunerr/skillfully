@@ -37,6 +37,10 @@ function statusLabel(candidate: GitHubImportCandidateView) {
   return "Ready";
 }
 
+function candidateDisplayName(candidate: GitHubImportCandidateView) {
+  return `${candidate.repoFullName}/${candidate.skillName}`;
+}
+
 function statusClass(candidate: GitHubImportCandidateView) {
   if (candidate.status === "invalid") {
     return "text-red-700";
@@ -161,19 +165,19 @@ export function GitHubImportModal({
                   <label
                     key={candidate.id}
                     className={`grid gap-4 border-2 p-4 sm:grid-cols-[auto_1fr] ${rowTone} ${
-                      disabled ? "opacity-75" : ""
+                      disabled ? "cursor-not-allowed opacity-75" : "cursor-pointer"
                     }`}
                   >
                     <input
                       type="checkbox"
-                      className="mt-1 h-5 w-5 accent-black"
+                      className="mt-1 h-5 w-5 cursor-pointer accent-black disabled:cursor-not-allowed"
                       checked={selectedCandidateIds.has(candidate.id)}
                       disabled={disabled}
                       onChange={() => onToggleCandidate(candidate.id)}
                     />
                     <span className="min-w-0">
                       <span className="block break-words font-mono text-sm font-black">
-                        {candidate.repoFullName} - {candidate.skillName}
+                        {candidateDisplayName(candidate)}
                       </span>
                       <span className="mt-1 block break-words font-mono text-xs">
                         {candidate.skillRoot}

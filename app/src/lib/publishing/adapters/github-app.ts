@@ -11,6 +11,9 @@ export type GitHubPublishTarget = {
   autoMerge: boolean;
 };
 
+export const GITHUB_PUBLISH_TARGET_CONSENT_NOT_GRANTED =
+  "GitHub publish target consent is not granted";
+
 export type GitHubWriteFile = {
   path: string;
   contentText?: string | null;
@@ -48,6 +51,7 @@ export function resolveGitHubPublishTarget({
     skillRoot?: string | null;
     baseBranch?: string | null;
     autoMerge?: boolean | null;
+    consentStatus?: string | null;
   } | null;
 }): GitHubPublishTarget {
   if (skill.sourceMode === "github_import") {
@@ -59,6 +63,9 @@ export function resolveGitHubPublishTarget({
     }
     if (!configuredTarget.installationId) {
       throw new Error("GitHub App installation is not configured for the source repository");
+    }
+    if (configuredTarget.consentStatus !== "granted") {
+      throw new Error(GITHUB_PUBLISH_TARGET_CONSENT_NOT_GRANTED);
     }
     return {
       repoFullName: configuredTarget.repoFullName,
@@ -422,6 +429,12 @@ export function createGitHubAppAdapter({
             issues.push({
               severity: "error" as const,
               message: "GitHub App installation is not configured for the source repository",
+            });
+          }
+          if (context.githubTarget.consentStatus !== "granted") {
+            issues.push({
+              severity: "error" as const,
+              message: GITHUB_PUBLISH_TARGET_CONSENT_NOT_GRANTED,
             });
           }
         }

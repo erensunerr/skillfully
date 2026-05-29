@@ -34,6 +34,7 @@ export type PublishContext = {
     skillRoot?: string | null;
     baseBranch?: string | null;
     autoMerge?: boolean | null;
+    consentStatus?: string | null;
   } | null;
 };
 

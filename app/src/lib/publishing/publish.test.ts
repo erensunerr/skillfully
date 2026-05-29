@@ -84,12 +84,35 @@ test("resolveGitHubPublishTarget keeps imported skills in their source repo and 
       repoFullName: "acme/agent-skills",
       installationId: "user-installation",
       skillRoot: "skills/Original Skill",
+      consentStatus: "granted",
     },
   });
 
   assert.equal(target.repoFullName, "acme/agent-skills");
   assert.equal(target.installationId, "user-installation");
   assert.equal(target.skillRoot, "skills/Original Skill");
+});
+
+test("resolveGitHubPublishTarget rejects imported targets without granted consent", () => {
+  assert.throws(
+    () =>
+      resolveGitHubPublishTarget({
+        defaultRepo,
+        skill: {
+          skillId: "sk_imported",
+          slug: "original-skill",
+          sourceMode: "github_import",
+          originalSkillPath: "skills/Original Skill",
+        },
+        configuredTarget: {
+          repoFullName: "acme/agent-skills",
+          installationId: "user-installation",
+          skillRoot: "skills/Original Skill",
+          consentStatus: "pending",
+        } as never,
+      }),
+    /GitHub publish target consent is not granted/,
+  );
 });
 
 test("GitHub adapter rejects imported skills without a source target", async () => {
@@ -140,6 +163,36 @@ test("GitHub adapter rejects imported skills without the source installation", a
   assert.match(
     issues.map((issue) => issue.message).join("\n"),
     /GitHub App installation is not configured for the source repository/,
+  );
+});
+
+test("GitHub adapter rejects imported skills without granted target consent", async () => {
+  const adapter = createGitHubAppAdapter({
+    appId: "1",
+    privateKey: "placeholder",
+    defaultRepo,
+  });
+  const issues = await adapter.validate({
+    skill: {
+      skillId: "sk_imported",
+      slug: "code-review",
+      name: "code-review",
+      sourceMode: "github_import",
+      originalSkillPath: ".agents/skills/code-review",
+    },
+    version: { id: "version-1", version: "1.0.0" },
+    files: [],
+    githubTarget: {
+      repoFullName: "octocat/Hello-World",
+      installationId: "installation-1",
+      skillRoot: ".agents/skills/code-review",
+      consentStatus: "pending",
+    } as never,
+  });
+
+  assert.match(
+    issues.map((issue) => issue.message).join("\n"),
+    /GitHub publish target consent is not granted/,
   );
 });
 

@@ -4,6 +4,7 @@ import { type ComponentType, type FormEvent, type ReactNode, useEffect, useMemo,
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Select, { type SingleValue, type StylesConfig } from "react-select";
+import { BrandedCheckbox } from "@/components/branded-checkbox";
 import { db, isUsingLocalPreviewDb } from "@/lib/db";
 import { isPrimarySkillMarkdownPath } from "@/lib/skills/managed-block";
 import {
@@ -2246,16 +2247,13 @@ export function SkillShareDialog({
 
         {isPrivateSkill ? (
           <div className="mt-5 border border-[var(--ink)] bg-[var(--paper)] px-4 py-3">
-            <label className="flex items-center gap-3 font-editorial-sans text-sm">
-              <input
-                type="checkbox"
-                className="h-4 w-4 accent-[var(--ink)]"
-                checked={anyoneWithLinkCanUse}
-                disabled={isLinkUseSaving}
-                onChange={(event) => void updateLinkUse(event.currentTarget.checked)}
-              />
+            <BrandedCheckbox
+              checked={anyoneWithLinkCanUse}
+              disabled={isLinkUseSaving}
+              onChange={(event) => void updateLinkUse(event.currentTarget.checked)}
+            >
               Anyone with link can use.
-            </label>
+            </BrandedCheckbox>
             <p className="mt-2 text-sm leading-5 text-[var(--ink)]/65">
               Disable link access to revoke the current link.
             </p>

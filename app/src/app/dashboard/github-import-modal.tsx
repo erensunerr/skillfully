@@ -1,5 +1,7 @@
 "use client";
 
+import { BrandedCheckbox } from "@/components/branded-checkbox";
+
 type GitHubImportCandidateStatus = "valid" | "invalid" | "already_imported";
 
 export type GitHubImportCandidateView = {
@@ -162,19 +164,16 @@ export function GitHubImportModal({
                   ? "border-red-700 bg-red-50"
                   : "border-black bg-white";
                 return (
-                  <label
+                  <BrandedCheckbox
                     key={candidate.id}
                     className={`grid gap-4 border-2 p-4 sm:grid-cols-[auto_1fr] ${rowTone} ${
-                      disabled ? "cursor-not-allowed opacity-75" : "cursor-pointer"
+                      disabled ? "opacity-75" : ""
                     }`}
+                    boxClassName="mt-1"
+                    checked={selectedCandidateIds.has(candidate.id)}
+                    disabled={disabled}
+                    onChange={() => onToggleCandidate(candidate.id)}
                   >
-                    <input
-                      type="checkbox"
-                      className="mt-1 h-5 w-5 cursor-pointer accent-black disabled:cursor-not-allowed"
-                      checked={selectedCandidateIds.has(candidate.id)}
-                      disabled={disabled}
-                      onChange={() => onToggleCandidate(candidate.id)}
-                    />
                     <span className="min-w-0">
                       <span className="block break-words font-mono text-sm font-black">
                         {candidateDisplayName(candidate)}
@@ -199,7 +198,7 @@ export function GitHubImportModal({
                         </span>
                       ) : null}
                     </span>
-                  </label>
+                  </BrandedCheckbox>
                 );
               })}
             </div>

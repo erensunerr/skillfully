@@ -1092,7 +1092,7 @@ export function SkillSelector({
           role="listbox"
           className="absolute left-0 top-[calc(100%+0.45rem)] z-[100] w-[min(18rem,calc(100vw-2.5rem))] border border-[var(--ink)] bg-[var(--white)] p-2 shadow-[6px_6px_0_var(--ink)]"
         >
-          <div className="space-y-1">
+          <div className="max-h-[min(28rem,calc(100vh-14rem))] space-y-1 overflow-y-auto overscroll-contain pr-1">
             {skillOptions.length === 0 ? (
               <p className="px-3 py-3 font-editorial-mono text-xs uppercase text-[var(--ink)]/65">
                 No skills yet.
@@ -2256,8 +2256,8 @@ function SkillEditorWorkspace({
     ...frontmatterStateFromFiles(skill, fallbackEditorFiles(skill)),
     status: "Draft",
   });
-  const [isFilesOpen, setIsFilesOpen] = useState(true);
-  const [isFrontmatterOpen, setIsFrontmatterOpen] = useState(true);
+  const [isFilesOpen, setIsFilesOpen] = useState(false);
+  const [isFrontmatterOpen, setIsFrontmatterOpen] = useState(false);
   const [publishStep, setPublishStep] = useState<PublishModalStep | null>(null);
   const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
   const [installPromptCopied, setInstallPromptCopied] = useState(false);

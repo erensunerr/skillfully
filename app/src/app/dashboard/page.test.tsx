@@ -456,6 +456,7 @@ test("share dialog shows private link-use checkbox only for private skills", asy
   );
 
   assert.match(privateHtml, /Anyone with link can use\./);
+  assert.match(privateHtml, /Disable link access to revoke the current link\./);
   assert.match(privateHtml, /type="checkbox"/);
   assert.match(privateHtml, /checked=""/);
   assert.doesNotMatch(publicHtml, /Anyone with link can use\./);

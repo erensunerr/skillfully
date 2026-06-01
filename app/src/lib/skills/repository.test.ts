@@ -107,7 +107,7 @@ test("createSkillDraft creates a draft version, default file, and publishing tar
   );
 });
 
-test("updateSkillMetadata can toggle private link-use access", async () => {
+test("updateSkillMetadata creates and revokes private link-use tokens", async () => {
   const store = new InMemorySkillStore();
   let counter = 0;
 
@@ -128,10 +128,26 @@ test("updateSkillMetadata can toggle private link-use access", async () => {
     ownerId: "user-1",
     skillId: "sk_demo",
     anyoneWithLinkCanUse: true,
+    linkUseTokenGenerator: () => "slt_generated_token",
   });
 
   assert.equal(updated.anyoneWithLinkCanUse, true);
+  assert.equal(updated.linkUseToken, "slt_generated_token");
   assert.equal(Object.values(store.rows.skills)[0].anyoneWithLinkCanUse, true);
+  assert.equal(Object.values(store.rows.skills)[0].linkUseToken, "slt_generated_token");
+
+  const revoked = await updateSkillMetadata({
+    store,
+    now: () => 1700000000200,
+    ownerId: "user-1",
+    skillId: "sk_demo",
+    anyoneWithLinkCanUse: false,
+    linkUseTokenGenerator: () => "slt_unused_token",
+  });
+
+  assert.equal(revoked.anyoneWithLinkCanUse, false);
+  assert.equal(revoked.linkUseToken, undefined);
+  assert.equal(Object.values(store.rows.skills)[0].linkUseToken, undefined);
 });
 
 test("createSkillDraft stores durable GitHub metadata for imported skills", async () => {

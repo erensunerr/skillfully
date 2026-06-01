@@ -45,6 +45,7 @@ type Skill = InstaQLEntity<AppSchema, "skills"> & {
   accessLevel?: SkillAccessLevel;
   ownerEmail?: string | null;
   anyoneWithLinkCanUse?: boolean | null;
+  linkUseToken?: string | null;
 };
 type Feedback = InstaQLEntity<AppSchema, "feedback">;
 type SkillUsageEvent = InstaQLEntity<AppSchema, "skillUsageEvents">;
@@ -1726,6 +1727,9 @@ function buildPublicInstallPrompt(skill: Skill) {
     name: skill.name,
     slug: skill.slug,
     skillId: skill.skillId,
+    linkUseToken: skillVisibility(skill) === "private" && skill.anyoneWithLinkCanUse === true
+      ? skill.linkUseToken
+      : null,
     repoFullName: isGitHubManaged && typeof skill.originalRepoFullName === "string"
       ? skill.originalRepoFullName
       : null,
@@ -2061,8 +2065,10 @@ export function SkillShareDialog({
   }, [skill.skillId, user?.id, user?.refresh_token]);
 
   useEffect(() => {
-    setAnyoneWithLinkCanUse(Boolean(skill.anyoneWithLinkCanUse));
-  }, [skill.id, skill.anyoneWithLinkCanUse]);
+    if (!isLinkUseSaving) {
+      setAnyoneWithLinkCanUse(Boolean(skill.anyoneWithLinkCanUse));
+    }
+  }, [skill.id, skill.anyoneWithLinkCanUse, isLinkUseSaving]);
 
   async function updateLinkUse(nextValue: boolean) {
     if (!isPrivateSkill || isLinkUseSaving) {
@@ -2239,16 +2245,21 @@ export function SkillShareDialog({
         </form>
 
         {isPrivateSkill ? (
-          <label className="mt-5 flex items-center gap-3 border border-[var(--ink)] bg-[var(--paper)] px-4 py-3 font-editorial-sans text-sm">
-            <input
-              type="checkbox"
-              className="h-4 w-4 accent-[var(--ink)]"
-              checked={anyoneWithLinkCanUse}
-              disabled={isLinkUseSaving}
-              onChange={(event) => void updateLinkUse(event.currentTarget.checked)}
-            />
-            Anyone with link can use.
-          </label>
+          <div className="mt-5 border border-[var(--ink)] bg-[var(--paper)] px-4 py-3">
+            <label className="flex items-center gap-3 font-editorial-sans text-sm">
+              <input
+                type="checkbox"
+                className="h-4 w-4 accent-[var(--ink)]"
+                checked={anyoneWithLinkCanUse}
+                disabled={isLinkUseSaving}
+                onChange={(event) => void updateLinkUse(event.currentTarget.checked)}
+              />
+              Anyone with link can use.
+            </label>
+            <p className="mt-2 text-sm leading-5 text-[var(--ink)]/65">
+              Disable link access to revoke the current link.
+            </p>
+          </div>
         ) : null}
 
         <div className="mt-7 border border-[var(--ink)]">
@@ -2345,8 +2356,11 @@ function SkillEditorWorkspace({
       skill.name,
       skill.originalRepoFullName,
       skill.originalSkillPath,
+      skill.anyoneWithLinkCanUse,
+      skill.linkUseToken,
       skill.skillId,
       skill.slug,
+      skill.visibility,
     ],
   );
   const markdownFiles = files.filter(isEditableSkillFile);

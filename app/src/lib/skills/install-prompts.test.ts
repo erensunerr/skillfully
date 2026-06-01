@@ -62,3 +62,16 @@ test("buildUserSkillInstallPrompt preserves GitHub-managed source repo and path"
     ].join("\n"),
   );
 });
+
+test("buildUserSkillInstallPrompt includes private link-use token when provided", () => {
+  const prompt = buildUserSkillInstallPrompt({
+    name: "code-review",
+    slug: "code-review",
+    skillId: "sk_test123",
+    linkUseToken: "slt_test",
+  });
+
+  assert.match(prompt, /Manifest URL: https:\/\/www\.skillfully\.sh\/api\/skills\/sk_test123\/manifest\?share=slt_test/);
+  assert.match(prompt, /SKILL\.md URL: https:\/\/www\.skillfully\.sh\/api\/skills\/sk_test123\/files\/SKILL\.md\?share=slt_test/);
+  assert.match(prompt, /POST https:\/\/www\.skillfully\.sh\/api\/skills\/sk_test123\/install\?share=slt_test/);
+});

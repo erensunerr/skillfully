@@ -53,7 +53,6 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
     description?: unknown;
     visibility?: unknown;
     anyoneWithLinkCanUse?: unknown;
-    anyone_with_link_can_use?: unknown;
   };
   try {
     body = await request.json();
@@ -62,7 +61,7 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
   }
 
   try {
-    const anyoneWithLinkCanUseInput = body.anyoneWithLinkCanUse ?? body.anyone_with_link_can_use;
+    const anyoneWithLinkCanUseInput = body.anyoneWithLinkCanUse;
     if (anyoneWithLinkCanUseInput !== undefined && typeof anyoneWithLinkCanUseInput !== "boolean") {
       return jsonResponse({ error: "anyoneWithLinkCanUse must be boolean" }, 400, ALLOW);
     }

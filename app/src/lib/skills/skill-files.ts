@@ -76,11 +76,13 @@ export function buildSkillManifest({
   version,
   files,
   baseUrl,
+  linkUseToken,
 }: {
   skill: ManifestSkill;
   version: ManifestVersion;
   files: ManifestFile[];
   baseUrl?: string | null;
+  linkUseToken?: string | null;
 }) {
   return {
     skill_id: skill.skillId,
@@ -88,7 +90,7 @@ export function buildSkillManifest({
     slug: skill.slug,
     description: skill.description ?? null,
     feedback_url: skillfullyFeedbackUrl({ skillId: skill.skillId, baseUrl }),
-    manifest_url: skillfullyManifestUrl({ skillId: skill.skillId, baseUrl }),
+    manifest_url: skillfullyManifestUrl({ skillId: skill.skillId, baseUrl, linkUseToken }),
     version_id: version.id,
     version: version.version,
     status: version.status,
@@ -97,7 +99,7 @@ export function buildSkillManifest({
       const rawContent = file.contentText ?? "";
       const content =
         file.contentText !== undefined && isPrimarySkillMarkdownPath(file.path)
-          ? appendSkillfullyManagedBlock(rawContent, { skillId: skill.skillId, baseUrl })
+          ? appendSkillfullyManagedBlock(rawContent, { skillId: skill.skillId, baseUrl, linkUseToken })
           : rawContent;
       return {
         id: file.id,

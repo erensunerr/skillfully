@@ -46,6 +46,7 @@ class InMemoryInstallStore {
         status: "published",
         visibility: "private",
         anyoneWithLinkCanUse: true,
+        linkUseToken: "slt_private_link",
         sourceMode: "managed",
         currentDraftVersionId: "draft-private-link",
         publishedVersionId: "published-private-link",
@@ -228,21 +229,47 @@ test("private manifest without auth returns 401", async () => {
   assert.match(String(body.error), /authorization/i);
 });
 
-test("private link-use skill serves manifest, file, and install without auth", async () => {
+test("private link-use skill without share token requires auth", async () => {
+  useInstallStore();
+
+  const response = await GET_MANIFEST(
+    new Request("https://www.skillfully.sh/api/skills/sk_private_link/manifest") as never,
+    installContext("sk_private_link"),
+  );
+  const body = await response.json();
+
+  assert.equal(response.status, 401);
+  assert.match(String(body.error), /authorization/i);
+});
+
+test("private link-use skill with wrong share token requires auth", async () => {
+  useInstallStore();
+
+  const response = await GET_MANIFEST(
+    new Request("https://www.skillfully.sh/api/skills/sk_private_link/manifest?share=slt_wrong") as never,
+    installContext("sk_private_link"),
+  );
+  const body = await response.json();
+
+  assert.equal(response.status, 401);
+  assert.match(String(body.error), /authorization/i);
+});
+
+test("private link-use skill serves manifest, file, and install with matching share token", async () => {
   const { usageEvents } = useInstallStore();
 
   const manifestResponse = await GET_MANIFEST(
-    new Request("https://www.skillfully.sh/api/skills/sk_private_link/manifest") as never,
+    new Request("https://www.skillfully.sh/api/skills/sk_private_link/manifest?share=slt_private_link") as never,
     installContext("sk_private_link"),
   );
   const manifestBody = await manifestResponse.json();
   const fileResponse = await GET_FILE(
-    new Request("https://www.skillfully.sh/api/skills/sk_private_link/files/SKILL.md") as never,
+    new Request("https://www.skillfully.sh/api/skills/sk_private_link/files/SKILL.md?share=slt_private_link") as never,
     installContext("sk_private_link", ["SKILL.md"]),
   );
   const fileText = await fileResponse.text();
   const installResponse = await POST_INSTALL(
-    new Request("https://www.skillfully.sh/api/skills/sk_private_link/install", {
+    new Request("https://www.skillfully.sh/api/skills/sk_private_link/install?share=slt_private_link", {
       method: "POST",
     }) as never,
     installContext("sk_private_link"),
@@ -251,10 +278,18 @@ test("private link-use skill serves manifest, file, and install without auth", a
 
   assert.equal(manifestResponse.status, 200);
   assert.equal(manifestBody.skill_id, "sk_private_link");
+  assert.equal(
+    manifestBody.manifest_url,
+    "https://www.skillfully.sh/api/skills/sk_private_link/manifest?share=slt_private_link",
+  );
   assert.equal(fileResponse.status, 200);
   assert.match(fileText, /name: private-link-skill/);
+  assert.match(fileText, /api\/skills\/sk_private_link\/manifest\?share=slt_private_link/);
   assert.equal(installResponse.status, 200);
-  assert.equal(installBody.manifest_url, "https://www.skillfully.sh/api/skills/sk_private_link/manifest");
+  assert.equal(
+    installBody.manifest_url,
+    "https://www.skillfully.sh/api/skills/sk_private_link/manifest?share=slt_private_link",
+  );
   assert.deepEqual(usageEvents.map((event) => event.eventKind), [
     "manifest_checked",
     "file_loaded",

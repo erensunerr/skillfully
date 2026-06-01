@@ -44,6 +44,7 @@ type SkillAccessLevel = "owner" | "edit" | "use";
 type Skill = InstaQLEntity<AppSchema, "skills"> & {
   accessLevel?: SkillAccessLevel;
   ownerEmail?: string | null;
+  anyoneWithLinkCanUse?: boolean | null;
 };
 type Feedback = InstaQLEntity<AppSchema, "feedback">;
 type SkillUsageEvent = InstaQLEntity<AppSchema, "skillUsageEvents">;
@@ -209,13 +210,16 @@ function skillVisibility(skill: Pick<Skill, "visibility">): "private" | "public"
   return skill.visibility === "public" ? "public" : "private";
 }
 
-function publishingDestinationRowsForSkill(skill: Pick<Skill, "visibility">) {
+function publishingDestinationRowsForSkill(skill: Pick<Skill, "visibility" | "anyoneWithLinkCanUse">) {
   if (skillVisibility(skill) === "private") {
+    const linkUseEnabled = skill.anyoneWithLinkCanUse === true;
     return [
       [
         "Skillfully",
-        "Private Skillfully release",
-        "Only people with use or edit access can install published versions",
+        linkUseEnabled ? "Private link-use release" : "Private Skillfully release",
+        linkUseEnabled
+          ? "Anyone with the link can install published versions"
+          : "Only people with use or edit access can install published versions",
         "terminal",
       ],
     ] satisfies Array<[string, string, string, string]>;
@@ -1627,7 +1631,9 @@ function VersionSnapshot({ skill }: { skill: Skill }) {
       ? [
           "Published version",
           "Published",
-          skillVisibility(skill) === "private"
+          skillVisibility(skill) === "private" && skill.anyoneWithLinkCanUse === true
+            ? "A frozen version is available to anyone with the link"
+            : skillVisibility(skill) === "private"
             ? "A frozen version is available to people with use or edit access"
             : "A frozen version is available for public installs",
         ]
@@ -2005,21 +2011,26 @@ function editorGridClass(isFilesOpen: boolean, isFrontmatterOpen: boolean) {
   return "xl:grid-cols-[3.5rem_minmax(0,1fr)_3.5rem]";
 }
 
-function SkillShareDialog({
+export function SkillShareDialog({
   skill,
   user,
+  onSkillUpdated,
   onClose,
 }: {
   skill: Skill;
   user?: AppUser | null;
+  onSkillUpdated?: (skill: Skill) => void;
   onClose: () => void;
 }) {
   const [email, setEmail] = useState("");
   const [permission, setPermission] = useState<"use" | "edit">("use");
   const [grants, setGrants] = useState<SkillAccessGrantView[]>([]);
   const [statusMessage, setStatusMessage] = useState("");
+  const [anyoneWithLinkCanUse, setAnyoneWithLinkCanUse] = useState(() => Boolean(skill.anyoneWithLinkCanUse));
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLinkUseSaving, setIsLinkUseSaving] = useState(false);
+  const isPrivateSkill = skillVisibility(skill) === "private";
 
   async function loadGrants() {
     if (!user || isUsingLocalPreviewDb) {
@@ -2048,6 +2059,46 @@ function SkillShareDialog({
   useEffect(() => {
     void loadGrants();
   }, [skill.skillId, user?.id, user?.refresh_token]);
+
+  useEffect(() => {
+    setAnyoneWithLinkCanUse(Boolean(skill.anyoneWithLinkCanUse));
+  }, [skill.id, skill.anyoneWithLinkCanUse]);
+
+  async function updateLinkUse(nextValue: boolean) {
+    if (!isPrivateSkill || isLinkUseSaving) {
+      return;
+    }
+
+    const previousValue = anyoneWithLinkCanUse;
+    setAnyoneWithLinkCanUse(nextValue);
+    setIsLinkUseSaving(true);
+    setStatusMessage("Saving link access...");
+    try {
+      if (!user || isUsingLocalPreviewDb) {
+        const nextSkill = { ...skill, anyoneWithLinkCanUse: nextValue } as Skill;
+        onSkillUpdated?.(nextSkill);
+        setStatusMessage("Link access saved locally.");
+        return;
+      }
+      const payload = await dashboardJson<{ skill: Skill }>(
+        user,
+        `/api/dashboard/skills/${skill.skillId}`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({ anyoneWithLinkCanUse: nextValue }),
+        },
+      );
+      setAnyoneWithLinkCanUse(Boolean(payload.skill.anyoneWithLinkCanUse));
+      onSkillUpdated?.(payload.skill);
+      setStatusMessage("Link access updated.");
+    } catch (error) {
+      captureClientException(error);
+      setAnyoneWithLinkCanUse(previousValue);
+      setStatusMessage(`Link access update failed: ${extractErrorMessage(error)}`);
+    } finally {
+      setIsLinkUseSaving(false);
+    }
+  }
 
   async function submitInvite(event: FormEvent) {
     event.preventDefault();
@@ -2187,6 +2238,19 @@ function SkillShareDialog({
           </div>
         </form>
 
+        {isPrivateSkill ? (
+          <label className="mt-5 flex items-center gap-3 border border-[var(--ink)] bg-[var(--paper)] px-4 py-3 font-editorial-sans text-sm">
+            <input
+              type="checkbox"
+              className="h-4 w-4 accent-[var(--ink)]"
+              checked={anyoneWithLinkCanUse}
+              disabled={isLinkUseSaving}
+              onChange={(event) => void updateLinkUse(event.currentTarget.checked)}
+            />
+            Anyone with link can use.
+          </label>
+        ) : null}
+
         <div className="mt-7 border border-[var(--ink)]">
           <div className="border-b border-[var(--ink)] px-4 py-3 font-editorial-mono text-xs font-bold uppercase">
             People with access
@@ -2243,11 +2307,13 @@ function SkillEditorWorkspace({
   user,
   usageEvents = [],
   onTabChange,
+  onSkillUpdated,
 }: {
   skill: Skill;
   user?: AppUser | null;
   usageEvents?: SkillUsageEvent[];
   onTabChange?: (tab: DashboardTab) => void;
+  onSkillUpdated?: (skill: Skill) => void;
 }) {
   const [files, setFiles] = useState<SkillEditorFile[]>(() => fallbackEditorFiles(skill));
   const [selectedFileId, setSelectedFileId] = useState(() => fallbackEditorFiles(skill)[0]?.id ?? "");
@@ -2982,6 +3048,7 @@ function SkillEditorWorkspace({
         <SkillShareDialog
           skill={skill}
           user={user}
+          onSkillUpdated={onSkillUpdated}
           onClose={() => setIsShareDialogOpen(false)}
         />
       ) : null}
@@ -3401,7 +3468,9 @@ export function SkillSettingsWorkspace({
       ? "Private manifest and files"
       : "Public manifest and files";
   const publishBehavior = currentVisibility === "private"
-    ? "Publish private releases for shared users"
+    ? skill.anyoneWithLinkCanUse === true
+      ? "Publish private releases for anyone with the link"
+      : "Publish private releases for shared users"
     : isGitHubImported
     ? "Create pull request on publish"
     : "Publish to Skillfully public manifest and files";
@@ -3595,7 +3664,9 @@ export function SkillSettingsWorkspace({
           </table>
           <p className="mt-4 text-sm leading-6 text-[var(--ink)]/65">
             {currentVisibility === "private"
-              ? "Private publishes are served by Skillfully only and are visible only to people with use or edit access."
+              ? skill.anyoneWithLinkCanUse === true
+                ? "Private publishes are served by Skillfully only and are usable by anyone with the link."
+                : "Private publishes are served by Skillfully only and are visible only to people with use or edit access."
               : isGitHubImported
               ? "GitHub is the source of truth for this skill; merge the publish PR before installing."
               : "Skillfully is the source of truth for this skill; GitHub is only used for imported skills."}
@@ -3836,7 +3907,15 @@ export function SkillDetail({
   }
 
   if (visibleActiveTab === "editor") {
-    return <SkillEditorWorkspace skill={skill} user={user} usageEvents={usageEvents} onTabChange={onTabChange} />;
+    return (
+      <SkillEditorWorkspace
+        skill={skill}
+        user={user}
+        usageEvents={usageEvents}
+        onTabChange={onTabChange}
+        onSkillUpdated={onSkillUpdated}
+      />
+    );
   }
 
   if (visibleActiveTab === "analytics") {

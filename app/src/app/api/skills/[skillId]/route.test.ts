@@ -38,6 +38,20 @@ class InMemoryInstallStore {
         createdAt: 1,
         updatedAt: 1,
       },
+      private_link_skill: {
+        ownerId: "owner-1",
+        name: "Private Link Skill",
+        skillId: "sk_private_link",
+        slug: "private-link-skill",
+        status: "published",
+        visibility: "private",
+        anyoneWithLinkCanUse: true,
+        sourceMode: "managed",
+        currentDraftVersionId: "draft-private-link",
+        publishedVersionId: "published-private-link",
+        createdAt: 1,
+        updatedAt: 1,
+      },
     },
     skillVersions: {
       "published-public": {
@@ -53,6 +67,16 @@ class InMemoryInstallStore {
       "published-private": {
         ownerId: "owner-1",
         skillId: "sk_private",
+        version: "1",
+        versionNumber: 1,
+        status: "published",
+        createdAt: 1,
+        updatedAt: 1,
+        publishedAt: 1,
+      },
+      "published-private-link": {
+        ownerId: "owner-1",
+        skillId: "sk_private_link",
         version: "1",
         versionNumber: 1,
         status: "published",
@@ -83,6 +107,18 @@ class InMemoryInstallStore {
         kind: "markdown",
         mimeType: "text/markdown",
         contentText: "---\nname: private-skill\n---\n",
+        createdAt: 1,
+        updatedAt: 1,
+      },
+      "file-private-link": {
+        ownerId: "owner-1",
+        skillId: "sk_private_link",
+        versionId: "published-private-link",
+        fileKey: "sk_private_link:published-private-link:SKILL.md",
+        path: "SKILL.md",
+        kind: "markdown",
+        mimeType: "text/markdown",
+        contentText: "---\nname: private-link-skill\n---\n",
         createdAt: 1,
         updatedAt: 1,
       },
@@ -192,6 +228,40 @@ test("private manifest without auth returns 401", async () => {
   assert.match(String(body.error), /authorization/i);
 });
 
+test("private link-use skill serves manifest, file, and install without auth", async () => {
+  const { usageEvents } = useInstallStore();
+
+  const manifestResponse = await GET_MANIFEST(
+    new Request("https://www.skillfully.sh/api/skills/sk_private_link/manifest") as never,
+    installContext("sk_private_link"),
+  );
+  const manifestBody = await manifestResponse.json();
+  const fileResponse = await GET_FILE(
+    new Request("https://www.skillfully.sh/api/skills/sk_private_link/files/SKILL.md") as never,
+    installContext("sk_private_link", ["SKILL.md"]),
+  );
+  const fileText = await fileResponse.text();
+  const installResponse = await POST_INSTALL(
+    new Request("https://www.skillfully.sh/api/skills/sk_private_link/install", {
+      method: "POST",
+    }) as never,
+    installContext("sk_private_link"),
+  );
+  const installBody = await installResponse.json();
+
+  assert.equal(manifestResponse.status, 200);
+  assert.equal(manifestBody.skill_id, "sk_private_link");
+  assert.equal(fileResponse.status, 200);
+  assert.match(fileText, /name: private-link-skill/);
+  assert.equal(installResponse.status, 200);
+  assert.equal(installBody.manifest_url, "https://www.skillfully.sh/api/skills/sk_private_link/manifest");
+  assert.deepEqual(usageEvents.map((event) => event.eventKind), [
+    "manifest_checked",
+    "file_loaded",
+    "skill_installed",
+  ]);
+});
+
 test("private manifest with auth but no access returns 404", async () => {
   useInstallStore();
 
@@ -264,6 +334,19 @@ test("public compatibility route refuses private skills", async () => {
       headers: { authorization: "Bearer use-token" },
     }) as never,
     installContext("sk_private"),
+  );
+  const body = await response.json();
+
+  assert.equal(response.status, 404);
+  assert.equal(body.error, "skill not found");
+});
+
+test("public compatibility route refuses private link-use skills", async () => {
+  useInstallStore();
+
+  const response = await GET_PUBLIC_COMPAT_MANIFEST(
+    new Request("https://www.skillfully.sh/api/public/skills/sk_private_link/manifest") as never,
+    installContext("sk_private_link"),
   );
   const body = await response.json();
 

@@ -151,7 +151,8 @@ async function resolveInstallSkill({
     return { ok: false, response: jsonResponse({ error: "skill not found" }, 404, "GET, OPTIONS") };
   }
 
-  if (!isPublic) {
+  const canUseWithLink = !publicOnly && skill.anyoneWithLinkCanUse === true;
+  if (!isPublic && !canUseWithLink) {
     const token = getBearerToken(request.headers.get("authorization"));
     if (!token) {
       return { ok: false, response: jsonResponse({ error: "authorization required" }, 401, "GET, OPTIONS") };

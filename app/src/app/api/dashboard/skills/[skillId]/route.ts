@@ -48,7 +48,13 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
     return jsonResponse({ error: "skill not found" }, 404, ALLOW);
   }
 
-  let body: { name?: unknown; description?: unknown; visibility?: unknown };
+  let body: {
+    name?: unknown;
+    description?: unknown;
+    visibility?: unknown;
+    anyoneWithLinkCanUse?: unknown;
+    anyone_with_link_can_use?: unknown;
+  };
   try {
     body = await request.json();
   } catch {
@@ -56,6 +62,10 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
   }
 
   try {
+    const anyoneWithLinkCanUseInput = body.anyoneWithLinkCanUse ?? body.anyone_with_link_can_use;
+    if (anyoneWithLinkCanUseInput !== undefined && typeof anyoneWithLinkCanUseInput !== "boolean") {
+      return jsonResponse({ error: "anyoneWithLinkCanUse must be boolean" }, 400, ALLOW);
+    }
     const skill = await updateSkillMetadata({
       store: access.store,
       ownerId: access.ownerId,
@@ -63,6 +73,7 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
       name: body.name === undefined ? undefined : String(body.name),
       description: body.description === undefined ? undefined : String(body.description),
       visibility: body.visibility === undefined ? undefined : String(body.visibility),
+      anyoneWithLinkCanUse: anyoneWithLinkCanUseInput,
     });
     return jsonResponse({ skill }, 200, ALLOW);
   } catch (error) {

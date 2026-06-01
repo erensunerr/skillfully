@@ -52,6 +52,7 @@ export type SkillRow = {
   slug: string;
   status: string;
   visibility: string;
+  anyoneWithLinkCanUse?: boolean;
   sourceMode: string;
   originalRepoFullName?: string;
   originalRepositoryId?: string;
@@ -334,6 +335,7 @@ export async function createSkillDraft({
     slug,
     status: "draft",
     visibility: "private",
+    anyoneWithLinkCanUse: false,
     sourceMode,
     ...(originalRepoFullName ? { originalRepoFullName } : {}),
     ...(originalRepositoryId ? { originalRepositoryId } : {}),
@@ -481,6 +483,7 @@ export async function updateSkillMetadata({
   name,
   description,
   visibility,
+  anyoneWithLinkCanUse,
 }: {
   store?: SkillStore;
   now?: () => number;
@@ -489,6 +492,7 @@ export async function updateSkillMetadata({
   name?: string | null;
   description?: string | null;
   visibility?: string | null;
+  anyoneWithLinkCanUse?: boolean;
 }) {
   const skill = await getSkillForOwner({ store, ownerId, skillId });
   if (!skill) {
@@ -505,6 +509,9 @@ export async function updateSkillMetadata({
     slug: cleanName === skill.name ? skill.slug : skillSlug(cleanName),
     description: description === undefined ? skill.description : description?.trim() || undefined,
     visibility: visibility === undefined || visibility === null ? skill.visibility : String(visibility),
+    anyoneWithLinkCanUse: anyoneWithLinkCanUse === undefined
+      ? Boolean(skill.anyoneWithLinkCanUse)
+      : anyoneWithLinkCanUse,
     updatedAt: now(),
   };
   if (updates.visibility !== "private" && updates.visibility !== "public") {

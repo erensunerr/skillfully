@@ -10,6 +10,7 @@ import {
   deleteSkillFile,
   listSkillFiles,
   markDraftPublished,
+  updateSkillMetadata,
   updateSkillFileText,
 } from "./repository";
 import { AGENT_SKILLS_SPEC_URL, buildSkillMarkdown } from "./skill-frontmatter";
@@ -89,6 +90,7 @@ test("createSkillDraft creates a draft version, default file, and publishing tar
 
   assert.equal(created.skill.skillId, "sk_demo");
   assert.equal(created.skill.slug, "customer-support");
+  assert.equal(created.skill.anyoneWithLinkCanUse, false);
   assert.equal(created.version.status, "draft");
   assert.equal(created.version.version, "1");
   assert.equal(created.version.versionNumber, 1);
@@ -103,6 +105,33 @@ test("createSkillDraft creates a draft version, default file, and publishing tar
     Object.values(store.rows.publishingTargets).find((target) => target.targetKind === "github"),
     undefined,
   );
+});
+
+test("updateSkillMetadata can toggle private link-use access", async () => {
+  const store = new InMemorySkillStore();
+  let counter = 0;
+
+  await createSkillDraft({
+    store,
+    now: () => 1700000000000,
+    idGenerator: () => `id_${++counter}`,
+    skillIdGenerator: () => "sk_demo",
+    ownerId: "user-1",
+    name: "Customer Support",
+    description: "Answers support questions.",
+    baseUrl: "https://www.skillfully.sh",
+  });
+
+  const updated = await updateSkillMetadata({
+    store,
+    now: () => 1700000000100,
+    ownerId: "user-1",
+    skillId: "sk_demo",
+    anyoneWithLinkCanUse: true,
+  });
+
+  assert.equal(updated.anyoneWithLinkCanUse, true);
+  assert.equal(Object.values(store.rows.skills)[0].anyoneWithLinkCanUse, true);
 });
 
 test("createSkillDraft stores durable GitHub metadata for imported skills", async () => {

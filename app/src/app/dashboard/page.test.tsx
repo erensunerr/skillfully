@@ -434,6 +434,33 @@ test("edit shared skill keeps authoring tabs and share button visible", async ()
   assert.match(html, /Share/);
 });
 
+test("share dialog shows private link-use checkbox only for private skills", async () => {
+  Object.assign(globalThis, { React });
+  const { SkillShareDialog } = await import("./page");
+
+  const privateHtml = renderToStaticMarkup(
+    <SkillShareDialog
+      skill={{ ...fakeSkill(), anyoneWithLinkCanUse: true } as never}
+      user={{ id: "user-1", email: "owner@example.com" } as never}
+      onSkillUpdated={() => undefined}
+      onClose={() => undefined}
+    />,
+  );
+  const publicHtml = renderToStaticMarkup(
+    <SkillShareDialog
+      skill={{ ...fakeSkill("public-skill"), visibility: "public", anyoneWithLinkCanUse: true } as never}
+      user={{ id: "user-1", email: "owner@example.com" } as never}
+      onSkillUpdated={() => undefined}
+      onClose={() => undefined}
+    />,
+  );
+
+  assert.match(privateHtml, /Anyone with link can use\./);
+  assert.match(privateHtml, /type="checkbox"/);
+  assert.match(privateHtml, /checked=""/);
+  assert.doesNotMatch(publicHtml, /Anyone with link can use\./);
+});
+
 test("dashboard skill detail renders the analytics tab UI", async () => {
   Object.assign(globalThis, { React });
   const { SkillDetail } = await import("./page");

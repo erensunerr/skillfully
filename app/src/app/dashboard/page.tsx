@@ -3,8 +3,8 @@
 import { type ComponentType, type FormEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import Select, { type SingleValue, type StylesConfig } from "react-select";
 import { BrandedCheckbox } from "@/components/branded-checkbox";
+import { BrandedSelect, DropdownChevron, type BrandedSelectOption } from "@/components/branded-select";
 import { db, isUsingLocalPreviewDb } from "@/lib/db";
 import { isPrimarySkillMarkdownPath } from "@/lib/skills/managed-block";
 import {
@@ -73,10 +73,7 @@ type DashboardRouteProps = {
   routeName?: string;
 };
 
-type SelectOption = {
-  value: string;
-  label: string;
-};
+type SelectOption = BrandedSelectOption;
 
 type MdxMarkdownEditorProps = {
   markdown: string;
@@ -207,6 +204,15 @@ const publicPublishingDestinationRows = [
   ["ClawHub", "Generates a submission packet", "Manual directory adapter", "triangle"],
   ["Hermes Skills Hub", "Generates a submission packet", "Manual directory adapter", "square"],
 ] satisfies Array<[string, string, string, string]>;
+
+const permissionSelectOptions = [
+  { value: "use", label: "Use" },
+  { value: "edit", label: "Edit" },
+] satisfies SelectOption[];
+
+function normalizePermission(value: string): "use" | "edit" {
+  return value === "edit" ? "edit" : "use";
+}
 
 function skillVisibility(skill: Pick<Skill, "visibility">): "private" | "public" {
   return skill.visibility === "public" ? "public" : "private";
@@ -495,73 +501,6 @@ function canEditSkill(skill: Pick<Skill, "accessLevel"> | null | undefined) {
 
 function skillRoute(skill: Skill, tab: SkillRouteTab) {
   return `/dashboard/${skill.skillId || skill.id}/${tab}`;
-}
-
-const selectStyles: StylesConfig<SelectOption, false> = {
-  control: (base, state) => ({
-    ...base,
-    minHeight: 46,
-    borderRadius: 0,
-    borderColor: "var(--ink)",
-    borderWidth: 1,
-    boxShadow: state.isFocused ? "0 0 0 2px var(--ink)" : "none",
-    backgroundColor: "var(--paper)",
-    color: "var(--ink)",
-    fontFamily: "var(--font-space-grotesk), Space Grotesk, sans-serif",
-    ":hover": {
-      borderColor: "var(--ink)",
-    },
-  }),
-  menu: (base) => ({
-    ...base,
-    zIndex: 50,
-    borderRadius: 0,
-    border: "1px solid var(--ink)",
-    backgroundColor: "var(--white)",
-    boxShadow: "6px 6px 0 var(--ink)",
-  }),
-  option: (base, state) => ({
-    ...base,
-    backgroundColor: state.isFocused || state.isSelected ? "var(--paper)" : "var(--white)",
-    color: "var(--ink)",
-    cursor: "pointer",
-    fontSize: 14,
-  }),
-  singleValue: (base) => ({ ...base, color: "var(--ink)" }),
-  input: (base) => ({ ...base, color: "var(--ink)" }),
-  indicatorSeparator: (base) => ({ ...base, backgroundColor: "var(--ink)" }),
-  dropdownIndicator: (base) => ({ ...base, color: "var(--ink)" }),
-};
-
-function DashboardSelect({
-  ariaLabel,
-  value,
-  options,
-  onChange,
-}: {
-  ariaLabel: string;
-  value: string;
-  options: SelectOption[];
-  onChange: (value: string) => void;
-}) {
-  const selected = options.find((option) => option.value === value) ?? options[0];
-
-  return (
-    <Select<SelectOption, false>
-      aria-label={ariaLabel}
-      className="min-w-40 font-editorial-sans text-sm"
-      instanceId={ariaLabel.toLowerCase().replace(/[^a-z0-9]+/g, "-")}
-      isSearchable={false}
-      options={options}
-      styles={selectStyles}
-      value={selected}
-      onChange={(nextValue: SingleValue<SelectOption>) => {
-        if (nextValue) {
-          onChange(nextValue.value);
-        }
-      }}
-    />
-  );
 }
 
 let cachedMdxMarkdownEditor: ComponentType<MdxMarkdownEditorProps> | null = null;
@@ -1090,7 +1029,7 @@ export function SkillSelector({
             </span>
           ) : null}
         </span>
-        <span aria-hidden className="text-xl leading-none">{isOpen ? "⌃" : "⌄"}</span>
+        <DropdownChevron open={isOpen} />
       </button>
 
       {isOpen ? (
@@ -2229,14 +2168,13 @@ export function SkillShareDialog({
           </label>
           <label className="block font-editorial-mono text-xs font-bold uppercase">
             Permission
-            <select
-              className={DASHBOARD_INPUT}
+            <BrandedSelect
+              ariaLabel="Share permission"
+              className="mt-2 w-full"
               value={permission}
-              onChange={(event) => setPermission(event.currentTarget.value === "edit" ? "edit" : "use")}
-            >
-              <option value="use">Use</option>
-              <option value="edit">Edit</option>
-            </select>
+              options={permissionSelectOptions}
+              onChange={(nextValue) => setPermission(normalizePermission(nextValue))}
+            />
           </label>
           <div className="flex items-end">
             <button type="submit" className={`${DASHBOARD_BUTTON} w-full`} disabled={isSubmitting}>
@@ -2278,15 +2216,15 @@ export function SkillShareDialog({
                       {grant.is_owner ? "Owner" : "Collaborator"}
                     </p>
                   </div>
-                  <select
-                    className="border border-[var(--ink)] bg-[var(--paper)] px-3 py-2 text-sm disabled:opacity-65"
+                  <BrandedSelect
+                    ariaLabel={`${grant.email || grant.user_id || "Owner"} permission`}
+                    className="sm:w-32"
                     value={grant.permission}
                     disabled={grant.is_owner}
-                    onChange={(event) => void updateGrantPermission(grant, event.currentTarget.value === "edit" ? "edit" : "use")}
-                  >
-                    <option value="use">Use</option>
-                    <option value="edit">Edit</option>
-                  </select>
+                    options={permissionSelectOptions}
+                    size="compact"
+                    onChange={(nextValue) => void updateGrantPermission(grant, normalizePermission(nextValue))}
+                  />
                   <button
                     type="button"
                     className="border border-[var(--ink)] px-3 py-2 font-editorial-mono text-xs font-bold uppercase disabled:cursor-not-allowed disabled:opacity-50"
@@ -3160,8 +3098,9 @@ function SkillAnalyticsWorkspace({
               onChange={(event) => setQuery(event.currentTarget.value)}
             />
           </label>
-          <DashboardSelect
+          <BrandedSelect
             ariaLabel="Analytics date range"
+            className="min-w-40"
             value={range}
             options={[
               { value: "24h", label: "Last 24h" },
@@ -3192,7 +3131,13 @@ function SkillAnalyticsWorkspace({
                 </button>
               );
             })}
-            <button type="button" aria-label="More filters" className="border border-[var(--ink)] px-3 py-2">⌄</button>
+            <button
+              type="button"
+              aria-label="More filters"
+              className="flex items-center justify-center border border-[var(--ink)] px-3 py-2"
+            >
+              <DropdownChevron />
+            </button>
           </div>
         </div>
 
@@ -3418,7 +3363,7 @@ function AccountTopBar({
         <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--ink)] font-editorial-mono text-sm font-bold text-[var(--paper)]">
           {skillInitials(accountName)}
         </span>
-        <span aria-hidden className="font-editorial-mono text-sm">{isAccountMenuOpen ? "⌃" : "⌄"}</span>
+        <DropdownChevron open={isAccountMenuOpen} />
       </button>
 
       {isAccountMenuOpen ? (
@@ -3813,8 +3758,8 @@ export function AccountSettingsWorkspace({
                 </span>
               }
             />
-            <SettingsRow label="Default landing page" value="Dashboard" action={<span aria-hidden className="text-xl">⌄</span>} />
-            <SettingsRow label="Time zone" value="Browser default" action={<span aria-hidden className="text-xl">⌄</span>} />
+            <SettingsRow label="Default landing page" value="Dashboard" action={<DropdownChevron />} />
+            <SettingsRow label="Time zone" value="Browser default" action={<DropdownChevron />} />
             <SettingsRow
               label="Email notifications"
               value="Important updates about your skills"

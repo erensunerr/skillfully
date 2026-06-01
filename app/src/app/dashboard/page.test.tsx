@@ -459,6 +459,9 @@ test("share dialog shows private link-use checkbox only for private skills", asy
   assert.match(privateHtml, /Disable link access to revoke the current link\./);
   assert.match(privateHtml, /type="checkbox"/);
   assert.match(privateHtml, /cursor-pointer/);
+  assert.match(privateHtml, /aria-label="Share permission"/);
+  assert.match(privateHtml, /data-dropdown-chevron="closed"/);
+  assert.doesNotMatch(privateHtml, /<select/);
   assert.match(privateHtml, /checked=""/);
   assert.doesNotMatch(publicHtml, /Anyone with link can use\./);
 });
@@ -825,6 +828,8 @@ test("dashboard renders the skill selector menu and create skill modal", async (
   );
 
   assert.match(html, /code-review/i);
+  assert.match(html, /data-dropdown-chevron="open"/);
+  assert.doesNotMatch(html, /⌄|⌃/);
   assert.match(html, /write-tests/i);
   assert.match(html, /release-check/i);
   assert.match(html, /Create new skill/i);

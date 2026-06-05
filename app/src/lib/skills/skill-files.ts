@@ -55,15 +55,17 @@ export function normalizeSkillFilePath(value: string) {
 export function createDefaultSkillFile({
   name,
   description,
+  body,
 }: {
   name: string;
   description?: string | null;
+  body?: string;
   feedbackUrl?: string;
 }) {
   return {
     path: "SKILL.md",
     kind: "markdown" as const,
-    contentText: buildSkillMarkdown({ name, description }),
+    contentText: buildSkillMarkdown({ name, description, body }),
   };
 }
 

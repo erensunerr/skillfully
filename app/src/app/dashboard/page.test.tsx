@@ -3,7 +3,11 @@ import test from "node:test";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
-function fakeSkill(name = "code-review", id = "skill-1") {
+function fakeSkill(
+  name = "code-review",
+  id = "skill-1",
+  overrides: Record<string, unknown> = {},
+) {
   return {
     id,
     ownerId: "user-1",
@@ -13,6 +17,7 @@ function fakeSkill(name = "code-review", id = "skill-1") {
     visibility: "private",
     createdAt: Date.now(),
     accessLevel: "owner" as const,
+    ...overrides,
   };
 }
 
@@ -232,16 +237,19 @@ test("dashboard skill detail renders the editor tab UI", async () => {
 
   assert.match(html, /Files/);
   assert.match(html, /Frontmatter/);
+  assert.match(html, /Focus mode/i);
+  assert.match(html, /First publish checklist/i);
+  assert.match(html, /unlock analytics/i);
   assert.match(html, /aria-readonly="true"/);
-  assert.match(html, /Collapse files/);
+  assert.match(html, /Expand files/);
   assert.match(html, /Collapse frontmatter/);
   assert.doesNotMatch(html, /Validate skill/);
-  assert.match(html, /Upload file/);
-  assert.match(html, /New markdown file/i);
-  assert.match(html, /Create markdown file/i);
-  assert.match(html, /Markdown files \(editable\)/i);
+  assert.doesNotMatch(html, /Upload file/);
+  assert.doesNotMatch(html, /New markdown file/i);
+  assert.doesNotMatch(html, /Create markdown file/i);
+  assert.doesNotMatch(html, /Markdown files \(editable\)/i);
   assert.match(html, /SKILL\.md/);
-  assert.match(html, /No assets uploaded/);
+  assert.doesNotMatch(html, /No assets uploaded/);
   assert.match(html, /Markdown editor/i);
   assert.match(html, /MDXEditor/i);
   assert.doesNotMatch(html, /The user asks for work that this skill is designed to handle/);
@@ -416,7 +424,11 @@ test("dashboard skill detail renders the analytics tab UI", async () => {
   const html = renderToStaticMarkup(
     <SkillDetail
       activeTab="analytics"
-      skill={fakeSkill()}
+      skill={fakeSkill("code-review", "skill-1", {
+        status: "published",
+        publishedVersionId: "version-1",
+        visibility: "public",
+      })}
       entries={fakeEntries()}
       usageEvents={fakeUsageEvents()}
       onBack={() => undefined}
@@ -729,17 +741,20 @@ test("dashboard route pages expose skill tab and account settings URLs", async (
   const dashboardPage = await import("./page");
   const skillTabPage = await import("./[skillId]/[tab]/page");
   const settingsPage = await import("./settings/page");
+  const gettingStartedPage = await import("./getting-started/page");
 
   const indexHtml = renderToStaticMarkup(<dashboardPage.default />);
   const tabHtml = renderToStaticMarkup(
     <skillTabPage.default params={{ skillId: "sk_test123", tab: "analytics" }} />,
   );
   const settingsHtml = renderToStaticMarkup(<settingsPage.default />);
+  const gettingStartedHtml = renderToStaticMarkup(<gettingStartedPage.default />);
 
   assert.match(indexHtml, /data-dashboard-route="index"/);
   assert.match(tabHtml, /data-initial-skill-id="sk_test123"/);
   assert.match(tabHtml, /data-initial-tab="analytics"/);
   assert.match(settingsHtml, /data-initial-tab="account"/);
+  assert.match(gettingStartedHtml, /data-dashboard-route="getting-started"/);
 });
 
 test("dashboard renders the skill selector menu and create skill modal", async () => {

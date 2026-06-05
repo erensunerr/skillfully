@@ -53,7 +53,9 @@ export async function POST(request: NextRequest) {
   let body: {
     name?: unknown;
     description?: unknown;
+    body?: unknown;
     source_mode?: unknown;
+    activation_source?: unknown;
     original_repo_full_name?: unknown;
     original_skill_path?: unknown;
   };
@@ -70,6 +72,7 @@ export async function POST(request: NextRequest) {
       ownerId: user.id,
       name: String(body.name ?? ""),
       description: body.description === undefined ? undefined : String(body.description),
+      body: body.body === undefined ? undefined : String(body.body),
       baseUrl: new URL(request.url).origin,
       skillIdGenerator: randomSkillId,
       sourceMode,
@@ -85,6 +88,7 @@ export async function POST(request: NextRequest) {
         has_description: Boolean(created.skill.description),
         is_first_skill: existingSkillCount === 0,
         source_mode: sourceMode,
+        activation_source: body.activation_source ? String(body.activation_source) : "manual",
         author_type: "human",
       },
     });
@@ -96,6 +100,7 @@ export async function POST(request: NextRequest) {
           skill_id: created.skill.skillId,
           skill_name: created.skill.name,
           source_mode: sourceMode,
+          activation_source: body.activation_source ? String(body.activation_source) : "manual",
           author_type: "human",
         },
       });

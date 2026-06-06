@@ -147,6 +147,7 @@ function DashboardPreview() {
       <div className="flex items-center justify-between border-b border-[var(--ink)] px-4 py-3">
         <BrandMark />
         <LandingAuthLink
+          href="/dashboard"
           intent="sign_in"
           surface="dashboard_preview"
           className="editorial-button editorial-button-dark px-3 py-2 text-[0.62rem]"
@@ -155,7 +156,7 @@ function DashboardPreview() {
         </LandingAuthLink>
       </div>
 
-      <div className="grid min-h-[24rem] md:grid-cols-[8.5rem_1fr]">
+      <div className="grid min-h-[18rem] md:min-h-[24rem] md:grid-cols-[8.5rem_1fr]">
         <nav className="hidden border-r border-[var(--ink)] bg-[var(--white)] p-3 font-editorial-mono text-[0.68rem] md:block">
           {["Overview", "Skills", "Feedback", "Runs", "Authors", "Settings"].map((item, index) => (
             <div
@@ -182,13 +183,13 @@ function DashboardPreview() {
             </button>
           </div>
 
-          <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="mt-5 grid grid-cols-2 gap-3 xl:grid-cols-4">
             {metrics.map(([label, value, delta]) => (
-              <div key={label} className="min-h-28 border border-[var(--ink)] bg-[var(--white)] p-3">
+              <div key={label} className="min-h-24 border border-[var(--ink)] bg-[var(--white)] p-3 sm:min-h-28">
                 <div className="font-editorial-mono text-[0.62rem] uppercase text-[var(--ink)]/60">
                   {label}
                 </div>
-                <div className="mt-4 font-editorial-sans text-3xl font-semibold">{value}</div>
+                <div className="mt-3 font-editorial-sans text-2xl font-semibold sm:mt-4 sm:text-3xl">{value}</div>
                 <div
                   className={`mt-2 font-editorial-mono text-[0.66rem] ${
                     delta.startsWith("-") ? "text-red-700" : "text-emerald-700"
@@ -200,9 +201,9 @@ function DashboardPreview() {
             ))}
           </div>
 
-          <div className="mt-5 grid gap-4 xl:grid-cols-[1fr_15rem]">
+          <div className="mt-5 grid gap-4 lg:grid-cols-[1fr_15rem]">
             <UsageTable compact />
-            <div className="border border-[var(--ink)] bg-[var(--white)] p-3">
+            <div className="border border-[var(--ink)] bg-[var(--white)] p-3 lg:block hidden">
               <div className="font-editorial-mono text-[0.68rem] font-bold uppercase">
                 Recent feedback
               </div>
@@ -212,6 +213,9 @@ function DashboardPreview() {
               <Link href="/dashboard" className="mt-4 block font-editorial-mono text-[0.68rem] uppercase">
                 View all feedback +
               </Link>
+            </div>
+            <div className="border border-dashed border-[var(--ink)]/30 bg-[var(--white)] p-3 text-sm leading-6 text-[var(--ink)]/70 lg:hidden">
+              Feedback and deeper analytics appear after your first published skill starts getting real usage.
             </div>
           </div>
         </div>
@@ -619,7 +623,7 @@ export default function LandingPage() {
           <nav className="flex flex-wrap gap-6">
             <Link href="/guide">Skills Guide</Link>
             <Link href="/blog">Blog</Link>
-            <LandingAuthLink intent="sign_in" surface="footer">
+            <LandingAuthLink href="/dashboard" intent="sign_in" surface="footer">
               Log in
             </LandingAuthLink>
             <Link href="/dashboard">Privacy</Link>

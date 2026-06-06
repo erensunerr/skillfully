@@ -1,8 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 
+import {
+  type AgentAccessAnswer,
+  type AgentSkillAnswer,
+  getAgentFirstQuizState,
+  shouldAskAgentAccess,
+} from "@/lib/agent-first-quiz";
 import { captureClientEvent } from "@/lib/client-analytics";
 
 import { LandingAuthLink, LandingPageView } from "../landing-analytics";
@@ -14,9 +20,6 @@ const SECONDARY_BUTTON =
 const PANEL = "border border-[var(--ink)] bg-[var(--paper)]";
 
 const AGENT_PROMPT = `Help me create my first agent skill. Ask me 5 short questions about who the skill is for, what job it should do, one example task, what good output looks like, and common failure modes. Then draft a short SKILL.md outline I can paste into Skillfully.`;
-
-type AgentSkillAnswer = "yes" | "no" | null;
-type AgentAccessAnswer = "yes" | "no" | null;
 
 function ChoiceButton({
   label,
@@ -43,18 +46,9 @@ export function AgentFirstLanding() {
   const [hasAgentAccess, setHasAgentAccess] = useState<AgentAccessAnswer>(null);
   const [copiedPrompt, setCopiedPrompt] = useState(false);
 
-  const quizState = useMemo(() => {
-    if (hasAgentAccess === "yes") {
-      return "ready_now";
-    }
-    if (knowsAgentSkill === "no" || hasAgentAccess === "no") {
-      return "needs_learning";
-    }
-    if (knowsAgentSkill === "yes" && hasAgentAccess === null) {
-      return "halfway";
-    }
-    return "start";
-  }, [hasAgentAccess, knowsAgentSkill]);
+  const quizState = getAgentFirstQuizState(knowsAgentSkill, hasAgentAccess);
+  const showAgentAccessQuestion = shouldAskAgentAccess(knowsAgentSkill);
+  const currentStep = showAgentAccessQuestion ? "2 of 2" : "1 of 2";
 
   async function copyPrompt() {
     await navigator.clipboard.writeText(AGENT_PROMPT);
@@ -64,6 +58,8 @@ export function AgentFirstLanding() {
 
   function answerAgentSkill(value: Exclude<AgentSkillAnswer, null>) {
     setKnowsAgentSkill(value);
+    setHasAgentAccess(null);
+    setCopiedPrompt(false);
     captureClientEvent("agent_first_question_answered", {
       question: "knows_agent_skill",
       answer: value,
@@ -121,8 +117,18 @@ export function AgentFirstLanding() {
 
         <section className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
           <div className={`${PANEL} p-6 sm:p-7`}>
-            <p className="font-editorial-mono text-xs font-bold uppercase tracking-[0.16em]">Quick quiz</p>
-            <div className="mt-6 border-t border-[var(--ink)]/15 pt-6">
+            <div className="flex flex-col gap-3 border-b border-[var(--ink)]/15 pb-5 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="font-editorial-mono text-xs font-bold uppercase tracking-[0.16em]">Quick quiz</p>
+                <p className="mt-2 text-sm leading-6 text-[var(--ink)]/75">
+                  We only reveal the next step after each answer so it feels like progress, not homework.
+                </p>
+              </div>
+              <p className="font-editorial-mono text-xs font-bold uppercase tracking-[0.16em] text-[var(--ink)]/65">
+                Step {currentStep}
+              </p>
+            </div>
+            <div className="mt-6 pt-1">
               <h2 className="font-editorial-sans text-2xl font-semibold">Do you know what an agent skill is?</h2>
               <p className="mt-2 text-sm leading-6 text-[var(--ink)]/75">
                 A reusable instruction set that helps an agent do one job well, consistently.
@@ -149,52 +155,56 @@ export function AgentFirstLanding() {
                   </div>
                 </div>
               ) : null}
-            </div>
-
-            <div className="mt-8 border-t border-[var(--ink)]/15 pt-6">
-              <h2 className="font-editorial-sans text-2xl font-semibold">Do you have an agent you can text right now?</h2>
-              <p className="mt-2 text-sm leading-6 text-[var(--ink)]/75">
-                If yes, we can give you a prompt to generate the rough draft before you open the editor.
-              </p>
-              <div className="mt-4 flex flex-col gap-3 sm:flex-row">
-                <ChoiceButton
-                  label="Yes, copy agent prompt"
-                  isActive={hasAgentAccess === "yes"}
-                  onClick={() => answerAgentAccess("yes")}
-                />
-                <ChoiceButton
-                  label="No, learn"
-                  isActive={hasAgentAccess === "no"}
-                  onClick={() => answerAgentAccess("no")}
-                />
-              </div>
-              {hasAgentAccess === "yes" ? (
-                <div className="mt-4 border border-dashed border-[var(--ink)]/35 bg-[var(--white)] p-4">
-                  <p className="text-sm leading-6 text-[var(--ink)]/80">
-                    Paste this into your agent, then bring the result into Skillfully when you open guided setup.
+              {showAgentAccessQuestion ? (
+                <div className="mt-6 border-t border-[var(--ink)]/15 pt-6">
+                  <p className="font-editorial-mono text-xs font-bold uppercase tracking-[0.16em] text-[var(--ink)]/65">
+                    Great. One last question.
                   </p>
-                  <pre className="mt-3 overflow-x-auto whitespace-pre-wrap border border-[var(--ink)]/15 bg-[var(--paper)] p-3 font-editorial-mono text-xs leading-6 text-[var(--ink)]/85">
-                    {AGENT_PROMPT}
-                  </pre>
+                  <h2 className="mt-3 font-editorial-sans text-2xl font-semibold">Do you have an agent you can text right now?</h2>
+                  <p className="mt-2 text-sm leading-6 text-[var(--ink)]/75">
+                    If yes, we can give you a prompt to generate the rough draft before you open the editor.
+                  </p>
                   <div className="mt-4 flex flex-col gap-3 sm:flex-row">
-                    <button type="button" className={PRIMARY_BUTTON} onClick={() => void copyPrompt()}>
-                      {copiedPrompt ? "Copied prompt" : "Copy prompt"}
-                    </button>
-                    <LandingAuthLink
-                      href="/dashboard/getting-started"
-                      intent="sign_in"
-                      surface="agent_first_quiz"
-                      analytics={{ variant: "agent-first", path: "copy_prompt" }}
-                      className={SECONDARY_BUTTON}
-                    >
-                      Open guided setup
-                    </LandingAuthLink>
+                    <ChoiceButton
+                      label="Yes, copy agent prompt"
+                      isActive={hasAgentAccess === "yes"}
+                      onClick={() => answerAgentAccess("yes")}
+                    />
+                    <ChoiceButton
+                      label="No, learn"
+                      isActive={hasAgentAccess === "no"}
+                      onClick={() => answerAgentAccess("no")}
+                    />
                   </div>
-                </div>
-              ) : null}
-              {hasAgentAccess === "no" ? (
-                <div className="mt-4 border border-dashed border-[var(--ink)]/35 bg-[var(--white)] p-4 text-sm leading-6 text-[var(--ink)]/80">
-                  No problem. Read the basics first, then use guided setup to create the first draft inside Skillfully.
+                  {hasAgentAccess === "yes" ? (
+                    <div className="mt-4 border border-dashed border-[var(--ink)]/35 bg-[var(--white)] p-4">
+                      <p className="text-sm leading-6 text-[var(--ink)]/80">
+                        Paste this into your agent, then bring the result into Skillfully when you open guided setup.
+                      </p>
+                      <pre className="mt-3 overflow-x-auto whitespace-pre-wrap border border-[var(--ink)]/15 bg-[var(--paper)] p-3 font-editorial-mono text-xs leading-6 text-[var(--ink)]/85">
+                        {AGENT_PROMPT}
+                      </pre>
+                      <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+                        <button type="button" className={PRIMARY_BUTTON} onClick={() => void copyPrompt()}>
+                          {copiedPrompt ? "Copied prompt" : "Copy prompt"}
+                        </button>
+                        <LandingAuthLink
+                          href="/dashboard/getting-started"
+                          intent="sign_in"
+                          surface="agent_first_quiz"
+                          analytics={{ variant: "agent-first", path: "copy_prompt" }}
+                          className={SECONDARY_BUTTON}
+                        >
+                          Open guided setup
+                        </LandingAuthLink>
+                      </div>
+                    </div>
+                  ) : null}
+                  {hasAgentAccess === "no" ? (
+                    <div className="mt-4 border border-dashed border-[var(--ink)]/35 bg-[var(--white)] p-4 text-sm leading-6 text-[var(--ink)]/80">
+                      No problem. Read the basics first, then use guided setup to create the first draft inside Skillfully.
+                    </div>
+                  ) : null}
                 </div>
               ) : null}
             </div>

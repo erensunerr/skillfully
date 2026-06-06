@@ -1,6 +1,7 @@
 export const LANDING_VARIANT_COOKIE = "skillfully_landing_variant";
+export const LANDING_DISTINCT_ID_COOKIE = "skillfully_landing_distinct_id";
 export const AGENT_FIRST_EXPERIMENT_FLAG_KEY = "landing_agent_first_onboarding";
-const DEFAULT_AGENT_FIRST_EXPERIMENT_ALLOCATION = 0.25;
+export const AGENT_FIRST_VARIANT_FLAG_VALUE = "agent_first";
 
 export type LandingVariant = "control" | "agent-first";
 
@@ -12,42 +13,24 @@ export function normalizeLandingVariant(value: string | null | undefined): Landi
   return null;
 }
 
-export function assignLandingVariant(sample: number, testAllocation = 0.25): LandingVariant {
-  if (!Number.isFinite(sample)) {
+export function normalizeLandingVariantFlagValue(value: unknown): LandingVariant | null {
+  if (value === true) {
+    return "agent-first";
+  }
+
+  if (value === false) {
     return "control";
   }
 
-  return sample >= 0 && sample < testAllocation ? "agent-first" : "control";
-}
-
-export function parseLandingExperimentAllocation(
-  value: string | null | undefined,
-  defaultAllocation = DEFAULT_AGENT_FIRST_EXPERIMENT_ALLOCATION,
-) {
-  if (value === null || value === undefined || value.trim() === "") {
-    return defaultAllocation;
+  if (value === "control") {
+    return "control";
   }
 
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed)) {
-    return defaultAllocation;
+  if (value === AGENT_FIRST_VARIANT_FLAG_VALUE || value === "agent-first") {
+    return "agent-first";
   }
 
-  if (parsed >= 0 && parsed <= 1) {
-    return parsed;
-  }
-
-  if (parsed >= 0 && parsed <= 100) {
-    return parsed / 100;
-  }
-
-  return defaultAllocation;
-}
-
-export function getLandingExperimentAllocation() {
-  return parseLandingExperimentAllocation(
-    process.env.AGENT_FIRST_EXPERIMENT_ALLOCATION ?? process.env.NEXT_PUBLIC_AGENT_FIRST_EXPERIMENT_ALLOCATION,
-  );
+  return null;
 }
 
 export function getLandingExperimentProperties(variant: LandingVariant | null) {
@@ -55,9 +38,13 @@ export function getLandingExperimentProperties(variant: LandingVariant | null) {
     return {};
   }
 
+  const posthogVariantValue = variant === "agent-first" ? AGENT_FIRST_VARIANT_FLAG_VALUE : "control";
+
   return {
     landing_variant: variant,
     landing_experiment: AGENT_FIRST_EXPERIMENT_FLAG_KEY,
+    [`$feature/${AGENT_FIRST_EXPERIMENT_FLAG_KEY}`]: posthogVariantValue,
+    $active_feature_flags: [AGENT_FIRST_EXPERIMENT_FLAG_KEY],
   };
 }
 
@@ -80,11 +67,4 @@ export function getLandingVariantFromCookieString(cookieString: string | null | 
 
 export function landingVariantPath(variant: LandingVariant) {
   return variant === "agent-first" ? "/agent-first" : "/";
-}
-
-export function isAgentFirstExperimentEnabled() {
-  return (
-    process.env.NEXT_PUBLIC_AGENT_FIRST_EXPERIMENT === "1" ||
-    process.env.AGENT_FIRST_EXPERIMENT === "1"
-  );
 }

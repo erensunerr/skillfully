@@ -2,12 +2,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  assignLandingVariant,
+  AGENT_FIRST_VARIANT_FLAG_VALUE,
   getLandingExperimentProperties,
   getLandingVariantFromCookieString,
   landingVariantPath,
   normalizeLandingVariant,
-  parseLandingExperimentAllocation,
+  normalizeLandingVariantFlagValue,
 } from "@/lib/landing-experiment";
 
 test("normalizeLandingVariant accepts supported values only", () => {
@@ -17,20 +17,13 @@ test("normalizeLandingVariant accepts supported values only", () => {
   assert.equal(normalizeLandingVariant(null), null);
 });
 
-test("assignLandingVariant sends the first quarter to agent-first", () => {
-  assert.equal(assignLandingVariant(0), "agent-first");
-  assert.equal(assignLandingVariant(0.2499), "agent-first");
-  assert.equal(assignLandingVariant(0.25), "control");
-  assert.equal(assignLandingVariant(0.9), "control");
-});
-
-test("parseLandingExperimentAllocation accepts ratios and percentages and falls back safely", () => {
-  assert.equal(parseLandingExperimentAllocation(undefined), 0.25);
-  assert.equal(parseLandingExperimentAllocation("0.4"), 0.4);
-  assert.equal(parseLandingExperimentAllocation("40"), 0.4);
-  assert.equal(parseLandingExperimentAllocation("100"), 1);
-  assert.equal(parseLandingExperimentAllocation("-4"), 0.25);
-  assert.equal(parseLandingExperimentAllocation("wat"), 0.25);
+test("normalizeLandingVariantFlagValue maps PostHog values to routing variants", () => {
+  assert.equal(normalizeLandingVariantFlagValue("control"), "control");
+  assert.equal(normalizeLandingVariantFlagValue(AGENT_FIRST_VARIANT_FLAG_VALUE), "agent-first");
+  assert.equal(normalizeLandingVariantFlagValue("agent-first"), "agent-first");
+  assert.equal(normalizeLandingVariantFlagValue(true), "agent-first");
+  assert.equal(normalizeLandingVariantFlagValue(false), "control");
+  assert.equal(normalizeLandingVariantFlagValue("unknown"), null);
 });
 
 test("landing experiment helpers recover the assigned variant and analytics properties", () => {
@@ -39,6 +32,8 @@ test("landing experiment helpers recover the assigned variant and analytics prop
   assert.deepEqual(getLandingExperimentProperties("agent-first"), {
     landing_variant: "agent-first",
     landing_experiment: "landing_agent_first_onboarding",
+    "$feature/landing_agent_first_onboarding": "agent_first",
+    $active_feature_flags: ["landing_agent_first_onboarding"],
   });
   assert.deepEqual(getLandingExperimentProperties(null), {});
 });

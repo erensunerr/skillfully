@@ -24,7 +24,7 @@ test("agent-first landing renders the stripped-down first question without card 
   assert.doesNotMatch(html, /See regular landing page/i);
 });
 
-test("agent-first landing tracks both question branches and keeps the copy CTA inactive until clicked", async () => {
+test("agent-first landing tracks both question branches, keeps the copy CTA inactive until clicked, and removes the extra account CTA after copy", async () => {
   const source = await readFile(new URL("./agent-first-landing.tsx", import.meta.url), "utf8");
 
   assert.match(source, /question:\s*"knows_agent_skill"/);
@@ -32,5 +32,7 @@ test("agent-first landing tracks both question branches and keeps the copy CTA i
   assert.match(source, /answer:\s*"yes"/);
   assert.match(source, /answer:\s*"no"/);
   assert.match(source, /copiedPrompt \? PRIMARY_BUTTON : SECONDARY_BUTTON/);
+  assert.match(source, /Prompt copied\. Paste it into your agent, then create your account in Skillfully\./);
+  assert.doesNotMatch(source, /Create account/);
   assert.match(source, /onOpen=\{answerAgentAccessNo\}/);
 });

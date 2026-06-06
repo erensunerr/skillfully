@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { captureClientEvent } from "@/lib/client-analytics";
 
 import { BookingModalCta } from "../booking-modal";
-import { LandingAuthLink, LandingPageView } from "../landing-analytics";
+import { LandingPageView } from "../landing-analytics";
 
 const PRIMARY_BUTTON =
   "inline-flex min-h-12 items-center justify-center rounded-full border border-[#f4f4ef] bg-[#f4f4ef] px-5 py-3 text-center font-editorial-sans text-sm font-semibold text-[#080808] transition hover:bg-transparent hover:text-[#f4f4ef]";
@@ -198,20 +198,9 @@ export function AgentFirstLanding() {
 
                   <div className="mt-5 min-h-12">
                     {copiedPrompt ? (
-                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                        <p className="text-sm leading-6 text-[#cfcfcf]">
-                          Prompt copied. Paste it into your agent, then create your account in Skillfully.
-                        </p>
-                        <LandingAuthLink
-                          href="/dashboard/getting-started"
-                          intent="sign_in"
-                          surface="agent_first_quiz"
-                          analytics={{ variant: "agent-first", path: "copy_prompt" }}
-                          className={SECONDARY_BUTTON}
-                        >
-                          Create account
-                        </LandingAuthLink>
-                      </div>
+                      <p className="text-sm leading-6 text-[#cfcfcf]">
+                        Prompt copied. Paste it into your agent, then create your account in Skillfully.
+                      </p>
                     ) : (
                       <p className="text-sm leading-6 text-[#8d8d8d]">
                         If you already have an agent, we&apos;ll copy the exact prompt for you.

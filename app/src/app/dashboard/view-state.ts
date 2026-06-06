@@ -3,6 +3,8 @@ export type DashboardScreen = "list" | "create" | "detail";
 export type DashboardSkillRef = {
   id: string;
   accessLevel?: "owner" | "edit" | "use";
+  status?: string | null;
+  publishedVersionId?: string | null;
 };
 
 export type DashboardSkillTab = "overview" | "editor" | "analytics" | "settings" | "account";
@@ -88,7 +90,23 @@ export function canOpenSkillTab<T extends DashboardSkillRef>(
     return true;
   }
 
-  return skill.accessLevel !== "use";
+  if (skill.accessLevel === "use") {
+    return false;
+  }
+
+  if (tab === "analytics") {
+    return Boolean(skill.publishedVersionId || skill.status === "published");
+  }
+
+  return true;
+}
+
+export function isAnalyticsLocked<T extends DashboardSkillRef>(skill: T | null | undefined) {
+  if (!skill) {
+    return true;
+  }
+
+  return !Boolean(skill.publishedVersionId || skill.status === "published");
 }
 
 export function resolveDashboardTabForSkill<T extends DashboardSkillRef>(

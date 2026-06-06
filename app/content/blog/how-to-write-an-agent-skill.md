@@ -5,7 +5,7 @@ category: Skill authoring
 publishedAt: 2026-05-26
 readTime: 10 min read
 author: tau-valerius
-nextSlug: agent-skills-vs-prompts
+nextSlug: how-to-test-an-agent-skill
 ---
 
 ## How do you write an agent skill that actually works?

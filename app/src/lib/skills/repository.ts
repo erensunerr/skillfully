@@ -286,6 +286,7 @@ export async function createSkillDraft({
   ownerId,
   name,
   description,
+  body,
   baseUrl,
   sourceMode = "managed",
   originalRepoFullName,
@@ -299,6 +300,7 @@ export async function createSkillDraft({
   ownerId: string;
   name: string;
   description?: string | null;
+  body?: string | null;
   baseUrl: string;
   sourceMode?: string;
   originalRepoFullName?: string | null;
@@ -317,10 +319,12 @@ export async function createSkillDraft({
   const generatedSkillId = skillIdGenerator();
   const slug = skillSlug(cleanName);
   const cleanDescription = description?.trim() || undefined;
+  const cleanBody = body?.trim() || undefined;
   const feedbackUrl = `${baseUrl.replace(/\/+$/, "")}/feedback/${generatedSkillId}`;
   const defaultFile = createDefaultSkillFile({
     name: cleanName,
     description: cleanDescription,
+    body: cleanBody,
     feedbackUrl,
   });
   const repo = defaultGitHubRepo();

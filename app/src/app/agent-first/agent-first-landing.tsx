@@ -134,7 +134,7 @@ export function AgentFirstLanding() {
   return (
     <main className="h-screen overflow-hidden bg-[#0f0f0f] px-6 py-8 text-[#f4f4ef] sm:px-10 sm:py-10">
       <LandingPageView page="/agent-first" variant="agent-first" />
-      <section className="mx-auto flex h-full w-full max-w-3xl items-center">
+      <section className="mx-auto flex h-full w-full max-w-3xl items-start pt-10 sm:items-center sm:pt-0">
         <div className="w-full">
           <p className="font-editorial-mono text-xs font-bold uppercase tracking-[0.16em] text-[#a1a1a1]">
             Step {currentStep}
@@ -159,8 +159,8 @@ export function AgentFirstLanding() {
                 </div>
               </div>
 
-              <div className="min-w-full pl-6 sm:pl-10">
-                <div className="flex min-h-[18rem] flex-col justify-center">
+              <div className="min-w-full">
+                <div className="flex min-h-[18rem] flex-col justify-start sm:justify-center">
                   <div className="flex items-center justify-between gap-4">
                     <p className="font-editorial-mono text-xs font-bold uppercase tracking-[0.16em] text-[#a1a1a1]">
                       One more thing.

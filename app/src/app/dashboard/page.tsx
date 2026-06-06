@@ -4432,7 +4432,7 @@ export default function Dashboard({
             return;
           }
 
-          captureClientEvent("auth_email_submitted", { email: normalized, auth_flow: "dashboard" });
+          captureClientEvent("auth_email_submitted", { auth_flow: "dashboard" });
           setIsSubmitting(true);
           try {
             await db.auth.sendMagicCode({ email: normalized });
@@ -4465,7 +4465,6 @@ export default function Dashboard({
           }
 
           captureClientEvent("auth_code_submitted", {
-            email: normalized,
             auth_flow: "dashboard",
             code_length: code.length,
           });
@@ -4478,7 +4477,7 @@ export default function Dashboard({
 
             if (response.user) {
               identifyClientUser(response.user.id, { email: normalized });
-              captureClientEvent("auth_code_verified", { email: normalized, auth_flow: "dashboard" });
+              captureClientEvent("auth_code_verified", { auth_flow: "dashboard" });
               return;
             }
 

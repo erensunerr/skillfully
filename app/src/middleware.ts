@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import {
   assignLandingVariant,
+  getLandingExperimentAllocation,
   landingVariantPath,
   LANDING_VARIANT_COOKIE,
   normalizeLandingVariant,
@@ -67,7 +68,7 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  const assignedVariant = assignLandingVariant(randomSample());
+  const assignedVariant = assignLandingVariant(randomSample(), getLandingExperimentAllocation());
   if (assignedVariant === "agent-first") {
     const redirectUrl = nextUrl.clone();
     redirectUrl.pathname = "/agent-first";

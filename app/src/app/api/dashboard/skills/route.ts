@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import { NextRequest } from "next/server";
 
 import { getDashboardUser } from "@/lib/dashboard-auth";
+import { getLandingExperimentProperties, LANDING_VARIANT_COOKIE, normalizeLandingVariant } from "@/lib/landing-experiment";
 import { captureServerEvent } from "@/lib/posthog-server";
 import { jsonResponse } from "@/lib/route-helpers";
 import { createSkillDraft, listSkillsForOwner } from "@/lib/skills/repository";
@@ -79,10 +80,13 @@ export async function POST(request: NextRequest) {
       originalRepoFullName: body.original_repo_full_name ? String(body.original_repo_full_name) : undefined,
       originalSkillPath: body.original_skill_path ? String(body.original_skill_path) : undefined,
     });
+    const landingVariant = normalizeLandingVariant(request.cookies.get(LANDING_VARIANT_COOKIE)?.value);
+    const landingExperimentProperties = getLandingExperimentProperties(landingVariant);
     await captureServerEvent({
       distinctId: user.id,
       event: "skill_created",
       properties: {
+        ...landingExperimentProperties,
         skill_id: created.skill.skillId,
         skill_name: created.skill.name,
         has_description: Boolean(created.skill.description),
@@ -97,6 +101,7 @@ export async function POST(request: NextRequest) {
         distinctId: user.id,
         event: "first_skill_created",
         properties: {
+          ...landingExperimentProperties,
           skill_id: created.skill.skillId,
           skill_name: created.skill.name,
           source_mode: sourceMode,

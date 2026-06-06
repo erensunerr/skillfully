@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { renderToStaticMarkup } from "react-dom/server";
 
@@ -21,4 +22,15 @@ test("agent-first landing renders the stripped-down first question without card 
   assert.doesNotMatch(html, /SKILLS GUIDE/i);
   assert.doesNotMatch(html, /BLOG/i);
   assert.doesNotMatch(html, /See regular landing page/i);
+});
+
+test("agent-first landing tracks both question branches and keeps the copy CTA inactive until clicked", async () => {
+  const source = await readFile(new URL("./agent-first-landing.tsx", import.meta.url), "utf8");
+
+  assert.match(source, /question:\s*"knows_agent_skill"/);
+  assert.match(source, /question:\s*"has_agent_access"/);
+  assert.match(source, /answer:\s*"yes"/);
+  assert.match(source, /answer:\s*"no"/);
+  assert.match(source, /copiedPrompt \? PRIMARY_BUTTON : SECONDARY_BUTTON/);
+  assert.match(source, /onOpen=\{answerAgentAccessNo\}/);
 });

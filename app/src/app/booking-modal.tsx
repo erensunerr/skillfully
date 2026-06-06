@@ -12,11 +12,13 @@ export function BookingModalCta({
   className,
   children = "Book onboarding",
   initialOpen = false,
+  onOpen,
 }: {
   surface: string;
   className: string;
   children?: ReactNode;
   initialOpen?: boolean;
+  onOpen?: () => void;
 }) {
   const [isOpen, setIsOpen] = useState(initialOpen);
   const titleId = useId();
@@ -58,6 +60,7 @@ export function BookingModalCta({
   }, [closeModal, isOpen]);
 
   function openModal() {
+    onOpen?.();
     captureClientEvent("meeting_booking_clicked", { surface });
     setIsOpen(true);
   }

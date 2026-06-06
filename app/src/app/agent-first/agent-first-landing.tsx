@@ -33,7 +33,7 @@ function ChoiceButton({
 
   if (href) {
     return (
-      <Link href={href} className={className}>
+      <Link href={href} className={className} onClick={onClick}>
         {label}
       </Link>
     );
@@ -99,18 +99,36 @@ export function AgentFirstLanding() {
     setKnowsAgentSkill("yes");
     setCopiedPrompt(false);
     captureClientEvent("agent_first_question_answered", {
+      surface: "agent_first_quiz",
       question: "knows_agent_skill",
       answer: "yes",
     });
   }
 
+  function answerAgentSkillNo() {
+    captureClientEvent("agent_first_question_answered", {
+      surface: "agent_first_quiz",
+      question: "knows_agent_skill",
+      answer: "no",
+    });
+  }
+
   async function answerAgentAccessYes() {
     captureClientEvent("agent_first_question_answered", {
+      surface: "agent_first_quiz",
       question: "has_agent_access",
       answer: "yes",
     });
 
     await copyPrompt();
+  }
+
+  function answerAgentAccessNo() {
+    captureClientEvent("agent_first_question_answered", {
+      surface: "agent_first_quiz",
+      question: "has_agent_access",
+      answer: "no",
+    });
   }
 
   return (
@@ -136,7 +154,7 @@ export function AgentFirstLanding() {
                   </h2>
                   <div className="mt-6 flex flex-col gap-3 sm:flex-row">
                     <ChoiceButton label="Yes, continue" isActive={knowsAgentSkill === "yes"} onClick={answerAgentSkill} />
-                    <ChoiceButton label="No, learn first" isActive={false} href={LEARN_SKILLS_HREF} />
+                    <ChoiceButton label="No, learn first" isActive={false} href={LEARN_SKILLS_HREF} onClick={answerAgentSkillNo} />
                   </div>
                 </div>
               </div>
@@ -162,10 +180,18 @@ export function AgentFirstLanding() {
                     Do you have an agent that you can text right now?
                   </h2>
                   <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-                    <button type="button" className={`${PRIMARY_BUTTON} w-full sm:w-auto`} onClick={() => void answerAgentAccessYes()}>
+                    <button
+                      type="button"
+                      className={`${copiedPrompt ? PRIMARY_BUTTON : SECONDARY_BUTTON} w-full sm:w-auto`}
+                      onClick={() => void answerAgentAccessYes()}
+                    >
                       {copiedPrompt ? "Prompt copied" : "Yes, copy prompt"}
                     </button>
-                    <BookingModalCta surface="agent_first_quiz" className={`${TERTIARY_BUTTON} w-full sm:w-auto`}>
+                    <BookingModalCta
+                      surface="agent_first_quiz"
+                      className={`${TERTIARY_BUTTON} w-full sm:w-auto`}
+                      onOpen={answerAgentAccessNo}
+                    >
                       No, book a free setup call
                     </BookingModalCta>
                   </div>

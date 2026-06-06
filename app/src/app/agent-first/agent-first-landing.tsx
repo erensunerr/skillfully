@@ -161,22 +161,7 @@ export function AgentFirstLanding() {
 
               <div className="min-w-full">
                 <div className="flex min-h-[18rem] flex-col justify-start sm:justify-center">
-                  <div className="flex items-center justify-between gap-4">
-                    <p className="font-editorial-mono text-xs font-bold uppercase tracking-[0.16em] text-[#a1a1a1]">
-                      One more thing.
-                    </p>
-                    <button
-                      type="button"
-                      className="font-editorial-mono text-xs font-bold uppercase tracking-[0.16em] text-[#a1a1a1] transition hover:text-[#f4f4ef]"
-                      onClick={() => {
-                        setKnowsAgentSkill(null);
-                        setCopiedPrompt(false);
-                      }}
-                    >
-                      Back
-                    </button>
-                  </div>
-                  <h2 className="mt-3 font-editorial-sans text-2xl font-semibold sm:text-4xl">
+                  <h2 className="font-editorial-sans text-2xl font-semibold sm:text-4xl">
                     Do you have an agent that you can text right now?
                   </h2>
                   <div className="mt-6 flex flex-col gap-3 sm:flex-row">

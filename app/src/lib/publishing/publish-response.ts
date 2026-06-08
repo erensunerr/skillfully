@@ -35,6 +35,13 @@ export type PublishResponse = PublishResultEnvelope & {
   next_action?: PublishNextAction;
 };
 
+function linkUseTokenForContext(context: PublishContext) {
+  const token = context.skill.linkUseToken?.trim();
+  return context.skill.visibility === "private" && context.skill.anyoneWithLinkCanUse === true && token
+    ? token
+    : null;
+}
+
 function installPromptForContext(context: PublishContext) {
   const githubTarget = context.skill.sourceMode === "github_import" ? context.githubTarget : null;
   return buildUserSkillInstallPrompt({
@@ -43,12 +50,19 @@ function installPromptForContext(context: PublishContext) {
     skillId: context.skill.skillId,
     repoFullName: githubTarget?.repoFullName ?? null,
     skillRoot: githubTarget?.skillRoot ?? context.skill.originalSkillPath ?? null,
+    linkUseToken: linkUseTokenForContext(context),
   });
 }
 
-function confirmationForSkill(skillId: string): PublishConfirmation {
+function confirmationForSkill(skillId: string, linkUseToken?: string | null): PublishConfirmation {
+  const installEndpoint = new URL(`/api/skills/${skillId}/install`, PUBLIC_BASE_URL);
+  const token = linkUseToken?.trim();
+  if (token) {
+    installEndpoint.searchParams.set("share", token);
+  }
+
   return {
-    install_endpoint: `${PUBLIC_BASE_URL}/api/public/skills/${skillId}/install`,
+    install_endpoint: installEndpoint.toString(),
     feedback_endpoint: `${PUBLIC_BASE_URL}/feedback/${skillId}`,
     success_events: INSTALL_CONFIRMATION_EVENTS,
   };
@@ -67,7 +81,7 @@ export function buildPublishResponse({
   }
 
   const installPrompt = installPromptForContext(context);
-  const confirmation = confirmationForSkill(context.skill.skillId);
+  const confirmation = confirmationForSkill(context.skill.skillId, linkUseTokenForContext(context));
   const githubSubmission = result.results.find(
     (entry) => entry.targetKind === "github" && entry.status === "submitted" && entry.url,
   );

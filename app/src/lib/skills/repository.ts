@@ -967,6 +967,8 @@ export async function buildPublishContextForSkill({
       slug: skill.slug || skillSlug(skill.name),
       name: skill.name,
       visibility: skill.visibility,
+      anyoneWithLinkCanUse: skill.anyoneWithLinkCanUse,
+      linkUseToken: skill.linkUseToken,
       sourceMode: skill.sourceMode,
       originalSkillPath: skill.originalSkillPath,
     },

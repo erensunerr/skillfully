@@ -1,3 +1,5 @@
+import crypto from "node:crypto";
+
 import { NextRequest, NextResponse } from "next/server";
 
 import { getAgentAuthor } from "@/lib/agent-author-api";
@@ -16,6 +18,7 @@ import {
   buildSkillManifest,
   isPrimarySkillMarkdownPath,
   normalizeSkillFilePath,
+  skillfullyManifestUrl,
 } from "@/lib/skills/skill-files";
 
 type InstallUser = {
@@ -128,6 +131,26 @@ async function loadPublishedVersionAndFiles({
   return { version, files };
 }
 
+function shareTokenFromRequest(request: NextRequest) {
+  const token = new URL(request.url).searchParams.get("share")?.trim();
+  return token || null;
+}
+
+function secureTokenEquals(left: string, right: string) {
+  const leftBuffer = Buffer.from(left);
+  const rightBuffer = Buffer.from(right);
+  return leftBuffer.length === rightBuffer.length && crypto.timingSafeEqual(leftBuffer, rightBuffer);
+}
+
+function hasValidLinkUseToken(skill: SkillRow, request: NextRequest) {
+  const storedToken = typeof skill.linkUseToken === "string" ? skill.linkUseToken.trim() : "";
+  const requestToken = shareTokenFromRequest(request);
+  if (!storedToken || !requestToken) {
+    return false;
+  }
+  return secureTokenEquals(requestToken, storedToken);
+}
+
 async function resolveInstallSkill({
   request,
   skillId,
@@ -137,7 +160,14 @@ async function resolveInstallSkill({
   skillId: string;
   publicOnly?: boolean;
 }): Promise<
-  | { ok: true; store: SkillAccessStore; skill: SkillRow; version: SkillVersionRow; files: SkillFileRow[] }
+  | {
+      ok: true;
+      store: SkillAccessStore;
+      skill: SkillRow;
+      version: SkillVersionRow;
+      files: SkillFileRow[];
+      linkUseToken?: string;
+    }
   | { ok: false; response: NextResponse }
 > {
   const config = deps();
@@ -151,7 +181,8 @@ async function resolveInstallSkill({
     return { ok: false, response: jsonResponse({ error: "skill not found" }, 404, "GET, OPTIONS") };
   }
 
-  if (!isPublic) {
+  const canUseWithLink = !publicOnly && skill.anyoneWithLinkCanUse === true && hasValidLinkUseToken(skill, request);
+  if (!isPublic && !canUseWithLink) {
     const token = getBearerToken(request.headers.get("authorization"));
     if (!token) {
       return { ok: false, response: jsonResponse({ error: "authorization required" }, 401, "GET, OPTIONS") };
@@ -185,6 +216,7 @@ async function resolveInstallSkill({
     skill,
     version: published.version,
     files: published.files,
+    linkUseToken: canUseWithLink && typeof skill.linkUseToken === "string" ? skill.linkUseToken : undefined,
   };
 }
 
@@ -224,6 +256,7 @@ export async function serveSkillManifest({
     },
     files: manifestFiles,
     baseUrl: new URL(request.url).origin,
+    linkUseToken: resolved.linkUseToken,
   });
 
   await deps().recordUsage({
@@ -275,6 +308,7 @@ export async function serveSkillFile({
       ? appendSkillfullyManagedBlock(file.contentText, {
           skillId,
           baseUrl: new URL(request.url).origin,
+          linkUseToken: resolved.linkUseToken,
         })
       : file.contentText;
     return new NextResponse(contentText, {
@@ -322,7 +356,11 @@ export async function serveSkillInstall({
     {
       ok: true,
       skill_id: skillId,
-      manifest_url: `${new URL(request.url).origin}/api/skills/${skillId}/manifest`,
+      manifest_url: skillfullyManifestUrl({
+        skillId,
+        baseUrl: new URL(request.url).origin,
+        linkUseToken: resolved.linkUseToken,
+      }),
     },
     200,
     "POST, OPTIONS",

@@ -153,7 +153,7 @@ test("dashboard does not render seeded demo data for an empty skill", async () =
 
   assert.match(html, /No feedback yet/i);
   assert.match(html, /No usage data yet/i);
-  assert.match(html, /Version history appears after the first publish/i);
+  assert.doesNotMatch(html, /Version history appears after the first publish/i);
 });
 
 test("dashboard skill detail renders the operational overview UI", async () => {
@@ -222,7 +222,7 @@ test("published dashboard overview renders both install prompt actions", async (
   assert.match(html, /Install code-review/);
 });
 
-test("dashboard skill detail renders the editor tab UI", async () => {
+test("dashboard skill detail renders the editor tab UI with rails closed by default", async () => {
   Object.assign(globalThis, { React });
   const { SkillDetail } = await import("./page");
 
@@ -238,11 +238,13 @@ test("dashboard skill detail renders the editor tab UI", async () => {
   assert.match(html, /Files/);
   assert.match(html, /Frontmatter/);
   assert.match(html, /Focus mode/i);
-  assert.match(html, /First publish checklist/i);
   assert.match(html, /unlock analytics/i);
-  assert.match(html, /aria-readonly="true"/);
   assert.match(html, /Expand files/);
-  assert.match(html, /Collapse frontmatter/);
+  assert.match(html, /Expand frontmatter/);
+  assert.doesNotMatch(html, /First publish checklist/i);
+  assert.doesNotMatch(html, /aria-readonly="true"/);
+  assert.doesNotMatch(html, /Collapse files/);
+  assert.doesNotMatch(html, /Collapse frontmatter/);
   assert.doesNotMatch(html, /Validate skill/);
   assert.doesNotMatch(html, /Upload file/);
   assert.doesNotMatch(html, /New markdown file/i);
@@ -255,9 +257,9 @@ test("dashboard skill detail renders the editor tab UI", async () => {
   assert.doesNotMatch(html, /The user asks for work that this skill is designed to handle/);
   assert.doesNotMatch(html, /When to use/);
   assert.doesNotMatch(html, /Workflow/);
-  assert.match(html, /SKILL\.md present/);
-  assert.match(html, /Version history/);
-  assert.match(html, /Version history appears after the first publish/);
+  assert.doesNotMatch(html, /SKILL\.md present/);
+  assert.doesNotMatch(html, /Version history/);
+  assert.doesNotMatch(html, /Version history appears after the first publish/);
   assert.doesNotMatch(html, />Version<\/span>/);
   assert.doesNotMatch(html, /0\.1\.0/);
   assert.doesNotMatch(html, /Publishing destinations/);
@@ -366,6 +368,29 @@ test("dashboard selector marks shared skills", async () => {
   assert.match(html, /Use only/);
 });
 
+test("dashboard selector constrains the skill row list when open", async () => {
+  Object.assign(globalThis, { React });
+  const { SkillSelector } = await import("./page");
+
+  const html = renderToStaticMarkup(
+    <SkillSelector
+      skills={Array.from({ length: 16 }, (_, index) =>
+        fakeSkill(`skill-${index + 1}`, `skill-${index + 1}`),
+      ) as never}
+      selectedId="skill-1"
+      isOpen={true}
+      onToggle={() => undefined}
+      onSelect={() => undefined}
+      onCreateSkill={() => undefined}
+    />,
+  );
+
+  assert.match(html, /max-h-\[/);
+  assert.match(html, /overflow-y-auto/);
+  assert.match(html, /overscroll-contain/);
+  assert.match(html, /Create new skill/);
+});
+
 test("use-only shared skill hides editor analytics settings and share controls", async () => {
   Object.assign(globalThis, { React });
   const { SkillDetail } = await import("./page");
@@ -415,6 +440,38 @@ test("edit shared skill keeps authoring tabs and share button visible", async ()
 
   assert.match(html, /Markdown editor/i);
   assert.match(html, /Share/);
+});
+
+test("share dialog shows private link-use checkbox only for private skills", async () => {
+  Object.assign(globalThis, { React });
+  const { SkillShareDialog } = await import("./page");
+
+  const privateHtml = renderToStaticMarkup(
+    <SkillShareDialog
+      skill={{ ...fakeSkill(), anyoneWithLinkCanUse: true } as never}
+      user={{ id: "user-1", email: "owner@example.com" } as never}
+      onSkillUpdated={() => undefined}
+      onClose={() => undefined}
+    />,
+  );
+  const publicHtml = renderToStaticMarkup(
+    <SkillShareDialog
+      skill={{ ...fakeSkill("public-skill"), visibility: "public", anyoneWithLinkCanUse: true } as never}
+      user={{ id: "user-1", email: "owner@example.com" } as never}
+      onSkillUpdated={() => undefined}
+      onClose={() => undefined}
+    />,
+  );
+
+  assert.match(privateHtml, /Anyone with link can use\./);
+  assert.match(privateHtml, /Disable link access to revoke the current link\./);
+  assert.match(privateHtml, /type="checkbox"/);
+  assert.match(privateHtml, /cursor-pointer/);
+  assert.match(privateHtml, /aria-label="Share permission"/);
+  assert.match(privateHtml, /data-dropdown-chevron="closed"/);
+  assert.doesNotMatch(privateHtml, /<select/);
+  assert.match(privateHtml, /checked=""/);
+  assert.doesNotMatch(publicHtml, /Anyone with link can use\./);
 });
 
 test("dashboard skill detail renders the analytics tab UI", async () => {
@@ -786,6 +843,8 @@ test("dashboard renders the skill selector menu and create skill modal", async (
   );
 
   assert.match(html, /code-review/i);
+  assert.match(html, /data-dropdown-chevron="open"/);
+  assert.doesNotMatch(html, /⌄|⌃/);
   assert.match(html, /write-tests/i);
   assert.match(html, /release-check/i);
   assert.match(html, /Create new skill/i);

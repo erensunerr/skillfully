@@ -6,6 +6,7 @@ const DEFAULT_BASE_URL = "https://www.skillfully.sh";
 export type SkillfullyManagedBlockOptions = {
   skillId: string;
   baseUrl?: string | null;
+  linkUseToken?: string | null;
 };
 
 export function normalizeSkillfullyBaseUrl(baseUrl?: string | null) {
@@ -16,17 +17,35 @@ export function skillfullyFeedbackUrl({ skillId, baseUrl }: SkillfullyManagedBlo
   return `${normalizeSkillfullyBaseUrl(baseUrl)}/feedback/${skillId}`;
 }
 
-export function skillfullyManifestUrl({ skillId, baseUrl }: SkillfullyManagedBlockOptions) {
-  return `${normalizeSkillfullyBaseUrl(baseUrl)}/api/skills/${skillId}/manifest`;
+function withLinkUseToken(url: string, linkUseToken?: string | null) {
+  const token = linkUseToken?.trim();
+  if (!token) {
+    return url;
+  }
+
+  const withToken = new URL(url);
+  withToken.searchParams.set("share", token);
+  return withToken.toString();
+}
+
+export function skillfullyManifestUrl({ skillId, baseUrl, linkUseToken }: SkillfullyManagedBlockOptions) {
+  return withLinkUseToken(
+    `${normalizeSkillfullyBaseUrl(baseUrl)}/api/skills/${skillId}/manifest`,
+    linkUseToken,
+  );
 }
 
 export function skillfullyFileUrl({
   skillId,
   path,
   baseUrl,
+  linkUseToken,
 }: SkillfullyManagedBlockOptions & { path: string }) {
   const normalizedPath = path.split("/").map(encodeURIComponent).join("/");
-  return `${normalizeSkillfullyBaseUrl(baseUrl)}/api/skills/${skillId}/files/${normalizedPath}`;
+  return withLinkUseToken(
+    `${normalizeSkillfullyBaseUrl(baseUrl)}/api/skills/${skillId}/files/${normalizedPath}`,
+    linkUseToken,
+  );
 }
 
 export function isPrimarySkillMarkdownPath(path: string) {

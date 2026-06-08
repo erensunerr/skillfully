@@ -15,6 +15,8 @@ export type PublishContext = {
     slug: string;
     name: string;
     visibility?: string | null;
+    anyoneWithLinkCanUse?: boolean | null;
+    linkUseToken?: string | null;
     sourceMode?: string | null;
     originalSkillPath?: string | null;
   };

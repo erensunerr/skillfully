@@ -58,6 +58,8 @@ const _schema = i.schema({
       slug: i.string().indexed().optional(),
       status: i.string().indexed().optional(),
       visibility: i.string().indexed().optional(),
+      anyoneWithLinkCanUse: i.boolean().optional(),
+      linkUseToken: i.string().optional(),
       sourceMode: i.string().indexed().optional(),
       originalRepoFullName: i.string().indexed().optional(),
       originalRepositoryId: i.string().indexed().optional(),

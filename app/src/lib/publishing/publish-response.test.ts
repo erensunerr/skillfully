@@ -81,3 +81,45 @@ test("buildPublishResponse sends Skillfully-managed publishers directly to Skill
   assert.match(response.next_action?.install_prompt ?? "", /stored on Skillfully, not GitHub/);
   assert.doesNotMatch(response.next_action?.install_prompt ?? "", /on github|erensunerr\/skillfully-skills/i);
 });
+
+test("buildPublishResponse includes private link-use token in install action URLs", () => {
+  const response = buildPublishResponse({
+    context: {
+      ...importedContext,
+      defaultGitHubRepo: null,
+      skill: {
+        skillId: "sk_private_link",
+        slug: "private-link",
+        name: "private-link",
+        visibility: "private",
+        sourceMode: "managed",
+        originalSkillPath: null,
+        anyoneWithLinkCanUse: true,
+        linkUseToken: "slt_publish_token",
+      },
+      githubTarget: null,
+    },
+    result: {
+      results: [
+        {
+          targetKind: "skillfully",
+          status: "published",
+        },
+      ],
+    },
+  });
+
+  assert.equal(response.next_action?.type, "install_skill");
+  assert.match(
+    response.next_action?.install_prompt ?? "",
+    /https:\/\/www\.skillfully\.sh\/api\/skills\/sk_private_link\/manifest\?share=slt_publish_token/,
+  );
+  assert.match(
+    response.next_action?.install_prompt ?? "",
+    /POST https:\/\/www\.skillfully\.sh\/api\/skills\/sk_private_link\/install\?share=slt_publish_token/,
+  );
+  assert.equal(
+    response.next_action?.confirmation.install_endpoint,
+    "https://www.skillfully.sh/api/skills/sk_private_link/install?share=slt_publish_token",
+  );
+});

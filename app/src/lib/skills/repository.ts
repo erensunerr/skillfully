@@ -52,6 +52,8 @@ export type SkillRow = {
   slug: string;
   status: string;
   visibility: string;
+  anyoneWithLinkCanUse?: boolean;
+  linkUseToken?: string;
   sourceMode: string;
   originalRepoFullName?: string;
   originalRepositoryId?: string;
@@ -114,6 +116,10 @@ export type PublishingTargetRow = {
 
 const GITHUB_REPO_FULL_NAME_PATTERN = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
 const GITHUB_INSTALLATION_ID_PATTERN = /^[A-Za-z0-9_-]+$/;
+
+function randomLinkUseToken() {
+  return `slt_${crypto.randomBytes(24).toString("base64url")}`;
+}
 
 function normalizeGitHubRepoFullName(value: string) {
   const normalized = value.trim();
@@ -338,6 +344,7 @@ export async function createSkillDraft({
     slug,
     status: "draft",
     visibility: "private",
+    anyoneWithLinkCanUse: false,
     sourceMode,
     ...(originalRepoFullName ? { originalRepoFullName } : {}),
     ...(originalRepositoryId ? { originalRepositoryId } : {}),
@@ -480,19 +487,23 @@ export async function listSkillsForOwner({
 export async function updateSkillMetadata({
   store = defaultSkillStore,
   now = () => Date.now(),
+  linkUseTokenGenerator = randomLinkUseToken,
   ownerId,
   skillId,
   name,
   description,
   visibility,
+  anyoneWithLinkCanUse,
 }: {
   store?: SkillStore;
   now?: () => number;
+  linkUseTokenGenerator?: () => string;
   ownerId: string;
   skillId: string;
   name?: string | null;
   description?: string | null;
   visibility?: string | null;
+  anyoneWithLinkCanUse?: boolean;
 }) {
   const skill = await getSkillForOwner({ store, ownerId, skillId });
   if (!skill) {
@@ -504,11 +515,23 @@ export async function updateSkillMetadata({
     throw new Error("skill name is required");
   }
 
+  const nextAnyoneWithLinkCanUse = anyoneWithLinkCanUse === undefined
+    ? Boolean(skill.anyoneWithLinkCanUse)
+    : anyoneWithLinkCanUse;
+  const existingLinkUseToken = typeof skill.linkUseToken === "string" && skill.linkUseToken.trim()
+    ? skill.linkUseToken
+    : undefined;
+  const nextLinkUseToken = nextAnyoneWithLinkCanUse
+    ? existingLinkUseToken ?? linkUseTokenGenerator()
+    : undefined;
+
   const updates = {
     name: cleanName,
     slug: cleanName === skill.name ? skill.slug : skillSlug(cleanName),
     description: description === undefined ? skill.description : description?.trim() || undefined,
     visibility: visibility === undefined || visibility === null ? skill.visibility : String(visibility),
+    anyoneWithLinkCanUse: nextAnyoneWithLinkCanUse,
+    linkUseToken: nextLinkUseToken,
     updatedAt: now(),
   };
   if (updates.visibility !== "private" && updates.visibility !== "public") {
@@ -944,6 +967,8 @@ export async function buildPublishContextForSkill({
       slug: skill.slug || skillSlug(skill.name),
       name: skill.name,
       visibility: skill.visibility,
+      anyoneWithLinkCanUse: skill.anyoneWithLinkCanUse,
+      linkUseToken: skill.linkUseToken,
       sourceMode: skill.sourceMode,
       originalSkillPath: skill.originalSkillPath,
     },

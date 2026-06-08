@@ -109,6 +109,27 @@ test("buildSkillManifest includes text files, assets, version metadata, and hash
   assert.equal(manifest.files[1].url, "https://storage.example/logo.png");
 });
 
+test("buildSkillManifest can carry a private link-use token in update URLs", () => {
+  const manifest = buildSkillManifest({
+    skill: {
+      skillId: "sk_demo",
+      name: "demo-skill",
+      slug: "demo-skill",
+      description: "Demo",
+    },
+    version: {
+      id: "version-1",
+      version: "1.0.0",
+      status: "published",
+    },
+    files: [],
+    baseUrl: "https://www.skillfully.sh",
+    linkUseToken: "slt_demo",
+  });
+
+  assert.equal(manifest.manifest_url, "https://www.skillfully.sh/api/skills/sk_demo/manifest?share=slt_demo");
+});
+
 test("managed block appends feedback and update instructions without changing editable content", () => {
   const original = "# Existing Skill\n\n## Workflow\n\nDo the work.";
   const updated = appendSkillfullyManagedBlock(original, {
@@ -121,6 +142,17 @@ test("managed block appends feedback and update instructions without changing ed
   assert.match(updated, /https:\/\/www\.skillfully\.sh\/feedback\/sk_demo/);
   assert.match(updated, /https:\/\/www\.skillfully\.sh\/api\/skills\/sk_demo\/manifest/);
   assert.equal(stripSkillfullyManagedBlock(updated), original);
+});
+
+test("managed block can carry a private link-use token in update URLs", () => {
+  const block = buildSkillfullyManagedBlock({
+    skillId: "sk_demo",
+    baseUrl: "https://www.skillfully.sh",
+    linkUseToken: "slt_demo",
+  });
+
+  assert.match(block, /https:\/\/www\.skillfully\.sh\/api\/skills\/sk_demo\/manifest\?share=slt_demo/);
+  assert.match(block, /https:\/\/www\.skillfully\.sh\/api\/skills\/sk_demo\/files\/SKILL\.md\?share=slt_demo/);
 });
 
 test("buildSkillfullyManagedBlock includes update and feedback endpoints", () => {

@@ -1,42 +1,52 @@
 "use client";
 
-import { type ReactNode, useEffect } from "react";
-import Link from "next/link";
+import { useEffect, type ReactNode } from "react";
 
 import { captureClientEvent } from "@/lib/client-analytics";
+import { AGENT_FIRST_EXPERIMENT_FLAG_KEY } from "@/lib/landing-experiment";
 
-type LandingAuthIntent = "sign_in";
-
-export function LandingPageView() {
+export function LandingPageView({
+  page = "/",
+  variant = "control",
+}: {
+  page?: string;
+  variant?: string;
+}) {
   useEffect(() => {
-    captureClientEvent("landing_page_viewed", { page: "/" });
-  }, []);
+    captureClientEvent("landing_page_viewed", {
+      page,
+      variant,
+      landing_experiment: AGENT_FIRST_EXPERIMENT_FLAG_KEY,
+    });
+  }, [page, variant]);
 
   return null;
 }
 
 export function LandingAuthLink({
-  href = "/dashboard",
   intent,
   surface,
   className,
+  href,
+  analytics = {},
   children,
 }: {
-  href?: string;
-  intent: LandingAuthIntent;
+  intent: string;
   surface: string;
   className?: string;
+  href: string;
+  analytics?: Record<string, unknown>;
   children: ReactNode;
 }) {
   return (
-    <Link
+    <a
       href={href}
       className={className}
       data-auth-intent={intent}
       data-auth-surface={surface}
-      onClick={() => captureClientEvent("landing_auth_cta_clicked", { intent, surface })}
+      onClick={() => captureClientEvent("landing_auth_cta_clicked", { intent, surface, ...analytics })}
     >
       {children}
-    </Link>
+    </a>
   );
 }

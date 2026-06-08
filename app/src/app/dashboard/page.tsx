@@ -30,11 +30,12 @@ import type { User as InstantUser } from "@instantdb/core";
 import {
   canOpenSkillTab,
   githubConnectionStatusMessage,
+  isAnalyticsLocked,
   resolveDashboardTabForSkill,
   resolveDashboardViewState,
   shouldShowOnboardingModalByDefault,
 } from "./view-state";
-import { OnboardingModal } from "./onboarding-modal";
+import { ActivationWorkspace } from "./activation-workspace";
 import {
   GitHubImportModal,
   type GitHubImportCandidateView,
@@ -65,6 +66,15 @@ type AuthForm = {
 type SkillForm = {
   name: string;
   description: string;
+};
+
+type ActivationMode = "template" | "generate";
+
+type ActivationForm = {
+  name: string;
+  audience: string;
+  job: string;
+  examplePrompt: string;
 };
 
 type DashboardRouteProps = {
@@ -501,6 +511,66 @@ function canEditSkill(skill: Pick<Skill, "accessLevel"> | null | undefined) {
 
 function skillRoute(skill: Skill, tab: SkillRouteTab) {
   return `/dashboard/${skill.skillId || skill.id}/${tab}`;
+}
+
+function gettingStartedRoute() {
+  return "/dashboard/getting-started";
+}
+
+function activationSummary(form: ActivationForm) {
+  return [form.audience.trim(), form.job.trim()].filter(Boolean).join(" · ");
+}
+
+function buildActivationBody(mode: ActivationMode, form: ActivationForm) {
+  const audience = form.audience.trim() || "the target audience";
+  const job = form.job.trim() || "the job this skill should handle";
+  const examplePrompt = form.examplePrompt.trim() || "Add one real task this skill should help with.";
+  const intro =
+    mode === "template"
+      ? "## Who this skill helps\n- Audience: " + audience + "\n\n## What it should do\n- Job: " + job
+      : "## Goal\nHelp " + audience + " with this job:\n- " + job;
+
+  return [
+    intro,
+    "## Workflow",
+    "1. Understand the user's request and confirm the exact output they need.",
+    "2. Ask only for missing context that blocks a strong answer.",
+    "3. Produce the deliverable directly and keep the response practical.",
+    "## Example task",
+    examplePrompt,
+    "## Notes to improve",
+    "- Add your preferred tone, constraints, and output format.",
+    "- Replace this example with 2-3 real prompts from users.",
+  ].join("\n\n");
+}
+
+function activationChecklistItems({
+  skill,
+  summary,
+  body,
+}: {
+  skill: Skill;
+  summary: string;
+  body: string;
+}) {
+  return [
+    {
+      label: "Name your skill",
+      done: Boolean(skill.name.trim()),
+    },
+    {
+      label: "Add a one-line summary",
+      done: Boolean(summary.trim()) && summary.trim() !== DEFAULT_SKILL_DESCRIPTION,
+    },
+    {
+      label: "Write instructions in SKILL.md",
+      done: body.trim().length >= 120,
+    },
+    {
+      label: "Publish your first version",
+      done: Boolean(skill.publishedVersionId || skill.status === "published"),
+    },
+  ];
 }
 
 let cachedMdxMarkdownEditor: ComponentType<MdxMarkdownEditorProps> | null = null;
@@ -2249,6 +2319,28 @@ export function SkillShareDialog({
   );
 }
 
+function ActivationChecklistCard({
+  items,
+}: {
+  items: Array<{ label: string; done: boolean }>;
+}) {
+  return (
+    <section className={`${DASHBOARD_CARD} p-5`}>
+      <p className="font-editorial-mono text-xs font-bold uppercase">First publish checklist</p>
+      <div className="mt-4 space-y-3">
+        {items.map((item) => (
+          <div key={item.label} className="flex items-start gap-3 text-sm leading-6">
+            <span className={`mt-0.5 inline-flex h-5 w-5 items-center justify-center border ${item.done ? "border-emerald-700 bg-emerald-50 text-emerald-700" : "border-[var(--ink)]/35 bg-[var(--white)] text-[var(--ink)]/55"}`}>
+              {item.done ? "✓" : "·"}
+            </span>
+            <span className={item.done ? "text-[var(--ink)]" : "text-[var(--ink)]/72"}>{item.label}</span>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function SkillEditorWorkspace({
   skill,
   user,
@@ -2309,6 +2401,11 @@ function SkillEditorWorkspace({
       ? extractSkillMarkdownBody(selectedFile?.contentText ?? "")
       : selectedFile?.contentText ?? ""
     : "";
+  const checklistItems = activationChecklistItems({
+    skill,
+    summary: frontmatter.summary,
+    body: selectedMarkdown,
+  });
   const canPersistFiles = Boolean(user && !isUsingLocalPreviewDb);
   const editorStatusLabel = skill.status === "published" || skill.publishedVersionId ? "Published" : "Draft";
   const editorValidationRows = [
@@ -2331,6 +2428,7 @@ function SkillEditorWorkspace({
     }));
     setDirtyFileIds(new Set());
     setDeletingFileIds(new Set());
+    setIsFilesOpen(!isAnalyticsLocked(skill));
 
     if (!user || isUsingLocalPreviewDb) {
       setFiles(fallbackFiles);
@@ -2716,6 +2814,14 @@ function SkillEditorWorkspace({
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-[var(--paper)] text-[var(--ink)]">
+      {isAnalyticsLocked(skill) ? (
+        <section className="border-b border-[var(--ink)] bg-[var(--white)] px-5 py-4 text-sm leading-6 sm:px-6">
+          <p className="font-editorial-mono text-xs font-bold uppercase">Focus mode</p>
+          <p className="mt-2 max-w-3xl text-[var(--ink)]/75">
+            Start with SKILL.md, add one concrete example, then publish your first version to unlock analytics.
+          </p>
+        </section>
+      ) : null}
       <section className={`grid min-h-0 flex-1 overflow-hidden border-b border-[var(--ink)] ${editorGridClass(isFilesOpen, isFrontmatterOpen)}`}>
         <aside className={`min-h-0 overflow-hidden border-b border-[var(--ink)] xl:border-b-0 xl:border-r ${isFilesOpen ? "p-5" : "p-0"}`}>
           {isFilesOpen ? (
@@ -2872,7 +2978,8 @@ function SkillEditorWorkspace({
                 onToggle={() => setIsFrontmatterOpen((current) => !current)}
               />
               <div className="mt-6 min-h-0 flex-1 overflow-y-auto pr-1">
-                <div className="space-y-5">
+                {isAnalyticsLocked(skill) ? <ActivationChecklistCard items={checklistItems} /> : null}
+                <div className="mt-6 space-y-5">
                   <label className="block text-sm">
                     <span className="block font-editorial-sans">Name</span>
                     <input
@@ -4018,6 +4125,13 @@ export default function Dashboard({
     name: "",
     description: "",
   });
+  const [activationMode, setActivationMode] = useState<ActivationMode | null>(null);
+  const [activationForm, setActivationForm] = useState<ActivationForm>({
+    name: "",
+    audience: "",
+    job: "",
+    examplePrompt: "",
+  });
 
   const [errorMessage, setErrorMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -4156,11 +4270,26 @@ export default function Dashboard({
     return () => window.removeEventListener("popstate", syncStateFromLocation);
   }, [skills]);
 
+  const isGettingStartedRoute = routeName === "getting-started";
+  const shouldShowActivationWorkspace = isGettingStartedRoute && screen === "list" && skills.length === 0;
   const shouldShowOnboardingModal =
+    !isGettingStartedRoute &&
     screen === "list" &&
     !githubImportSessionId &&
     !onboardingDismissed &&
     shouldShowOnboardingModalByDefault({ skills });
+
+  useEffect(() => {
+    if (!user || skills.length > 0 || githubImportSessionId) {
+      return;
+    }
+
+    if (isGettingStartedRoute || initialTab === "account") {
+      return;
+    }
+
+    pushDashboardPath(router, gettingStartedRoute());
+  }, [githubImportSessionId, initialTab, isGettingStartedRoute, router, skills.length, user]);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -4170,6 +4299,13 @@ export default function Dashboard({
   useEffect(() => {
     setOnboardingDismissed(false);
     setVisibleSkillsFromApi(null);
+    setActivationMode(null);
+    setActivationForm({
+      name: "",
+      audience: "",
+      job: "",
+      examplePrompt: "",
+    });
   }, [user?.id]);
 
   useEffect(() => {
@@ -4331,7 +4467,7 @@ export default function Dashboard({
             return;
           }
 
-          captureClientEvent("auth_email_submitted", { email: normalized, auth_flow: "dashboard" });
+          captureClientEvent("auth_email_submitted", { auth_flow: "dashboard" });
           setIsSubmitting(true);
           try {
             await db.auth.sendMagicCode({ email: normalized });
@@ -4364,7 +4500,6 @@ export default function Dashboard({
           }
 
           captureClientEvent("auth_code_submitted", {
-            email: normalized,
             auth_flow: "dashboard",
             code_length: code.length,
           });
@@ -4377,7 +4512,7 @@ export default function Dashboard({
 
             if (response.user) {
               identifyClientUser(response.user.id, { email: normalized });
-              captureClientEvent("auth_code_verified", { email: normalized, auth_flow: "dashboard" });
+              captureClientEvent("auth_code_verified", { auth_flow: "dashboard" });
               return;
             }
 
@@ -4463,12 +4598,14 @@ export default function Dashboard({
   }
 
   function openOnboarding() {
-    setOnboardingDismissed(false);
+    setOnboardingDismissed(true);
     setErrorMessage("");
     setIsSkillSelectorOpen(false);
     setIsAccountMenuOpen(false);
     setActiveTab("overview");
     setScreen("list");
+    setActivationMode("template");
+    pushDashboardPath(router, gettingStartedRoute());
   }
 
   async function openGitHubInstall(surface: string, intent: "import" | "configure" = "import") {
@@ -4645,7 +4782,19 @@ export default function Dashboard({
     setScreen("detail");
   }
 
-  async function createSkill(name: string, description: string) {
+  async function createSkill({
+    name,
+    description,
+    body,
+    activationSource = "manual",
+    destinationTab = "overview",
+  }: {
+    name: string;
+    description: string;
+    body?: string;
+    activationSource?: string;
+    destinationTab?: "overview" | "editor";
+  }) {
     if (!user) {
       return;
     }
@@ -4657,6 +4806,7 @@ export default function Dashboard({
     }
 
     const cleanDescription = description.trim() || undefined;
+    const cleanBody = body?.trim() || undefined;
     setIsSubmitting(true);
 
     try {
@@ -4683,6 +4833,8 @@ export default function Dashboard({
           body: JSON.stringify({
             name: cleanName,
             description: cleanDescription,
+            body: cleanBody,
+            activation_source: activationSource,
           }),
         });
         createdSkillId = response.skill.skillId;
@@ -4696,14 +4848,21 @@ export default function Dashboard({
 
       setSkillForm({ name: "", description: "" });
       setModalSkillForm({ name: "", description: "" });
+      setActivationMode(null);
+      setActivationForm({
+        name: "",
+        audience: "",
+        job: "",
+        examplePrompt: "",
+      });
       setSelectedSkillId(createdEntityId);
-      setActiveTab("overview");
+      setActiveTab(destinationTab);
       setOnboardingDismissed(true);
       setIsCreateSkillModalOpen(false);
       setIsSkillSelectorOpen(false);
       setScreen("detail");
       setErrorMessage("");
-      router.push(`/dashboard/${createdSkillId}/overview`);
+      router.push(`/dashboard/${createdSkillId}/${destinationTab}`);
     } catch (error) {
       captureClientException(error);
       setErrorMessage(extractErrorMessage(error));
@@ -4718,7 +4877,27 @@ export default function Dashboard({
       return;
     }
 
-    createSkill(name, description);
+    void createSkill({ name, description, activationSource: "modal", destinationTab: "overview" });
+  }
+
+  function createSkillFromActivation(mode: ActivationMode) {
+    const cleanName = activationForm.name.trim();
+    if (!cleanName) {
+      setErrorMessage("Skill name is required");
+      return;
+    }
+
+    const description = activationSummary(activationForm) || DEFAULT_SKILL_DESCRIPTION;
+    const body = buildActivationBody(mode, activationForm);
+    setActivationMode(mode);
+    captureClientEvent("activation_draft_requested", { mode });
+    void createSkill({
+      name: cleanName,
+      description,
+      body,
+      activationSource: mode,
+      destinationTab: "editor",
+    });
   }
 
   function handleSkillUpdated(nextSkill: Skill) {
@@ -4813,7 +4992,9 @@ export default function Dashboard({
             <div className="px-5 py-8 sm:px-8 lg:px-11 lg:py-12">
               <SkillForm
                 form={skillForm}
-                onSubmit={createSkill}
+                onSubmit={(name, description) =>
+                  void createSkill({ name, description, activationSource: "manual", destinationTab: "overview" })
+                }
                 onCancel={() => {
                   setScreen("list");
                   setErrorMessage("");
@@ -4837,6 +5018,22 @@ export default function Dashboard({
                 setScreen("list");
               }}
             />
+          ) : shouldShowActivationWorkspace ? (
+            <ActivationWorkspace
+              mode={activationMode}
+              form={activationForm}
+              isSubmitting={isSubmitting}
+              onModeSelect={(mode) => {
+                setActivationMode(mode);
+                setErrorMessage("");
+              }}
+              onFormChange={setActivationForm}
+              onStartImport={() => {
+                captureClientEvent("activation_github_import_clicked");
+                void openGitHubInstall("activation_workspace");
+              }}
+              onCreate={createSkillFromActivation}
+            />
           ) : (
             <div className="px-5 py-8 sm:px-8 lg:px-11 lg:py-12">
               <EmptyState
@@ -4853,16 +5050,6 @@ export default function Dashboard({
           ) : null}
         </section>
       </div>
-      {shouldShowOnboardingModal ? (
-        <OnboardingModal
-          onClose={() => {
-            captureClientEvent("onboarding_modal_closed");
-            setOnboardingDismissed(true);
-          }}
-          onConnectGitHub={() => void openGitHubInstall("onboarding_modal")}
-          onCreateSkill={openCreateSkill}
-        />
-      ) : null}
       {isCreateSkillModalOpen ? (
         <CreateSkillModal
           form={modalSkillForm}

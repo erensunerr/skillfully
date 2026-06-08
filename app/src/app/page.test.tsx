@@ -59,5 +59,6 @@ test("booking click analytics has one canonical event", async () => {
   const source = await readFile(new URL("./booking-modal.tsx", import.meta.url), "utf8");
 
   assert.match(source, /meeting_booking_clicked/);
+  assert.match(source, /createPortal\(modal, document\.body\)/);
   assert.doesNotMatch(source, /landing_booking_cta_clicked/);
 });

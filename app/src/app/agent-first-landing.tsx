@@ -7,6 +7,7 @@ import { captureClientEvent } from "@/lib/client-analytics";
 
 import { BookingModalCta } from "./booking-modal";
 import { LandingPageView } from "./landing-analytics";
+import { PublicHeader } from "./public-header";
 
 const PRIMARY_BUTTON =
   "inline-flex min-h-12 items-center justify-center rounded-full border border-[#f4f4ef] bg-[#f4f4ef] px-5 py-3 text-center font-editorial-sans text-sm font-semibold text-[#080808] transition hover:bg-transparent hover:text-[#f4f4ef]";
@@ -132,9 +133,10 @@ export function AgentFirstLanding() {
   }
 
   return (
-    <main className="h-screen overflow-hidden bg-[#0f0f0f] px-6 py-8 text-[#f4f4ef] sm:px-10 sm:py-10">
+    <main className="flex h-screen flex-col overflow-hidden bg-[#0f0f0f] text-[#f4f4ef]">
       <LandingPageView page="/" variant="agent-first" />
-      <section className="mx-auto flex h-full w-full max-w-3xl items-start pt-10 sm:items-center sm:pt-0">
+      <PublicHeader showBookingCta={false} />
+      <section className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 items-start px-6 py-8 sm:items-center sm:px-10 sm:py-10">
         <div className="w-full">
           <p className="font-editorial-mono text-xs font-bold uppercase tracking-[0.16em] text-[#a1a1a1]">
             Step {currentStep}

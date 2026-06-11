@@ -5,9 +5,14 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import { AgentFirstLanding } from "./agent-first-landing";
 
-test("agent-first landing renders the stripped-down first question without card chrome or old explainer copy", () => {
+test("agent-first landing renders the shared header, login, and stripped-down first question without the booking header CTA", () => {
   const html = renderToStaticMarkup(<AgentFirstLanding />);
 
+  assert.match(html, /Skillfully/i);
+  assert.match(html, /Skills Guide/i);
+  assert.match(html, /Blog/i);
+  assert.match(html, /Log in/i);
+  assert.doesNotMatch(html, /Book onboarding/i);
   assert.match(html, /Skillfully helps you make better agent skills/i);
   assert.match(html, /Do you know what an agent skill is\?/i);
   assert.match(html, /Do you have an agent that you can text right now\?/i);
@@ -19,8 +24,6 @@ test("agent-first landing renders the stripped-down first question without card 
   assert.doesNotMatch(html, /Two questions\. Then we point you to the right next step\./i);
   assert.doesNotMatch(html, /A reusable instruction set that helps an agent do one job well, consistently\./i);
   assert.doesNotMatch(html, /border border-\[var\(--ink\)\] bg-\[var\(--paper\)\]/i);
-  assert.doesNotMatch(html, /SKILLS GUIDE/i);
-  assert.doesNotMatch(html, /BLOG/i);
   assert.doesNotMatch(html, /See regular landing page/i);
 });
 
@@ -35,5 +38,6 @@ test("agent-first landing tracks both question branches, keeps the copy CTA inac
   assert.match(source, /Prompt copied\. Paste it into your agent, then create your account in Skillfully\./);
   assert.doesNotMatch(source, /Create account/);
   assert.match(source, /onOpen=\{answerAgentAccessNo\}/);
+  assert.match(source, /<PublicHeader showBookingCta=\{false\} \/>/);
   assert.match(source, /<LandingPageView page="\/" variant="agent-first" \/>/);
 });

@@ -23,7 +23,7 @@ export function BrandMark({ light = false }: { light?: boolean }) {
   );
 }
 
-export function PublicHeader() {
+export function PublicHeader({ showBookingCta = true }: { showBookingCta?: boolean } = {}) {
   const navLinkClass =
     "inline-flex min-h-11 min-w-[44px] items-center justify-center py-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-current";
 
@@ -57,13 +57,15 @@ export function PublicHeader() {
         >
           Log in
         </LandingAuthLink>
-        <BookingModalCta
-          surface="header"
-          className="inline-flex items-center justify-center rounded-md border border-[var(--ink)] bg-[var(--ink)] px-3 py-2 font-editorial-sans text-xs font-semibold text-[var(--paper)] transition hover:bg-[var(--paper)] hover:text-[var(--ink)] sm:px-4 sm:text-sm"
-        >
-          <span className="sm:hidden">Book</span>
-          <span className="hidden sm:inline">Book onboarding</span>
-        </BookingModalCta>
+        {showBookingCta ? (
+          <BookingModalCta
+            surface="header"
+            className="inline-flex items-center justify-center rounded-md border border-[var(--ink)] bg-[var(--ink)] px-3 py-2 font-editorial-sans text-xs font-semibold text-[var(--paper)] transition hover:bg-[var(--paper)] hover:text-[var(--ink)] sm:px-4 sm:text-sm"
+          >
+            <span className="sm:hidden">Book</span>
+            <span className="hidden sm:inline">Book onboarding</span>
+          </BookingModalCta>
+        ) : null}
       </div>
     </header>
   );

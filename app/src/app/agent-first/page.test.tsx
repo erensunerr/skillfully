@@ -3,10 +3,10 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import AgentFirstPage from "./page";
+import { AgentFirstLanding } from "./agent-first-landing";
 
 test("agent-first landing renders the stripped-down first question without card chrome or old explainer copy", () => {
-  const html = renderToStaticMarkup(<AgentFirstPage />);
+  const html = renderToStaticMarkup(<AgentFirstLanding />);
 
   assert.match(html, /Skillfully helps you make better agent skills/i);
   assert.match(html, /Do you know what an agent skill is\?/i);
@@ -35,4 +35,5 @@ test("agent-first landing tracks both question branches, keeps the copy CTA inac
   assert.match(source, /Prompt copied\. Paste it into your agent, then create your account in Skillfully\./);
   assert.doesNotMatch(source, /Create account/);
   assert.match(source, /onOpen=\{answerAgentAccessNo\}/);
+  assert.match(source, /<LandingPageView page="\/" variant="agent-first" \/>/);
 });

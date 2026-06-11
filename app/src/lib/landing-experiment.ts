@@ -2,6 +2,7 @@ export const LANDING_VARIANT_COOKIE = "skillfully_landing_variant";
 export const LANDING_DISTINCT_ID_COOKIE = "skillfully_landing_distinct_id";
 export const AGENT_FIRST_EXPERIMENT_FLAG_KEY = "landing_agent_first_onboarding";
 export const AGENT_FIRST_VARIANT_FLAG_VALUE = "agent_first";
+export const DEFAULT_POSTHOG_API_HOST = "https://us.i.posthog.com";
 
 export type LandingVariant = "control" | "agent-first";
 
@@ -48,23 +49,73 @@ export function getLandingExperimentProperties(variant: LandingVariant | null) {
   };
 }
 
-export function getLandingVariantFromCookieString(cookieString: string | null | undefined) {
+function parseCookieString(cookieString: string | null | undefined) {
   if (!cookieString) {
-    return null;
+    return new Map<string, string>();
   }
 
-  const variantCookie = cookieString
-    .split(";")
-    .map((part) => part.trim())
-    .find((part) => part.startsWith(`${LANDING_VARIANT_COOKIE}=`));
+  return new Map(
+    cookieString
+      .split(";")
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .map((part) => {
+        const separatorIndex = part.indexOf("=");
+        if (separatorIndex === -1) {
+          return [part, ""] as const;
+        }
+
+        return [part.slice(0, separatorIndex), part.slice(separatorIndex + 1)] as const;
+      }),
+  );
+}
+
+export function getLandingVariantFromCookieString(cookieString: string | null | undefined) {
+  const variantCookie = parseCookieString(cookieString).get(LANDING_VARIANT_COOKIE);
 
   if (!variantCookie) {
     return null;
   }
 
-  return normalizeLandingVariant(variantCookie.slice(LANDING_VARIANT_COOKIE.length + 1));
+  return normalizeLandingVariant(variantCookie);
 }
 
-export function landingVariantPath(variant: LandingVariant) {
-  return variant === "agent-first" ? "/agent-first" : "/";
+function parsePostHogCookieValue(value: string | undefined) {
+  if (!value) {
+    return null;
+  }
+
+  try {
+    const decoded = decodeURIComponent(value);
+    const parsed = JSON.parse(decoded) as { distinct_id?: unknown };
+    return typeof parsed.distinct_id === "string" && parsed.distinct_id ? parsed.distinct_id : null;
+  } catch {
+    return null;
+  }
+}
+
+export function getLandingDistinctIdFromCookieString(
+  cookieString: string | null | undefined,
+  posthogToken?: string | null,
+) {
+  const cookies = parseCookieString(cookieString);
+  const expectedPostHogCookie = posthogToken ? `ph_${posthogToken}_posthog` : null;
+
+  if (expectedPostHogCookie) {
+    const distinctId = parsePostHogCookieValue(cookies.get(expectedPostHogCookie));
+    if (distinctId) {
+      return distinctId;
+    }
+  }
+
+  for (const [name, value] of cookies) {
+    if (name.startsWith("ph_") && name.endsWith("_posthog")) {
+      const distinctId = parsePostHogCookieValue(value);
+      if (distinctId) {
+        return distinctId;
+      }
+    }
+  }
+
+  return cookies.get(LANDING_DISTINCT_ID_COOKIE) || null;
 }

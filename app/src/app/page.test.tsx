@@ -6,8 +6,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 test("landing page renders the refreshed editorial messaging", async () => {
   Object.assign(globalThis, { React });
-  const { default: LandingPage } = await import("./page");
-  const html = renderToStaticMarkup(<LandingPage />);
+  const { LandingPageContent } = await import("./page");
+  const html = renderToStaticMarkup(<LandingPageContent variant="control" />);
 
   assert.match(html, /THE PLATFORM FOR BUILDING BETTER AGENT SKILLS/);
   assert.match(html, /AGENT SKILL QA AND ANALYTICS/);

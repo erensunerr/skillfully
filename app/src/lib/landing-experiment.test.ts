@@ -4,8 +4,8 @@ import test from "node:test";
 import {
   AGENT_FIRST_VARIANT_FLAG_VALUE,
   getLandingExperimentProperties,
+  getLandingDistinctIdFromCookieString,
   getLandingVariantFromCookieString,
-  landingVariantPath,
   normalizeLandingVariant,
   normalizeLandingVariantFlagValue,
 } from "@/lib/landing-experiment";
@@ -35,10 +35,28 @@ test("landing experiment helpers recover the assigned variant and analytics prop
     "$feature/landing_agent_first_onboarding": "agent_first",
     $active_feature_flags: ["landing_agent_first_onboarding"],
   });
+  assert.deepEqual(getLandingExperimentProperties("control"), {
+    landing_variant: "control",
+    landing_experiment: "landing_agent_first_onboarding",
+    "$feature/landing_agent_first_onboarding": "control",
+    $active_feature_flags: ["landing_agent_first_onboarding"],
+  });
   assert.deepEqual(getLandingExperimentProperties(null), {});
 });
 
-test("landingVariantPath maps variants to routes", () => {
-  assert.equal(landingVariantPath("control"), "/");
-  assert.equal(landingVariantPath("agent-first"), "/agent-first");
+test("landing distinct id prefers PostHog persistence cookies before the bootstrap cookie", () => {
+  const posthogCookie = encodeURIComponent(JSON.stringify({ distinct_id: "posthog-anon-id" }));
+
+  assert.equal(
+    getLandingDistinctIdFromCookieString(
+      `skillfully_landing_distinct_id=landing-id; ph_phc_test_posthog=${posthogCookie}`,
+      "phc_test",
+    ),
+    "posthog-anon-id",
+  );
+  assert.equal(
+    getLandingDistinctIdFromCookieString("skillfully_landing_distinct_id=landing-id", "phc_test"),
+    "landing-id",
+  );
+  assert.equal(getLandingDistinctIdFromCookieString("foo=bar", "phc_test"), null);
 });

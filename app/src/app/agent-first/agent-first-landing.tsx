@@ -133,7 +133,7 @@ export function AgentFirstLanding() {
 
   return (
     <main className="h-screen overflow-hidden bg-[#0f0f0f] px-6 py-8 text-[#f4f4ef] sm:px-10 sm:py-10">
-      <LandingPageView page="/agent-first" variant="agent-first" />
+      <LandingPageView page="/" variant="agent-first" />
       <section className="mx-auto flex h-full w-full max-w-3xl items-start pt-10 sm:items-center sm:pt-0">
         <div className="w-full">
           <p className="font-editorial-mono text-xs font-bold uppercase tracking-[0.16em] text-[#a1a1a1]">

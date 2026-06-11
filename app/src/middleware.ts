@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 
 import {
   AGENT_FIRST_EXPERIMENT_FLAG_KEY,
+  DEFAULT_POSTHOG_API_HOST,
+  getLandingDistinctIdFromCookieString,
   LANDING_DISTINCT_ID_COOKIE,
-  landingVariantPath,
   LANDING_VARIANT_COOKIE,
   normalizeLandingVariant,
   normalizeLandingVariantFlagValue,
@@ -46,9 +47,9 @@ function buildCookieResponse(
 
 async function getPostHogLandingVariant(distinctId: string) {
   const projectToken = process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN;
-  const posthogHost = process.env.NEXT_PUBLIC_POSTHOG_HOST;
+  const posthogHost = process.env.NEXT_PUBLIC_POSTHOG_HOST || DEFAULT_POSTHOG_API_HOST;
 
-  if (!projectToken || !posthogHost) {
+  if (!projectToken) {
     return null;
   }
 
@@ -70,10 +71,11 @@ async function getPostHogLandingVariant(distinctId: string) {
   }
 
   const payload = (await response.json().catch(() => null)) as
-    | { featureFlags?: Record<string, unknown> }
+    | { featureFlags?: Record<string, unknown>; flags?: Record<string, unknown> }
     | null;
 
-  return normalizeLandingVariantFlagValue(payload?.featureFlags?.[AGENT_FIRST_EXPERIMENT_FLAG_KEY]);
+  const featureFlags = payload?.featureFlags ?? payload?.flags;
+  return normalizeLandingVariantFlagValue(featureFlags?.[AGENT_FIRST_EXPERIMENT_FLAG_KEY]);
 }
 
 export async function middleware(request: NextRequest) {
@@ -84,43 +86,34 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  const distinctId = request.cookies.get(LANDING_DISTINCT_ID_COOKIE)?.value ?? crypto.randomUUID();
+  const projectToken = process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN;
+  const distinctId =
+    getLandingDistinctIdFromCookieString(request.headers.get("cookie"), projectToken) ?? crypto.randomUUID();
   const override = normalizeLandingVariant(nextUrl.searchParams.get("landing"));
   if (override) {
     const url = nextUrl.clone();
     url.searchParams.delete("landing");
-    url.pathname = landingVariantPath(override);
+    url.pathname = "/";
     return buildCookieResponse(NextResponse.redirect(url), { distinctId, variant: override });
   }
 
   if (pathname === "/agent-first") {
     const existingVariant = normalizeLandingVariant(request.cookies.get(LANDING_VARIANT_COOKIE)?.value);
-    if (existingVariant === "agent-first") {
-      return buildCookieResponse(NextResponse.next(), { distinctId });
-    }
-
-    return buildCookieResponse(NextResponse.next(), { distinctId, variant: "agent-first" });
+    const redirectUrl = nextUrl.clone();
+    redirectUrl.pathname = "/";
+    return buildCookieResponse(NextResponse.redirect(redirectUrl), {
+      distinctId,
+      variant: existingVariant ?? "agent-first",
+    });
   }
 
   const existingVariant = normalizeLandingVariant(request.cookies.get(LANDING_VARIANT_COOKIE)?.value);
-  if (existingVariant === "agent-first") {
-    const redirectUrl = nextUrl.clone();
-    redirectUrl.pathname = "/agent-first";
-    return buildCookieResponse(NextResponse.redirect(redirectUrl), { distinctId, variant: existingVariant });
-  }
-
-  if (existingVariant === "control") {
+  if (existingVariant) {
     return buildCookieResponse(NextResponse.next(), { distinctId, variant: existingVariant });
   }
 
   const assignedVariant = await getPostHogLandingVariant(distinctId);
-  if (assignedVariant === "agent-first") {
-    const redirectUrl = nextUrl.clone();
-    redirectUrl.pathname = "/agent-first";
-    return buildCookieResponse(NextResponse.redirect(redirectUrl), { distinctId, variant: assignedVariant });
-  }
-
-  if (assignedVariant === "control") {
+  if (assignedVariant) {
     return buildCookieResponse(NextResponse.next(), { distinctId, variant: assignedVariant });
   }
 

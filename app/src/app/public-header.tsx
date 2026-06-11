@@ -28,7 +28,7 @@ export function PublicHeader({ showBookingCta = true }: { showBookingCta?: boole
     "inline-flex min-h-11 min-w-[44px] items-center justify-center py-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-current";
 
   return (
-    <header className="grid min-h-16 grid-cols-[1fr_auto] items-center gap-4 border-b border-[var(--ink)] bg-[var(--paper)] px-5 py-3 sm:grid-cols-[1fr_auto_1fr] lg:px-8">
+    <header className="grid min-h-16 grid-cols-[1fr_auto] items-center gap-4 border-b border-[var(--ink)] bg-[var(--paper)] px-5 py-3 text-[var(--ink)] sm:grid-cols-[1fr_auto_1fr] lg:px-8">
       <Link
         href="/"
         aria-label="Skillfully home"

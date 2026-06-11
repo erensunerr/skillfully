@@ -18,7 +18,7 @@ test("agent-first landing renders the shared header, login, and stripped-down fi
   assert.match(html, /Do you have an agent that you can text right now\?/i);
   assert.match(html, /Step 1 of 2/i);
   assert.match(html, /No, learn first/i);
-  assert.match(html, /\/guide\/start-with-agent-skills/);
+  assert.doesNotMatch(html, /\/guide\/start-with-agent-skills/);
   assert.match(html, /absolute inset-y-0 left-0 flex w-full transition-transform duration-500 ease-out translate-x-0/i);
   assert.match(html, /min-w-full/i);
   assert.doesNotMatch(html, /Two questions\. Then we point you to the right next step\./i);
@@ -34,9 +34,15 @@ test("agent-first landing tracks both question branches, keeps the copy CTA inac
   assert.match(source, /question:\s*"has_agent_access"/);
   assert.match(source, /answer:\s*"yes"/);
   assert.match(source, /answer:\s*"no"/);
+  assert.match(source, /Agent skills are playbooks \/ SOPs for AI agents\. They allow you to inject your expertise into the agent\./);
+  assert.match(source, /const currentStep = knowsAgentSkill \? "2 of 2" : "1 of 2"/);
+  assert.match(source, /knowsAgentSkill \? "-translate-x-full" : "translate-x-0"/);
+  assert.match(source, /knowsAgentSkill === "no" \?/);
   assert.match(source, /copiedPrompt \? PRIMARY_BUTTON : SECONDARY_BUTTON/);
   assert.match(source, /Prompt copied\. Paste it into your agent, then create your account in Skillfully\./);
   assert.doesNotMatch(source, /Create account/);
+  assert.doesNotMatch(source, /LEARN_SKILLS_HREF/);
+  assert.doesNotMatch(source, /href=\{LEARN_SKILLS_HREF\}/);
   assert.match(source, /onOpen=\{answerAgentAccessNo\}/);
   assert.match(source, /<PublicHeader showBookingCta=\{false\} \/>/);
   assert.match(source, /<LandingPageView page="\/" variant="agent-first" \/>/);

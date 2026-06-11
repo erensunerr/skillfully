@@ -4,7 +4,7 @@ import { cookies } from "next/headers";
 
 import { LANDING_VARIANT_COOKIE, normalizeLandingVariant, type LandingVariant } from "@/lib/landing-experiment";
 
-import { AgentFirstLanding } from "./agent-first/agent-first-landing";
+import { AgentFirstLanding } from "./agent-first-landing";
 import { BookingModalCta } from "./booking-modal";
 import { CtaDotSpotlight } from "./cta-dot-spotlight";
 import { SchematicGraphic } from "./hero-schematic";

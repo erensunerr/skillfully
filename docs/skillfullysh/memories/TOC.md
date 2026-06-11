@@ -1,6 +1,6 @@
 # Skillfullysh Memories TOC
 
-- Updated: 2026-05-29 GitHub publishing target authorization fix
+- Updated: 2026-06-11 A/B test dev overlay
 - [2026-04-13 Memory](./2026-04-13-memory.md)
 - [2026-04-25 Memory](./2026-04-25-memory.md)
 - [2026-04-26 Memory](./2026-04-26-memory.md)
@@ -14,3 +14,4 @@
 - [2026-05-25 Memory](./2026-05-25-memory.md)
 - [2026-05-28 Memory](./2026-05-28-memory.md)
 - [2026-05-29 Memory](./2026-05-29-memory.md)
+- [2026-06-11 Memory](./2026-06-11-memory.md)

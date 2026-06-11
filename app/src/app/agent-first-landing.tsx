@@ -5,8 +5,8 @@ import { useEffect, useState } from "react";
 
 import { captureClientEvent } from "@/lib/client-analytics";
 
-import { BookingModalCta } from "../booking-modal";
-import { LandingPageView } from "../landing-analytics";
+import { BookingModalCta } from "./booking-modal";
+import { LandingPageView } from "./landing-analytics";
 
 const PRIMARY_BUTTON =
   "inline-flex min-h-12 items-center justify-center rounded-full border border-[#f4f4ef] bg-[#f4f4ef] px-5 py-3 text-center font-editorial-sans text-sm font-semibold text-[#080808] transition hover:bg-transparent hover:text-[#f4f4ef]";

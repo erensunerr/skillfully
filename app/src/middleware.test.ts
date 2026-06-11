@@ -76,26 +76,28 @@ test("middleware reuses the PostHog anonymous id when evaluating the landing fla
   assert.equal(response.cookies.get(LANDING_VARIANT_COOKIE)?.value, "control");
 });
 
-test("middleware redirects legacy agent-first route to the root without changing assigned control visitors", async () => {
-  const response = await middleware(
-    new NextRequest("http://localhost/agent-first", {
-      headers: {
-        cookie: "skillfully_landing_variant=control; skillfully_landing_distinct_id=control-id",
-      },
-    }),
-  );
+test("middleware ignores landing query params and only uses the assigned experiment flag", async () => {
+  process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN = "phc_test";
+  delete process.env.NEXT_PUBLIC_POSTHOG_HOST;
 
-  assert.equal(response.status, 307);
-  assert.equal(response.headers.get("location"), "http://localhost/");
-  assert.equal(response.cookies.get(LANDING_DISTINCT_ID_COOKIE)?.value, "control-id");
+  globalThis.fetch = async () => Response.json({ featureFlags: { landing_agent_first_onboarding: "control" } });
+
+  const response = await middleware(new NextRequest("http://localhost/?landing=agent-first"));
+
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("location"), null);
   assert.equal(response.cookies.get(LANDING_VARIANT_COOKIE)?.value, "control");
 });
 
-test("middleware redirects legacy agent-first route to the root as agent-first for unassigned visitors", async () => {
+test("middleware does not handle the removed agent-first route", async () => {
+  globalThis.fetch = async () => {
+    throw new Error("PostHog should not be called outside the root route");
+  };
+
   const response = await middleware(new NextRequest("http://localhost/agent-first"));
 
-  assert.equal(response.status, 307);
-  assert.equal(response.headers.get("location"), "http://localhost/");
-  assert.equal(response.cookies.get(LANDING_VARIANT_COOKIE)?.value, "agent-first");
-  assert.ok(response.cookies.get(LANDING_DISTINCT_ID_COOKIE)?.value);
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("location"), null);
+  assert.equal(response.cookies.get(LANDING_DISTINCT_ID_COOKIE), undefined);
+  assert.equal(response.cookies.get(LANDING_VARIANT_COOKIE), undefined);
 });

@@ -82,30 +82,13 @@ export async function middleware(request: NextRequest) {
   const { nextUrl } = request;
   const pathname = nextUrl.pathname;
 
-  if (pathname !== "/" && pathname !== "/agent-first") {
+  if (pathname !== "/") {
     return NextResponse.next();
   }
 
   const projectToken = process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN;
   const distinctId =
     getLandingDistinctIdFromCookieString(request.headers.get("cookie"), projectToken) ?? crypto.randomUUID();
-  const override = normalizeLandingVariant(nextUrl.searchParams.get("landing"));
-  if (override) {
-    const url = nextUrl.clone();
-    url.searchParams.delete("landing");
-    url.pathname = "/";
-    return buildCookieResponse(NextResponse.redirect(url), { distinctId, variant: override });
-  }
-
-  if (pathname === "/agent-first") {
-    const existingVariant = normalizeLandingVariant(request.cookies.get(LANDING_VARIANT_COOKIE)?.value);
-    const redirectUrl = nextUrl.clone();
-    redirectUrl.pathname = "/";
-    return buildCookieResponse(NextResponse.redirect(redirectUrl), {
-      distinctId,
-      variant: existingVariant ?? "agent-first",
-    });
-  }
 
   const existingVariant = normalizeLandingVariant(request.cookies.get(LANDING_VARIANT_COOKIE)?.value);
   if (existingVariant) {
@@ -121,5 +104,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/", "/agent-first"],
+  matcher: ["/"],
 };

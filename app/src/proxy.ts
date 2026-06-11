@@ -78,7 +78,7 @@ async function getPostHogLandingVariant(distinctId: string) {
   return normalizeLandingVariantFlagValue(featureFlags?.[AGENT_FIRST_EXPERIMENT_FLAG_KEY]);
 }
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { nextUrl } = request;
   const pathname = nextUrl.pathname;
 

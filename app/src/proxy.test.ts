@@ -9,7 +9,7 @@ import {
   LANDING_VARIANT_COOKIE,
 } from "@/lib/landing-experiment";
 
-import { middleware } from "./middleware";
+import { proxy } from "./proxy";
 
 const originalFetch = globalThis.fetch;
 const originalProjectToken = process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN;
@@ -30,7 +30,7 @@ afterEach(() => {
   }
 });
 
-test("middleware evaluates landing experiment flags through the default PostHog host", async () => {
+test("proxy evaluates landing experiment flags through the default PostHog host", async () => {
   process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN = "phc_test";
   delete process.env.NEXT_PUBLIC_POSTHOG_HOST;
 
@@ -41,7 +41,7 @@ test("middleware evaluates landing experiment flags through the default PostHog 
     return Response.json({ featureFlags: { landing_agent_first_onboarding: "agent_first" } });
   };
 
-  const response = await middleware(new NextRequest("http://localhost/"));
+  const response = await proxy(new NextRequest("http://localhost/"));
   const distinctId = response.cookies.get(LANDING_DISTINCT_ID_COOKIE)?.value;
 
   assert.equal(flagRequest.url, `${DEFAULT_POSTHOG_API_HOST}/flags/?v=2`);
@@ -52,7 +52,7 @@ test("middleware evaluates landing experiment flags through the default PostHog 
   assert.ok(distinctId);
 });
 
-test("middleware reuses the PostHog anonymous id when evaluating the landing flag", async () => {
+test("proxy reuses the PostHog anonymous id when evaluating the landing flag", async () => {
   process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN = "phc_test";
   delete process.env.NEXT_PUBLIC_POSTHOG_HOST;
 
@@ -63,7 +63,7 @@ test("middleware reuses the PostHog anonymous id when evaluating the landing fla
     return Response.json({ featureFlags: { landing_agent_first_onboarding: "control" } });
   };
 
-  const response = await middleware(
+  const response = await proxy(
     new NextRequest("http://localhost/", {
       headers: {
         cookie: `skillfully_landing_distinct_id=landing-id; ph_phc_test_posthog=${posthogCookie}`,
@@ -76,25 +76,25 @@ test("middleware reuses the PostHog anonymous id when evaluating the landing fla
   assert.equal(response.cookies.get(LANDING_VARIANT_COOKIE)?.value, "control");
 });
 
-test("middleware ignores landing query params and only uses the assigned experiment flag", async () => {
+test("proxy ignores landing query params and only uses the assigned experiment flag", async () => {
   process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN = "phc_test";
   delete process.env.NEXT_PUBLIC_POSTHOG_HOST;
 
   globalThis.fetch = async () => Response.json({ featureFlags: { landing_agent_first_onboarding: "control" } });
 
-  const response = await middleware(new NextRequest("http://localhost/?landing=agent-first"));
+  const response = await proxy(new NextRequest("http://localhost/?landing=agent-first"));
 
   assert.equal(response.status, 200);
   assert.equal(response.headers.get("location"), null);
   assert.equal(response.cookies.get(LANDING_VARIANT_COOKIE)?.value, "control");
 });
 
-test("middleware does not handle the removed agent-first route", async () => {
+test("proxy does not handle the removed agent-first route", async () => {
   globalThis.fetch = async () => {
     throw new Error("PostHog should not be called outside the root route");
   };
 
-  const response = await middleware(new NextRequest("http://localhost/agent-first"));
+  const response = await proxy(new NextRequest("http://localhost/agent-first"));
 
   assert.equal(response.status, 200);
   assert.equal(response.headers.get("location"), null);

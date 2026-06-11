@@ -179,17 +179,11 @@ export function AgentFirstLanding() {
                     </BookingModalCta>
                   </div>
 
-                  <div className="mt-5 min-h-12">
-                    {copiedPrompt ? (
-                      <p className="text-sm leading-6 text-[#cfcfcf]">
-                        Prompt copied. Paste it into your agent, then create your account in Skillfully.
-                      </p>
-                    ) : (
-                      <p className="text-sm leading-6 text-[#8d8d8d]">
-                        If you already have an agent, we&apos;ll copy the exact prompt for you.
-                      </p>
-                    )}
-                  </div>
+                  {copiedPrompt ? (
+                    <p className="mt-5 text-sm leading-6 text-[#cfcfcf]">
+                      Prompt copied. Paste it into your agent, then create your account in Skillfully.
+                    </p>
+                  ) : null}
                 </div>
               </div>
             </div>

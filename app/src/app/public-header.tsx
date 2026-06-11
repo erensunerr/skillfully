@@ -28,13 +28,13 @@ export function PublicHeader({ showBookingCta = true }: { showBookingCta?: boole
     "inline-flex min-h-11 min-w-[44px] items-center justify-center py-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-current";
 
   return (
-    <header className="grid min-h-16 grid-cols-[1fr_auto] items-center gap-4 border-b border-[var(--ink)] bg-[var(--paper)] px-5 py-3 text-[var(--ink)] sm:grid-cols-[1fr_auto_1fr] lg:px-8">
+    <header className="grid min-h-16 grid-cols-[1fr_auto] items-center gap-4 border-b border-[var(--ink)] bg-[var(--ink)] px-5 py-3 text-[var(--paper)] sm:grid-cols-[1fr_auto_1fr] lg:px-8">
       <Link
         href="/"
         aria-label="Skillfully home"
         className="inline-flex min-h-11 items-center focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-current"
       >
-        <BrandMark />
+        <BrandMark light />
       </Link>
 
       <nav
@@ -53,14 +53,14 @@ export function PublicHeader({ showBookingCta = true }: { showBookingCta?: boole
           href="/dashboard"
           intent="sign_in"
           surface="header"
-          className="inline-flex items-center justify-center rounded-md border border-[var(--ink)] bg-[var(--white)] px-3 py-2 font-editorial-sans text-xs font-semibold text-[var(--ink)] transition hover:bg-[var(--paper)] sm:px-4 sm:text-sm"
+          className="inline-flex items-center justify-center rounded-md border border-[var(--paper)] bg-transparent px-3 py-2 font-editorial-sans text-xs font-semibold text-[var(--paper)] transition hover:bg-[var(--paper)] hover:text-[var(--ink)] sm:px-4 sm:text-sm"
         >
           Log in
         </LandingAuthLink>
         {showBookingCta ? (
           <BookingModalCta
             surface="header"
-            className="inline-flex items-center justify-center rounded-md border border-[var(--ink)] bg-[var(--ink)] px-3 py-2 font-editorial-sans text-xs font-semibold text-[var(--paper)] transition hover:bg-[var(--paper)] hover:text-[var(--ink)] sm:px-4 sm:text-sm"
+            className="inline-flex items-center justify-center rounded-md border border-[var(--paper)] bg-[var(--paper)] px-3 py-2 font-editorial-sans text-xs font-semibold text-[var(--ink)] transition hover:bg-transparent hover:text-[var(--paper)] sm:px-4 sm:text-sm"
           >
             <span className="sm:hidden">Book</span>
             <span className="hidden sm:inline">Book onboarding</span>

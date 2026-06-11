@@ -24,6 +24,7 @@ test("agent-first landing renders the shared header, login, and stripped-down fi
   assert.doesNotMatch(html, /Two questions\. Then we point you to the right next step\./i);
   assert.doesNotMatch(html, /A reusable instruction set that helps an agent do one job well, consistently\./i);
   assert.doesNotMatch(html, /border border-\[var\(--ink\)\] bg-\[var\(--paper\)\]/i);
+  assert.doesNotMatch(html, /If you already have an agent, we&#x27;ll copy the exact prompt for you\./i);
   assert.doesNotMatch(html, /See regular landing page/i);
 });
 
@@ -40,6 +41,7 @@ test("agent-first landing tracks both question branches, keeps the copy CTA inac
   assert.match(source, /knowsAgentSkill === "no" \?/);
   assert.match(source, /copiedPrompt \? PRIMARY_BUTTON : SECONDARY_BUTTON/);
   assert.match(source, /Prompt copied\. Paste it into your agent, then create your account in Skillfully\./);
+  assert.doesNotMatch(source, /If you already have an agent/);
   assert.doesNotMatch(source, /Create account/);
   assert.doesNotMatch(source, /LEARN_SKILLS_HREF/);
   assert.doesNotMatch(source, /href=\{LEARN_SKILLS_HREF\}/);

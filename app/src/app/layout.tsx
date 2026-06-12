@@ -3,6 +3,8 @@ import { Instrument_Serif, JetBrains_Mono, Space_Grotesk } from "next/font/googl
 import "@mdxeditor/editor/style.css";
 import "./globals.css";
 
+import { DevABTestOverlay } from "./dev-ab-test-overlay";
+
 const editorialSans = Space_Grotesk({
   variable: "--font-space-grotesk",
   subsets: ["latin"],
@@ -70,6 +72,7 @@ export default function RootLayout({
         className={`${editorialSans.variable} ${editorialMono.variable} ${editorialSerif.variable} overflow-x-hidden antialiased`}
       >
         {children}
+        {process.env.NODE_ENV === "development" ? <DevABTestOverlay /> : null}
       </body>
     </html>
   );

@@ -4,20 +4,21 @@ import { useEffect, type ReactNode } from "react";
 
 import { captureClientEvent } from "@/lib/client-analytics";
 import { AGENT_FIRST_EXPERIMENT_FLAG_KEY } from "@/lib/landing-experiment";
+import type { LandingVariant } from "@/lib/landing-experiment";
 
 export function LandingPageView({
   page = "/",
-  variant = "control",
+  variant = null,
 }: {
   page?: string;
-  variant?: string;
+  variant?: LandingVariant | null;
 }) {
   useEffect(() => {
     captureClientEvent("landing_page_viewed", {
       page,
-      variant,
+      ...(variant ? { variant } : {}),
       landing_experiment: AGENT_FIRST_EXPERIMENT_FLAG_KEY,
-    });
+    }, variant);
   }, [page, variant]);
 
   return null;

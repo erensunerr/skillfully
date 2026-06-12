@@ -3,26 +3,27 @@ import posthog from "posthog-js";
 import {
   getLandingExperimentProperties,
   getLandingVariantFromCookieString,
+  type LandingVariant,
 } from "@/lib/landing-experiment";
 
 const hasClientPosthogToken = Boolean(process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN);
 
-function getClientAnalyticsContextProperties() {
+function getClientAnalyticsContextProperties(variant?: LandingVariant | null) {
   if (typeof document === "undefined") {
     return {};
   }
 
-  const landingVariant = getLandingVariantFromCookieString(document.cookie);
+  const landingVariant = variant ?? getLandingVariantFromCookieString(document.cookie);
   return getLandingExperimentProperties(landingVariant);
 }
 
-export function captureClientEvent(eventName: string, properties?: Record<string, unknown>) {
+export function captureClientEvent(eventName: string, properties?: Record<string, unknown>, variant?: LandingVariant | null) {
   if (!hasClientPosthogToken) {
     return;
   }
 
   try {
-    posthog.capture(eventName, { ...getClientAnalyticsContextProperties(), ...properties });
+    posthog.capture(eventName, { ...getClientAnalyticsContextProperties(variant), ...properties });
   } catch {
     // Analytics must never block dashboard interactions.
   }

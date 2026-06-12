@@ -4,8 +4,8 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 const blueSystemPattern = /#0b66ff|#f3f5f9|#f1f4f8|#d8dce4/;
-const hardInvertedNavigationPattern =
-  /bg-\[var\(--ink\)\] text-\[var\(--paper\)\]|hover:bg-\[var\(--ink\)\] hover:text-\[var\(--paper\)\]|focus-visible:bg-\[var\(--ink\)\] focus-visible:text-\[var\(--paper\)\]/;
+const globalDarkHeaderPattern =
+  /<header class="[^"]*bg-\[var\(--ink\)\][^"]*text-\[var\(--paper\)\][^"]*"/;
 
 function assertUsesLandingHeader(html: string) {
   assert.match(html, /aria-label="Skillfully home"/);
@@ -14,6 +14,12 @@ function assertUsesLandingHeader(html: string) {
   assert.match(html, /data-booking-surface="header"/);
   assert.match(html, /Book onboarding/);
   assert.match(html, /min-h-11/);
+  assert.match(html, /<header class="[^"]*bg-\[var\(--paper\)\] text-\[var\(--ink\)\][^"]*"/);
+  assert.match(html, /rounded-none/);
+  assert.doesNotMatch(html, /rounded-md/);
+  assert.match(html, /border-\[var\(--ink\)\] bg-\[var\(--white\)\][^"]*text-\[var\(--ink\)\]/);
+  assert.match(html, /border-\[var\(--ink\)\] bg-\[var\(--ink\)\][^"]*text-\[var\(--paper\)\]/);
+  assert.doesNotMatch(html, globalDarkHeaderPattern);
 }
 
 test("public content pages use the landing header and monochrome design system", async () => {
@@ -43,8 +49,6 @@ test("public content pages use the landing header and monochrome design system",
   assert.doesNotMatch(blogArticleHtml, />Dashboard</);
   assert.doesNotMatch(guideArticleHtml, />Dashboard</);
 
-  assert.doesNotMatch(blogArticleHtml, hardInvertedNavigationPattern);
-  assert.doesNotMatch(guideArticleHtml, hardInvertedNavigationPattern);
   assert.match(blogArticleHtml, /hover:bg-\[var\(--paper-muted\)\]/);
   assert.match(guideArticleHtml, /bg-\[var\(--paper-muted\)\]/);
   assert.match(guideArticleHtml, /hover:bg-\[var\(--paper-muted\)\]/);

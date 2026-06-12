@@ -1,6 +1,10 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
+import { cookies } from "next/headers";
 
+import { LANDING_VARIANT_COOKIE, normalizeLandingVariant, type LandingVariant } from "@/lib/landing-experiment";
+
+import { AgentFirstLanding } from "./agent-first-landing";
 import { BookingModalCta } from "./booking-modal";
 import { CtaDotSpotlight } from "./cta-dot-spotlight";
 import { SchematicGraphic } from "./hero-schematic";
@@ -422,10 +426,10 @@ function PersonaCard({
   );
 }
 
-export default function LandingPage() {
+export function LandingPageContent({ variant = null }: { variant?: LandingVariant | null } = {}) {
   return (
     <main className="min-h-screen bg-[var(--paper)] text-[var(--ink)]">
-      <LandingPageView />
+      <LandingPageView variant={variant} />
       <div aria-hidden className="marketing-noise" />
 
       <div className="relative mx-auto max-w-[1440px] overflow-hidden border-x border-[var(--ink)] bg-[var(--paper)]">
@@ -634,4 +638,15 @@ export default function LandingPage() {
       </div>
     </main>
   );
+}
+
+export default async function LandingPage() {
+  const cookieStore = await cookies();
+  const variant = normalizeLandingVariant(cookieStore.get(LANDING_VARIANT_COOKIE)?.value);
+
+  if (variant === "agent-first") {
+    return <AgentFirstLanding />;
+  }
+
+  return <LandingPageContent variant={variant} />;
 }

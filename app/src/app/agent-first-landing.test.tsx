@@ -31,6 +31,7 @@ test("agent-first landing renders the shared header, login, and stripped-down fi
 
 test("agent-first landing tracks both question branches, keeps the copy CTA inactive until clicked, and removes the extra account CTA after copy", async () => {
   const source = await readFile(new URL("./agent-first-landing.tsx", import.meta.url), "utf8");
+  const headerSource = await readFile(new URL("./public-header.tsx", import.meta.url), "utf8");
 
   assert.match(source, /question:\s*"knows_agent_skill"/);
   assert.match(source, /question:\s*"has_agent_access"/);
@@ -48,5 +49,6 @@ test("agent-first landing tracks both question branches, keeps the copy CTA inac
   assert.doesNotMatch(source, /href=\{LEARN_SKILLS_HREF\}/);
   assert.match(source, /onOpen=\{answerAgentAccessNo\}/);
   assert.match(source, /<PublicHeader showBookingCta=\{false\} theme="dark" \/>/);
+  assert.match(headerSource, /hover:!text-\[var\(--ink\)\]/);
   assert.match(source, /<LandingPageView page="\/" variant="agent-first" \/>/);
 });

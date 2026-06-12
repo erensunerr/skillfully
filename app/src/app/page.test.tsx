@@ -6,8 +6,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 test("landing page renders the refreshed editorial messaging", async () => {
   Object.assign(globalThis, { React });
-  const { LandingPageContent } = await import("./page");
-  const html = renderToStaticMarkup(<LandingPageContent variant="control" />);
+  const { LandingPageContent } = await import("./landing-page-client");
+  const html = renderToStaticMarkup(<LandingPageContent />);
 
   assert.match(html, /THE PLATFORM FOR BUILDING BETTER AGENT SKILLS/);
   assert.match(html, /AGENT SKILL QA AND ANALYTICS/);
@@ -63,4 +63,26 @@ test("booking click analytics has one canonical event", async () => {
   assert.match(source, /meeting_booking_clicked/);
   assert.match(source, /createPortal\(modal, document\.body\)/);
   assert.doesNotMatch(source, /landing_booking_cta_clicked/);
+});
+
+test("landing page uses PostHog feature flag hook instead of cookie routing", async () => {
+  const clientSource = await readFile(new URL("./landing-page-client.tsx", import.meta.url), "utf8");
+  const serverSource = await readFile(new URL("./page.tsx", import.meta.url), "utf8");
+  const layoutSource = await readFile(new URL("./layout.tsx", import.meta.url), "utf8");
+
+  assert.match(serverSource, /PostHogProvider/);
+  assert.match(serverSource, /bootstrapFlags=\{\{ flags: \[AGENT_FIRST_EXPERIMENT_FLAG_KEY\] \}\}/);
+  assert.doesNotMatch(layoutSource, /<DevABTestOverlay \/>/);
+  assert.match(clientSource, /useFeatureFlagVariantKey/);
+  assert.match(clientSource, /AGENT_FIRST_EXPERIMENT_FLAG_KEY/);
+  assert.match(clientSource, /AGENT_FIRST_VARIANT_FLAG_VALUE/);
+  assert.match(clientSource, /<DevABTestOverlay[\s\S]*resolvedVariants=\{\{ \[AGENT_FIRST_EXPERIMENT_FLAG_KEY\]: variant \}\}/);
+  assert.match(clientSource, /LandingVariantPending/);
+  assert.match(clientSource, /variant === undefined/);
+  assert.doesNotMatch(clientSource, /posthog\.onFeatureFlags/);
+  assert.doesNotMatch(clientSource, /captureView=\{false\}/);
+  assert.doesNotMatch(clientSource, /cookies\(/);
+  assert.doesNotMatch(clientSource, /normalizeLandingVariant/);
+  assert.doesNotMatch(clientSource, /LANDING_VARIANT_COOKIE/);
+  assert.doesNotMatch(clientSource, /LandingPageContent\s*\([^)]*variant/);
 });

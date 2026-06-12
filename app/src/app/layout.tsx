@@ -1,9 +1,8 @@
 import type { Metadata } from "next";
 import { Instrument_Serif, JetBrains_Mono, Space_Grotesk } from "next/font/google";
+import { PostHogProvider } from "@posthog/next";
 import "@mdxeditor/editor/style.css";
 import "./globals.css";
-
-import { DevABTestOverlay } from "./dev-ab-test-overlay";
 
 const editorialSans = Space_Grotesk({
   variable: "--font-space-grotesk",
@@ -71,8 +70,21 @@ export default function RootLayout({
       <body
         className={`${editorialSans.variable} ${editorialMono.variable} ${editorialSerif.variable} overflow-x-hidden antialiased`}
       >
-        {children}
-        {process.env.NODE_ENV === "development" ? <DevABTestOverlay /> : null}
+        <PostHogProvider
+          apiKey={process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN}
+          clientOptions={{
+            api_host: "/ingest",
+            ui_host: "https://us.posthog.com",
+            defaults: "2026-01-30",
+            capture_exceptions: true,
+            debug: process.env.NODE_ENV === "development",
+          }}
+          serverOptions={{
+            host: process.env.NEXT_PUBLIC_POSTHOG_HOST,
+          }}
+        >
+          {children}
+        </PostHogProvider>
       </body>
     </html>
   );

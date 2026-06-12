@@ -1,65 +1,55 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import posthog from "posthog-js";
 
-import { AB_TEST_DEFINITIONS } from "@/lib/ab-test-registry";
+import { AB_TEST_DEFINITIONS, type ABTestDefinition } from "@/lib/ab-test-registry";
 
-const COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
+type OverrideSelections = Record<string, string | null>;
 
-function getCookieValue(cookieName: string) {
-  if (typeof document === "undefined") {
-    return null;
+function defaultOverrideSelections() {
+  return Object.fromEntries(AB_TEST_DEFINITIONS.map((test) => [test.key, null]));
+}
+
+function applyFeatureFlagOverrides(selections: OverrideSelections) {
+  const activeOverrideFlags = Object.fromEntries(
+    Object.entries(selections).filter((entry): entry is [string, string] => entry[1] !== null),
+  );
+
+  if (Object.keys(activeOverrideFlags).length > 0) {
+    posthog.featureFlags.overrideFeatureFlags({ flags: activeOverrideFlags });
+  } else {
+    posthog.featureFlags.overrideFeatureFlags(false);
   }
-
-  const prefix = `${cookieName}=`;
-  const cookie = document.cookie
-    .split(";")
-    .map((part) => part.trim())
-    .find((part) => part.startsWith(prefix));
-
-  return cookie ? decodeURIComponent(cookie.slice(prefix.length)) : null;
-}
-
-function setVariantCookie(cookieName: string, value: string) {
-  document.cookie = `${cookieName}=${encodeURIComponent(value)}; Path=/; SameSite=Lax; Max-Age=${COOKIE_MAX_AGE_SECONDS}`;
-}
-
-function clearVariantCookie(cookieName: string) {
-  document.cookie = `${cookieName}=; Path=/; SameSite=Lax; Max-Age=0`;
 }
 
 export function DevABTestOverlay({
   enabled = process.env.NODE_ENV === "development",
   defaultOpen = false,
+  resolvedVariants = {},
 }: {
   enabled?: boolean;
   defaultOpen?: boolean;
+  resolvedVariants?: Record<string, string | boolean | undefined>;
 } = {}) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
-  const [activeVariants, setActiveVariants] = useState<Record<string, string | null>>({});
+  const [overrideSelections, setOverrideSelections] = useState<OverrideSelections>(() => defaultOverrideSelections());
 
   useEffect(() => {
-    if (!enabled) {
-      return;
+    if (enabled) {
+      posthog.featureFlags.overrideFeatureFlags(false);
     }
-
-    setActiveVariants(
-      Object.fromEntries(AB_TEST_DEFINITIONS.map((test) => [test.key, getCookieValue(test.cookieName)])),
-    );
   }, [enabled]);
 
   if (!enabled) {
     return null;
   }
 
-  function reloadWithVariant(cookieName: string, value: string | null) {
-    if (value) {
-      setVariantCookie(cookieName, value);
-    } else {
-      clearVariantCookie(cookieName);
-    }
+  function updateFeatureFlagOverride(key: string, value: string | null) {
+    const nextSelections = { ...overrideSelections, [key]: value };
 
-    window.location.reload();
+    setOverrideSelections(nextSelections);
+    applyFeatureFlagOverrides(nextSelections);
   }
 
   return (
@@ -81,49 +71,14 @@ export function DevABTestOverlay({
           </header>
           <div className="space-y-4 p-3">
             {AB_TEST_DEFINITIONS.map((test) => {
-              const activeVariant = activeVariants[test.key];
-
               return (
-                <div key={test.key} className="space-y-2">
-                  <div>
-                    <p className="font-bold">{test.label}</p>
-                    <p className="mt-1 break-all text-[0.65rem] text-[#3a6b49]">{test.key}</p>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {test.variants.map((variant) => {
-                      const isActive = activeVariant === variant.value;
-
-                      return (
-                        <button
-                          key={variant.value}
-                          type="button"
-                          aria-pressed={isActive}
-                          className={[
-                            "border px-3 py-2 font-bold uppercase",
-                            isActive
-                              ? "border-[#063016] bg-[#0bb84f] text-[#031609]"
-                              : "border-[#0b5f2a] bg-white text-[#063016] hover:bg-[#d7f8df]",
-                          ].join(" ")}
-                          onClick={() => reloadWithVariant(test.cookieName, variant.value)}
-                        >
-                          {variant.label}
-                        </button>
-                      );
-                    })}
-                    <button
-                      type="button"
-                      className={[
-                        "border px-3 py-2 font-bold uppercase",
-                        activeVariant
-                          ? "border-[#0b5f2a] bg-white text-[#063016] hover:bg-[#d7f8df]"
-                          : "border-[#063016] bg-[#0bb84f] text-[#031609]",
-                      ].join(" ")}
-                      onClick={() => reloadWithVariant(test.cookieName, null)}
-                    >
-                      auto
-                    </button>
-                  </div>
-                </div>
+                <DevABTestFlagControls
+                  key={test.key}
+                  test={test}
+                  resolvedVariant={resolvedVariants[test.key]}
+                  overrideSelection={overrideSelections[test.key] ?? null}
+                  onOverrideChange={updateFeatureFlagOverride}
+                />
               );
             })}
           </div>
@@ -137,6 +92,66 @@ export function DevABTestOverlay({
       >
         dev
       </button>
+    </div>
+  );
+}
+
+function DevABTestFlagControls({
+  test,
+  resolvedVariant,
+  overrideSelection,
+  onOverrideChange,
+}: {
+  test: ABTestDefinition;
+  resolvedVariant: string | boolean | undefined;
+  overrideSelection: string | null;
+  onOverrideChange: (key: string, value: string | null) => void;
+}) {
+  const resolvedVariantLabel = resolvedVariant === undefined ? "loading" : String(resolvedVariant);
+
+  return (
+    <div className="space-y-2">
+      <div>
+        <p className="font-bold">{test.label}</p>
+        <p className="mt-1 break-all text-[0.65rem] text-[#3a6b49]">{test.key}</p>
+        <p className="mt-1 text-[0.65rem] text-[#3a6b49]">resolved: {resolvedVariantLabel}</p>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {test.variants.map((variant) => {
+          const isActive = overrideSelection === variant.value;
+
+          return (
+            <button
+              key={variant.value}
+              type="button"
+              aria-pressed={isActive}
+              className={[
+                "border px-3 py-2 font-bold uppercase",
+                isActive
+                  ? "border-[#063016] bg-[#0bb84f] text-[#031609]"
+                  : "border-[#0b5f2a] bg-white text-[#063016] hover:bg-[#d7f8df]",
+              ].join(" ")}
+              onClick={() => onOverrideChange(test.key, variant.value)}
+            >
+              <span className="block">{variant.label}</span>
+              <span className="mt-1 block text-[0.62rem] lowercase opacity-70">{variant.value}</span>
+            </button>
+          );
+        })}
+        <button
+          type="button"
+          aria-pressed={overrideSelection === null}
+          className={[
+            "border px-3 py-2 font-bold uppercase",
+            overrideSelection === null
+              ? "border-[#063016] bg-[#0bb84f] text-[#031609]"
+              : "border-[#0b5f2a] bg-white text-[#063016] hover:bg-[#d7f8df]",
+          ].join(" ")}
+          onClick={() => onOverrideChange(test.key, null)}
+        >
+          auto
+        </button>
+      </div>
     </div>
   );
 }

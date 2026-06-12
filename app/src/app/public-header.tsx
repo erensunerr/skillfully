@@ -28,11 +28,16 @@ type PublicHeaderTheme = "light" | "dark";
 export function PublicHeader({
   showBookingCta = true,
   theme = "light",
-}: { showBookingCta?: boolean; theme?: PublicHeaderTheme } = {}) {
+  compactMobile = false,
+}: { showBookingCta?: boolean; theme?: PublicHeaderTheme; compactMobile?: boolean } = {}) {
   const isDark = theme === "dark";
-  const navLinkClass =
-    "inline-flex min-h-11 min-w-[44px] items-center justify-center py-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-current";
-  const headerClass = `grid min-h-16 grid-cols-[1fr_auto] items-center gap-4 border-b border-[var(--ink)] px-5 py-3 sm:grid-cols-[1fr_auto_1fr] lg:px-8 ${
+  const navLinkClass = [
+    "inline-flex min-w-[44px] items-center justify-center hover:underline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-current",
+    compactMobile ? "min-h-8 py-1 sm:min-h-11 sm:py-2" : "min-h-11 py-2",
+  ].join(" ");
+  const headerClass = `grid min-h-16 grid-cols-[1fr_auto] items-center border-b border-[var(--ink)] px-5 sm:grid-cols-[1fr_auto_1fr] lg:px-8 ${
+    compactMobile ? "gap-x-4 gap-y-2 py-2 sm:gap-4 sm:py-3" : "gap-4 py-3"
+  } ${
     isDark ? "bg-[var(--ink)] text-[var(--paper)]" : "bg-[var(--paper)] text-[var(--ink)]"
   }`;
   const loginClass = isDark
@@ -54,7 +59,10 @@ export function PublicHeader({
 
       <nav
         aria-label="Primary navigation"
-        className="order-3 col-span-2 flex items-center justify-center gap-10 font-editorial-mono text-[0.72rem] font-bold uppercase tracking-[0.08em] sm:order-none sm:col-span-1"
+        className={[
+          "order-3 col-span-2 flex items-center justify-center font-editorial-mono font-bold uppercase tracking-[0.08em] sm:order-none sm:col-span-1",
+          compactMobile ? "gap-7 text-[0.65rem] sm:gap-10 sm:text-[0.72rem]" : "gap-10 text-[0.72rem]",
+        ].join(" ")}
       >
         <Link href="/guide" className={navLinkClass}>
           Skills Guide

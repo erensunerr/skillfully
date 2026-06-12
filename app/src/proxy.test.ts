@@ -34,11 +34,19 @@ test("proxy evaluates landing experiment flags through the default PostHog host"
   process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN = "phc_test";
   delete process.env.NEXT_PUBLIC_POSTHOG_HOST;
 
-  const flagRequest: { url: string; body: { distinct_id?: string } | null } = { url: "", body: null };
+  const flagRequest: { url: string; body: Record<string, unknown> | null } = { url: "", body: null };
   globalThis.fetch = async (url, init) => {
     flagRequest.url = String(url);
     flagRequest.body = init?.body ? JSON.parse(String(init.body)) : null;
-    return Response.json({ featureFlags: { landing_agent_first_onboarding: "agent_first" } });
+    return Response.json({
+      flags: {
+        landing_agent_first_onboarding: {
+          key: "landing_agent_first_onboarding",
+          enabled: true,
+          variant: "agent_first",
+        },
+      },
+    });
   };
 
   const response = await proxy(new NextRequest("http://localhost/"));
@@ -46,6 +54,8 @@ test("proxy evaluates landing experiment flags through the default PostHog host"
 
   assert.equal(flagRequest.url, `${DEFAULT_POSTHOG_API_HOST}/flags/?v=2`);
   assert.equal(flagRequest.body?.distinct_id, distinctId);
+  assert.equal(flagRequest.body?.token, "phc_test");
+  assert.equal("api_key" in (flagRequest.body ?? {}), false);
   assert.equal(response.status, 200);
   assert.equal(response.headers.get("location"), null);
   assert.equal(response.cookies.get(LANDING_VARIANT_COOKIE)?.value, "agent-first");

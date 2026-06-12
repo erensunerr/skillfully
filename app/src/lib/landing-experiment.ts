@@ -34,6 +34,21 @@ export function normalizeLandingVariantFlagValue(value: unknown): LandingVariant
   return null;
 }
 
+export function normalizeLandingVariantFlagResponse(value: unknown): LandingVariant | null {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    const flagResult = value as { enabled?: unknown; variant?: unknown };
+    const variant = normalizeLandingVariantFlagValue(flagResult.variant);
+
+    if (variant) {
+      return variant;
+    }
+
+    return normalizeLandingVariantFlagValue(flagResult.enabled);
+  }
+
+  return normalizeLandingVariantFlagValue(value);
+}
+
 export function getLandingExperimentProperties(variant: LandingVariant | null) {
   if (!variant) {
     return {};

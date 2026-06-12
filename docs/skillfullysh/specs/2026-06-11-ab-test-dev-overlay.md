@@ -17,6 +17,13 @@ EVERY A/B test must be added to the A/B test overlay before or alongside launch.
 - Variants: `control`, `agent-first`
 - Production route: `/`
 
+## PostHog Assignment Contract
+
+- Production assignment happens in `app/src/proxy.ts` before `/` renders.
+- The proxy calls PostHog `/flags/?v=2` with `token` and `distinct_id` only. Do not send `api_key` to this endpoint.
+- The current `/flags/?v=2` response returns flag objects under `flags`, with the experiment assignment in `flags.landing_agent_first_onboarding.variant`.
+- The proxy must keep accepting older raw values from `featureFlags` or `flags` for testability and backwards compatibility.
+
 ## Testing Expectations
 
 - The green `dev` button appears only when running the app with `next dev`.

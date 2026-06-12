@@ -7,7 +7,7 @@ import {
   LANDING_DISTINCT_ID_COOKIE,
   LANDING_VARIANT_COOKIE,
   normalizeLandingVariant,
-  normalizeLandingVariantFlagValue,
+  normalizeLandingVariantFlagResponse,
   type LandingVariant,
 } from "@/lib/landing-experiment";
 
@@ -60,7 +60,6 @@ async function getPostHogLandingVariant(distinctId: string) {
     },
     body: JSON.stringify({
       token: projectToken,
-      api_key: projectToken,
       distinct_id: distinctId,
     }),
     cache: "no-store",
@@ -75,7 +74,7 @@ async function getPostHogLandingVariant(distinctId: string) {
     | null;
 
   const featureFlags = payload?.featureFlags ?? payload?.flags;
-  return normalizeLandingVariantFlagValue(featureFlags?.[AGENT_FIRST_EXPERIMENT_FLAG_KEY]);
+  return normalizeLandingVariantFlagResponse(featureFlags?.[AGENT_FIRST_EXPERIMENT_FLAG_KEY]);
 }
 
 export async function proxy(request: NextRequest) {

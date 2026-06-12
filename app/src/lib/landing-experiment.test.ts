@@ -7,6 +7,7 @@ import {
   getLandingDistinctIdFromCookieString,
   getLandingVariantFromCookieString,
   normalizeLandingVariant,
+  normalizeLandingVariantFlagResponse,
   normalizeLandingVariantFlagValue,
 } from "@/lib/landing-experiment";
 
@@ -24,6 +25,29 @@ test("normalizeLandingVariantFlagValue maps PostHog values to routing variants",
   assert.equal(normalizeLandingVariantFlagValue(true), "agent-first");
   assert.equal(normalizeLandingVariantFlagValue(false), "control");
   assert.equal(normalizeLandingVariantFlagValue("unknown"), null);
+});
+
+test("normalizeLandingVariantFlagResponse maps current PostHog flags v2 objects", () => {
+  assert.equal(
+    normalizeLandingVariantFlagResponse({
+      key: "landing_agent_first_onboarding",
+      enabled: true,
+      variant: AGENT_FIRST_VARIANT_FLAG_VALUE,
+    }),
+    "agent-first",
+  );
+  assert.equal(
+    normalizeLandingVariantFlagResponse({
+      key: "landing_agent_first_onboarding",
+      enabled: true,
+      variant: "control",
+    }),
+    "control",
+  );
+  assert.equal(normalizeLandingVariantFlagResponse({ enabled: true }), "agent-first");
+  assert.equal(normalizeLandingVariantFlagResponse({ enabled: false }), "control");
+  assert.equal(normalizeLandingVariantFlagResponse({ enabled: true, variant: "unknown" }), "agent-first");
+  assert.equal(normalizeLandingVariantFlagResponse({}), null);
 });
 
 test("landing experiment helpers recover the assigned variant and analytics properties", () => {

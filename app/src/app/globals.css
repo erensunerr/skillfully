@@ -94,6 +94,7 @@ button:disabled,
   justify-content: center;
   overflow: hidden;
   border: 1px solid currentColor;
+  border-radius: 0;
   font-family: var(--font-jetbrains-mono), "JetBrains Mono", monospace;
   font-weight: 700;
   letter-spacing: 0.14em;

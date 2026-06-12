@@ -17,6 +17,8 @@ test("landing page renders the refreshed editorial messaging", async () => {
   assert.match(html, /A feedback loop for every agent skill/);
   assert.match(html, /Common questions/);
   assert.match(html, /Book onboarding/);
+  assert.match(html, /rounded-none/);
+  assert.doesNotMatch(html, /rounded-md/);
   assert.match(html, /data-booking-surface="header"/);
   assert.match(html, /data-booking-surface="hero"/);
   assert.match(html, /data-booking-surface="footer_cta"/);

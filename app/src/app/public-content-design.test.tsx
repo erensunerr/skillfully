@@ -15,6 +15,8 @@ function assertUsesLandingHeader(html: string) {
   assert.match(html, /Book onboarding/);
   assert.match(html, /min-h-11/);
   assert.match(html, /<header class="[^"]*bg-\[var\(--paper\)\] text-\[var\(--ink\)\][^"]*"/);
+  assert.match(html, /rounded-none/);
+  assert.doesNotMatch(html, /rounded-md/);
   assert.match(html, /border-\[var\(--ink\)\] bg-\[var\(--white\)\][^"]*text-\[var\(--ink\)\]/);
   assert.match(html, /border-\[var\(--ink\)\] bg-\[var\(--ink\)\][^"]*text-\[var\(--paper\)\]/);
   assert.doesNotMatch(html, globalDarkHeaderPattern);

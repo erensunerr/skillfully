@@ -129,10 +129,10 @@ export function AgentFirstLanding() {
   }
 
   return (
-    <main className="flex h-screen flex-col overflow-hidden bg-[#0f0f0f] text-[#f4f4ef]">
-      <LandingPageView page="/" variant="agent-first" />
-      <PublicHeader showBookingCta={false} theme="dark" />
-      <section className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 items-start px-6 py-8 sm:items-center sm:px-10 sm:py-10">
+    <main className="flex min-h-dvh flex-col overflow-y-auto bg-[#0f0f0f] text-[#f4f4ef] sm:h-screen sm:overflow-hidden">
+      <LandingPageView page="/" />
+      <PublicHeader showBookingCta={false} theme="dark" compactMobile />
+      <section className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 items-start px-6 py-6 sm:items-center sm:px-10 sm:py-10">
         <div className="w-full">
           <p className="font-editorial-mono text-xs font-bold uppercase tracking-[0.16em] text-[#a1a1a1]">
             Step {currentStep}
@@ -141,10 +141,10 @@ export function AgentFirstLanding() {
             Skillfully helps you make better agent skills.
           </h1>
 
-          <div className="relative mt-8 min-h-[18rem] overflow-hidden">
+          <div className="relative mt-6 min-h-[13rem] overflow-hidden sm:mt-8 sm:min-h-[18rem]">
             <div
               key={contentKey}
-              className="agent-first-step-panel agent-first-fade-swap flex min-h-[18rem] flex-col justify-start sm:justify-center"
+              className="agent-first-step-panel agent-first-fade-swap flex min-h-[13rem] flex-col justify-start sm:min-h-[18rem] sm:justify-center"
             >
               {knowsAgentSkill === "no" ? (
                 <p className="mb-5 max-w-xl text-sm leading-6 text-[#cfcfcf]">
@@ -154,7 +154,7 @@ export function AgentFirstLanding() {
               <h2 className="font-editorial-sans text-2xl font-semibold sm:text-4xl">
                 {questionText}
               </h2>
-              <div key={`controls-${contentKey}`} className="agent-first-controls-in mt-6 flex flex-col gap-3 sm:flex-row">
+              <div key={`controls-${contentKey}`} className="agent-first-controls-in mt-5 flex flex-col gap-3 sm:mt-6 sm:flex-row">
                 {isAgentAccessStep ? (
                   <>
                     <button

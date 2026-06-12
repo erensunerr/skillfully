@@ -126,7 +126,7 @@ export function AgentFirstLanding() {
   return (
     <main className="flex h-screen flex-col overflow-hidden bg-[#0f0f0f] text-[#f4f4ef]">
       <LandingPageView page="/" variant="agent-first" />
-      <PublicHeader showBookingCta={false} />
+      <PublicHeader showBookingCta={false} theme="dark" />
       <section className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 items-start px-6 py-8 sm:items-center sm:px-10 sm:py-10">
         <div className="w-full">
           <p className="font-editorial-mono text-xs font-bold uppercase tracking-[0.16em] text-[#a1a1a1]">

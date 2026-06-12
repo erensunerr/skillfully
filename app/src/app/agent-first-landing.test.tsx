@@ -21,6 +21,7 @@ test("agent-first landing renders the shared header, login, and stripped-down fi
   assert.doesNotMatch(html, /\/guide\/start-with-agent-skills/);
   assert.match(html, /absolute inset-y-0 left-0 flex w-full transition-transform duration-500 ease-out translate-x-0/i);
   assert.match(html, /min-w-full/i);
+  assert.match(html, /bg-\[var\(--ink\)\] text-\[var\(--paper\)\]/i);
   assert.doesNotMatch(html, /Two questions\. Then we point you to the right next step\./i);
   assert.doesNotMatch(html, /A reusable instruction set that helps an agent do one job well, consistently\./i);
   assert.doesNotMatch(html, /border border-\[var\(--ink\)\] bg-\[var\(--paper\)\]/i);
@@ -46,6 +47,6 @@ test("agent-first landing tracks both question branches, keeps the copy CTA inac
   assert.doesNotMatch(source, /LEARN_SKILLS_HREF/);
   assert.doesNotMatch(source, /href=\{LEARN_SKILLS_HREF\}/);
   assert.match(source, /onOpen=\{answerAgentAccessNo\}/);
-  assert.match(source, /<PublicHeader showBookingCta=\{false\} \/>/);
+  assert.match(source, /<PublicHeader showBookingCta=\{false\} theme="dark" \/>/);
   assert.match(source, /<LandingPageView page="\/" variant="agent-first" \/>/);
 });

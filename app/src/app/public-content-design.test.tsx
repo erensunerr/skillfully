@@ -4,6 +4,8 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 const blueSystemPattern = /#0b66ff|#f3f5f9|#f1f4f8|#d8dce4/;
+const globalDarkHeaderPattern =
+  /<header class="[^"]*bg-\[var\(--ink\)\][^"]*text-\[var\(--paper\)\][^"]*"/;
 
 function assertUsesLandingHeader(html: string) {
   assert.match(html, /aria-label="Skillfully home"/);
@@ -12,9 +14,10 @@ function assertUsesLandingHeader(html: string) {
   assert.match(html, /data-booking-surface="header"/);
   assert.match(html, /Book onboarding/);
   assert.match(html, /min-h-11/);
-  assert.match(html, /<header class="[^"]*bg-\[var\(--ink\)\][^"]*text-\[var\(--paper\)\][^"]*"/);
-  assert.match(html, /border-\[var\(--paper\)\] bg-transparent[^"]*text-\[var\(--paper\)\]/);
-  assert.match(html, /border-\[var\(--paper\)\] bg-\[var\(--paper\)\][^"]*text-\[var\(--ink\)\]/);
+  assert.match(html, /<header class="[^"]*bg-\[var\(--paper\)\] text-\[var\(--ink\)\][^"]*"/);
+  assert.match(html, /border-\[var\(--ink\)\] bg-\[var\(--white\)\][^"]*text-\[var\(--ink\)\]/);
+  assert.match(html, /border-\[var\(--ink\)\] bg-\[var\(--ink\)\][^"]*text-\[var\(--paper\)\]/);
+  assert.doesNotMatch(html, globalDarkHeaderPattern);
 }
 
 test("public content pages use the landing header and monochrome design system", async () => {

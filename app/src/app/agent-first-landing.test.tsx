@@ -55,9 +55,10 @@ test("agent-first landing tracks both question branches, keeps the copy CTA inac
   assert.doesNotMatch(source, /LEARN_SKILLS_HREF/);
   assert.doesNotMatch(source, /href=\{LEARN_SKILLS_HREF\}/);
   assert.match(source, /onOpen=\{answerAgentAccessNo\}/);
-  assert.match(source, /<PublicHeader showBookingCta=\{false\} theme="dark" \/>/);
+  assert.match(source, /<PublicHeader showBookingCta=\{false\} theme="dark" compactMobile \/>/);
   assert.match(headerSource, /rounded-none/);
   assert.doesNotMatch(headerSource, /rounded-md/);
   assert.match(headerSource, /hover:!text-\[var\(--ink\)\]/);
-  assert.match(source, /<LandingPageView page="\/" variant="agent-first" \/>/);
+  assert.match(source, /<LandingPageView page="\/" \/>/);
+  assert.doesNotMatch(source, /variant="agent-first"/);
 });

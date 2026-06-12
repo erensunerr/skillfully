@@ -1,15 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 
 import { captureClientEvent } from "@/lib/client-analytics";
-import {
-  AGENT_FIRST_TRANSITION_CHANGE_EVENT,
-  AGENT_FIRST_TRANSITION_STORAGE_KEY,
-  DEFAULT_AGENT_FIRST_TRANSITION_MODE,
-  normalizeAgentFirstTransitionMode,
-  type AgentFirstTransitionMode,
-} from "@/lib/agent-first-transition";
 
 import { BookingModalCta } from "./booking-modal";
 import { LandingPageView } from "./landing-analytics";
@@ -25,7 +18,6 @@ const TERTIARY_BUTTON =
 const AGENT_PROMPT = `Install the skillfully skill from erensunerr/skillfully. Help me create an account and connect my first agent skill.`;
 const AGENT_SKILL_EXPLANATION =
   "Agent skills are playbooks / SOPs for AI agents. They allow you to inject your expertise into the agent.";
-const SCRAMBLE_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789/<>[]{}";
 
 function ChoiceButton({
   label,
@@ -68,148 +60,9 @@ async function writePromptToClipboard(prompt: string) {
   }
 }
 
-function useReducedMotion() {
-  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
-
-  useEffect(() => {
-    const motionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
-
-    function syncMotionPreference() {
-      setPrefersReducedMotion(motionQuery.matches);
-    }
-
-    syncMotionPreference();
-    motionQuery.addEventListener("change", syncMotionPreference);
-
-    return () => motionQuery.removeEventListener("change", syncMotionPreference);
-  }, []);
-
-  return prefersReducedMotion;
-}
-
-function useAgentFirstTransitionMode() {
-  const [transitionMode, setTransitionMode] = useState<AgentFirstTransitionMode>(
-    DEFAULT_AGENT_FIRST_TRANSITION_MODE,
-  );
-
-  useEffect(() => {
-    if (process.env.NODE_ENV !== "development") {
-      return;
-    }
-
-    function readStoredMode() {
-      setTransitionMode(
-        normalizeAgentFirstTransitionMode(window.localStorage.getItem(AGENT_FIRST_TRANSITION_STORAGE_KEY)),
-      );
-    }
-
-    function handleTransitionChange(event: Event) {
-      const customEvent = event as CustomEvent<{ value?: unknown }>;
-      setTransitionMode(normalizeAgentFirstTransitionMode(customEvent.detail?.value));
-    }
-
-    function handleStorageChange(event: StorageEvent) {
-      if (event.key === AGENT_FIRST_TRANSITION_STORAGE_KEY) {
-        setTransitionMode(normalizeAgentFirstTransitionMode(event.newValue));
-      }
-    }
-
-    readStoredMode();
-    window.addEventListener(AGENT_FIRST_TRANSITION_CHANGE_EVENT, handleTransitionChange);
-    window.addEventListener("storage", handleStorageChange);
-
-    return () => {
-      window.removeEventListener(AGENT_FIRST_TRANSITION_CHANGE_EVENT, handleTransitionChange);
-      window.removeEventListener("storage", handleStorageChange);
-    };
-  }, []);
-
-  return transitionMode;
-}
-
-function randomScrambleChar() {
-  return SCRAMBLE_CHARS[Math.floor(Math.random() * SCRAMBLE_CHARS.length)];
-}
-
-function DecodingQuestionText({
-  text,
-  enabled,
-}: {
-  text: string;
-  enabled: boolean;
-}) {
-  const prefersReducedMotion = useReducedMotion();
-  const previousTextRef = useRef(text);
-  const [displayText, setDisplayText] = useState(text);
-
-  useEffect(() => {
-    if (!enabled || prefersReducedMotion || previousTextRef.current === text) {
-      previousTextRef.current = text;
-      setDisplayText(text);
-      return;
-    }
-
-    const previousText = previousTextRef.current;
-    const maxLength = Math.max(previousText.length, text.length);
-    const durationMs = 520;
-    let animationFrame = 0;
-    let startedAt = 0;
-
-    function animate(now: number) {
-      if (!startedAt) {
-        startedAt = now;
-      }
-
-      const progress = Math.min((now - startedAt) / durationMs, 1);
-      const resolvedCharacters = Math.floor(progress * maxLength);
-      const nextText = Array.from({ length: maxLength }, (_, index) => {
-        const targetCharacter = text[index] ?? "";
-
-        if (index < resolvedCharacters || progress === 1) {
-          return targetCharacter;
-        }
-
-        if (targetCharacter === " ") {
-          return " ";
-        }
-
-        return targetCharacter ? randomScrambleChar() : "";
-      }).join("");
-
-      setDisplayText(nextText.trimEnd());
-
-      if (progress < 1) {
-        animationFrame = window.requestAnimationFrame(animate);
-      } else {
-        previousTextRef.current = text;
-        setDisplayText(text);
-      }
-    }
-
-    animationFrame = window.requestAnimationFrame(animate);
-
-    return () => window.cancelAnimationFrame(animationFrame);
-  }, [enabled, prefersReducedMotion, text]);
-
-  return <span aria-hidden={enabled}>{enabled ? displayText : text}</span>;
-}
-
-function transitionPanelClass(mode: AgentFirstTransitionMode) {
-  if (mode === "fade-swap") {
-    return "agent-first-fade-swap";
-  }
-
-  if (mode === "letter-decode") {
-    return "agent-first-letter-decode";
-  }
-
-  return "agent-first-soft-rewrite";
-}
-
 export function AgentFirstLanding() {
   const [knowsAgentSkill, setKnowsAgentSkill] = useState<"yes" | "no" | null>(null);
   const [copiedPrompt, setCopiedPrompt] = useState(false);
-  const transitionMode = useAgentFirstTransitionMode();
 
   const currentStep = knowsAgentSkill ? "2 of 2" : "1 of 2";
   const isAgentAccessStep = knowsAgentSkill !== null;
@@ -217,7 +70,6 @@ export function AgentFirstLanding() {
     ? "Do you have an agent that you can text right now?"
     : "Do you know what an agent skill is?";
   const contentKey = isAgentAccessStep ? `agent-access-${knowsAgentSkill}` : "agent-skill";
-  const panelKey = transitionMode === "letter-decode" ? "letter-decode-panel" : `${transitionMode}-${contentKey}`;
 
   useEffect(() => {
     const previousOverflow = document.body.style.overflow;
@@ -291,20 +143,16 @@ export function AgentFirstLanding() {
 
           <div className="relative mt-8 min-h-[18rem] overflow-hidden">
             <div
-              key={panelKey}
-              className={`agent-first-transition-panel flex min-h-[18rem] flex-col justify-start sm:justify-center ${transitionPanelClass(transitionMode)}`}
-              data-agent-first-transition={transitionMode}
+              key={contentKey}
+              className="agent-first-step-panel agent-first-fade-swap flex min-h-[18rem] flex-col justify-start sm:justify-center"
             >
               {knowsAgentSkill === "no" ? (
                 <p className="mb-5 max-w-xl text-sm leading-6 text-[#cfcfcf]">
                   {AGENT_SKILL_EXPLANATION}
                 </p>
               ) : null}
-              <h2
-                aria-label={questionText}
-                className="font-editorial-sans text-2xl font-semibold sm:text-4xl"
-              >
-                <DecodingQuestionText text={questionText} enabled={transitionMode === "letter-decode"} />
+              <h2 className="font-editorial-sans text-2xl font-semibold sm:text-4xl">
+                {questionText}
               </h2>
               <div key={`controls-${contentKey}`} className="agent-first-controls-in mt-6 flex flex-col gap-3 sm:flex-row">
                 {isAgentAccessStep ? (

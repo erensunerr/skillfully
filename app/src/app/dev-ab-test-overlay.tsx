@@ -3,14 +3,6 @@
 import { useEffect, useState } from "react";
 
 import { AB_TEST_DEFINITIONS } from "@/lib/ab-test-registry";
-import {
-  AGENT_FIRST_TRANSITION_CHANGE_EVENT,
-  AGENT_FIRST_TRANSITION_MODES,
-  AGENT_FIRST_TRANSITION_STORAGE_KEY,
-  DEFAULT_AGENT_FIRST_TRANSITION_MODE,
-  normalizeAgentFirstTransitionMode,
-  type AgentFirstTransitionMode,
-} from "@/lib/agent-first-transition";
 
 const COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
 
@@ -36,19 +28,6 @@ function clearVariantCookie(cookieName: string) {
   document.cookie = `${cookieName}=; Path=/; SameSite=Lax; Max-Age=0`;
 }
 
-function getStoredTransitionMode() {
-  if (typeof window === "undefined") {
-    return DEFAULT_AGENT_FIRST_TRANSITION_MODE;
-  }
-
-  return normalizeAgentFirstTransitionMode(window.localStorage.getItem(AGENT_FIRST_TRANSITION_STORAGE_KEY));
-}
-
-function setStoredTransitionMode(value: AgentFirstTransitionMode) {
-  window.localStorage.setItem(AGENT_FIRST_TRANSITION_STORAGE_KEY, value);
-  window.dispatchEvent(new CustomEvent(AGENT_FIRST_TRANSITION_CHANGE_EVENT, { detail: { value } }));
-}
-
 export function DevABTestOverlay({
   enabled = process.env.NODE_ENV === "development",
   defaultOpen = false,
@@ -58,9 +37,6 @@ export function DevABTestOverlay({
 } = {}) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
   const [activeVariants, setActiveVariants] = useState<Record<string, string | null>>({});
-  const [activeTransitionMode, setActiveTransitionMode] = useState<AgentFirstTransitionMode>(
-    DEFAULT_AGENT_FIRST_TRANSITION_MODE,
-  );
 
   useEffect(() => {
     if (!enabled) {
@@ -70,7 +46,6 @@ export function DevABTestOverlay({
     setActiveVariants(
       Object.fromEntries(AB_TEST_DEFINITIONS.map((test) => [test.key, getCookieValue(test.cookieName)])),
     );
-    setActiveTransitionMode(getStoredTransitionMode());
   }, [enabled]);
 
   if (!enabled) {
@@ -85,11 +60,6 @@ export function DevABTestOverlay({
     }
 
     window.location.reload();
-  }
-
-  function updateTransitionMode(value: AgentFirstTransitionMode) {
-    setStoredTransitionMode(value);
-    setActiveTransitionMode(value);
   }
 
   return (
@@ -156,35 +126,6 @@ export function DevABTestOverlay({
                 </div>
               );
             })}
-
-            <div className="space-y-2 border-t border-[#0b5f2a] pt-3">
-              <div>
-                <p className="font-bold">Agent-first transition</p>
-                <p className="mt-1 text-[0.65rem] text-[#3a6b49]">Local animation preview</p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {AGENT_FIRST_TRANSITION_MODES.map((mode) => {
-                  const isActive = activeTransitionMode === mode.value;
-
-                  return (
-                    <button
-                      key={mode.value}
-                      type="button"
-                      aria-pressed={isActive}
-                      className={[
-                        "border px-3 py-2 font-bold uppercase",
-                        isActive
-                          ? "border-[#063016] bg-[#0bb84f] text-[#031609]"
-                          : "border-[#0b5f2a] bg-white text-[#063016] hover:bg-[#d7f8df]",
-                      ].join(" ")}
-                      onClick={() => updateTransitionMode(mode.value)}
-                    >
-                      {mode.label}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
           </div>
         </section>
       ) : null}

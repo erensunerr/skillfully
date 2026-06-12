@@ -17,17 +17,10 @@ EVERY A/B test must be added to the A/B test overlay before or alongside launch.
 - Variants: `control`, `agent-first`
 - Production route: `/`
 
-## Local Animation Preview
-
-- The overlay includes an `Agent-first transition` switcher for local visual QA.
-- Transition modes: `Soft rewrite`, `Letter decode`, `Fade swap`
-- The switcher stores the mode in local storage and updates the current page without adding URL parameters or production routing logic.
-
 ## Testing Expectations
 
 - The green `dev` button appears only when running the app with `next dev`.
 - Opening the overlay exposes each registered A/B test and its variants.
 - Choosing a variant sets that test's local cookie and reloads the page.
 - Choosing `auto` clears the local cookie so the automatic assignment path can run again.
-- Choosing an agent-first transition mode updates the local preview without reloading the page.
 - `/agent-first` must not be reintroduced as a standalone route for the landing onboarding experiment.

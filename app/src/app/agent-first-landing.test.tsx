@@ -19,7 +19,7 @@ test("agent-first landing renders the shared header, login, and stripped-down fi
   assert.match(html, /Step 1 of 2/i);
   assert.match(html, /No, learn first/i);
   assert.doesNotMatch(html, /\/guide\/start-with-agent-skills/);
-  assert.match(html, /data-agent-first-transition="soft-rewrite"/i);
+  assert.match(html, /agent-first-fade-swap/i);
   assert.doesNotMatch(html, /transition-transform/i);
   assert.doesNotMatch(html, /translate-x-0/i);
   assert.doesNotMatch(html, /-translate-x-full/i);
@@ -41,10 +41,10 @@ test("agent-first landing tracks both question branches, keeps the copy CTA inac
   assert.match(source, /answer:\s*"no"/);
   assert.match(source, /Agent skills are playbooks \/ SOPs for AI agents\. They allow you to inject your expertise into the agent\./);
   assert.match(source, /const currentStep = knowsAgentSkill \? "2 of 2" : "1 of 2"/);
-  assert.match(source, /soft-rewrite/);
-  assert.match(source, /letter-decode/);
-  assert.match(source, /fade-swap/);
-  assert.match(source, /prefers-reduced-motion: reduce/);
+  assert.doesNotMatch(source, /soft-rewrite/);
+  assert.doesNotMatch(source, /letter-decode/);
+  assert.match(source, /agent-first-fade-swap/);
+  assert.doesNotMatch(source, /prefers-reduced-motion: reduce/);
   assert.doesNotMatch(source, /transition-transform/);
   assert.doesNotMatch(source, /-translate-x-full/);
   assert.match(source, /knowsAgentSkill === "no" \?/);
